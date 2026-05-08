@@ -52,7 +52,7 @@ export async function fetchRecipes() {
       hasSides:   !!r.should_have_side,
       tryOut:     !!r.try_out,
       orderOut:   !!r.order_out,
-      defaultDay: r.weekdays?.[0] || null,
+      defaultDays: r.weekdays || [],
       fun:        !!r.fun_recipe,
       husband:    !!r.husband_approved,
     }
