@@ -27,18 +27,20 @@ export async function fetchRecipes() {
       husband_approved,
       recipe_dietary_tags ( dietary_tag_id )
     `)
-    .in('meal_type_id', ['breakfast', 'main', 'side', 'entree'])
+    .in('meal_type_id', ['breakfast', 'main', 'side', 'entree', 'dessert'])
     .order('name')
 
   if (error) throw error
 
-  return data.return data.filter(r => r.name && !r.name.startsWith('[')).map(r => {.map(r => {
+  return data.filter(r => r.name && !r.name.startsWith('[') && !r.name.startsWith('Untitled')).map(r => {
     const tags = (r.recipe_dietary_tags || []).map(t => t.dietary_tag_id)
     return {
       id:         r.id,
       name:       r.name,
       cat:        r.meal_type_id === 'breakfast' ? 'Breakfast'
                 : r.meal_type_id === 'side'      ? 'Sides'
+                : r.meal_type_id === 'entree'    ? 'Starters'
+                : r.meal_type_id === 'dessert'   ? 'Desserts'
                 : 'Mains',
       prep:       r.prep_time_minutes  || 0,
       active:     r.cook_time_minutes  || 0,
