@@ -32,7 +32,7 @@ export async function fetchRecipes() {
 
   if (error) throw error
 
-  return data.map(r => {
+  return data.filter(r => r.name && !r.name.startsWith('[') && !r.name.startsWith('Untitled')).map(r => {
     const tags = (r.recipe_dietary_tags || []).map(t => t.dietary_tag_id)
     return {
       id:         r.id,
