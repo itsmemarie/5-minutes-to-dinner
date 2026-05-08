@@ -337,10 +337,10 @@ function RecipeSelectionScreen({day,section,plan,recipes,onAdd}){
     return list
   },[catName,search,recipes])
   const already=filtered.filter(r=>currentIds.includes(r.id))
-  const defaults=filtered.filter(r=>!currentIds.includes(r.id)&&r.defaultDay===day&&!r.tryOut)
+  const defaults=filtered.filter(r=>!currentIds.includes(r.id)&&r.defaultDays.includes(day)&&!r.tryOut)
   const tryOut=filtered.filter(r=>!currentIds.includes(r.id)&&r.tryOut&&!r.orderOut)
   const orderOut=filtered.filter(r=>r.orderOut)
-  const other=filtered.filter(r=>!currentIds.includes(r.id)&&!r.tryOut&&!r.orderOut&&r.defaultDay!==day)
+  const other=filtered.filter(r=>!currentIds.includes(r.id)&&!r.tryOut&&!r.orderOut&&!r.defaultDays.includes(day))
   const toggle=rid=>setSelected(s=>s.includes(rid)?s.filter(x=>x!==rid):[...s,rid])
   return(
     <div style={{display:'flex',flexDirection:'column',minHeight:'100%'}}>
