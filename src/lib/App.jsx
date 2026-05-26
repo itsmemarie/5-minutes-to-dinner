@@ -5,7 +5,8 @@ import {
   addPlannedMeals, removePlannedMeal, updatePlannedMealPortion,
   fetchRatings, upsertRating,
   fetchShoppingList, saveShoppingList, updateShoppingItem,
-} from './lib/supabase.js'
+  fetchRecipeDetails,
+} from './supabase.js'
 
 
 // ─── Edge Function URLs ───────────────────────────────────────────
@@ -149,13 +150,238 @@ function Spinner({msg='Loading…'}){return(
   </div>
 )}
 
+// ─── Recipe helpers ───────────────────────────────────────────────
+function parseIngredients(text) {
+  if (!text) return []
+  const sections = []
+  let cur = { title: null, items: [] }
+  for (const raw of text.split(/\r?\n/)) {
+    const t = raw.trim()
+    if (!t) continue
+    const m = t.match(/^\[(.+)\]$/)
+    if (m) { if (cur.items.length || cur.title) sections.push(cur); cur = { title: m[1], items: [] } }
+    else if (t.startsWith('- ')) cur.items.push(t.slice(2))
+  }
+  if (cur.items.length || cur.title) sections.push(cur)
+  return sections
+}
+
+function parseIngredientParts(text, scale) {
+  const m = text.match(/^(\d+(?:\.\d+)?(?:\/\d+)?)\s*(g|kg|ml|l|cl|tsp|tbsp|oz|lb|cups?|pints?|tins?|bags?|bunches?|pinch(?:es)?|slices?|cloves?|pieces?|sprigs?|sheets?|drops?)?\s+(.+)$/i)
+  if (!m) return { qty: null, name: text }
+  const num = parseFloat(m[1]), unit = m[2] || '', name = m[3]
+  const s = Math.round(num * scale * 10) / 10
+  const d = s % 1 === 0 ? String(Math.round(s)) : s.toFixed(1)
+  return { qty: unit ? `${d}${unit}` : d, name }
+}
+
+function parseSteps(text) {
+  if (!text) return []
+  const steps = []
+  for (const line of text.split(/\r?\n/)) {
+    const t = line.trim()
+    const m = t.match(/^(\d+)\.\s+(.+)/)
+    if (m) steps.push({ num: m[1], text: m[2] })
+    else if (steps.length && t) steps[steps.length - 1].text += ' ' + t
+  }
+  return steps
+}
+
+// ─── Recipe Screen ─────────────────────────────────────────────────
+function RecipeScreen({ recipeId, portion }) {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState(null)
+  const [showStd, setShowStd] = useState(false)
+  const [showTM, setShowTM] = useState(false)
+
+  useEffect(() => {
+    fetchRecipeDetails(recipeId)
+      .then(setData).catch(e => setErr(e.message)).finally(() => setLoading(false))
+  }, [recipeId])
+
+  if (loading) return <Spinner msg='Loading recipe…'/>
+  if (err) return <div style={{padding:20}}><p style={{...mn,color:C.error}}>⚠️ {err}</p></div>
+  if (!data) return null
+
+  const base = data.portion_size || 4
+  const scale = portion ? portion / base : 1
+  const scaledFor = portion || base
+  const ingSections = parseIngredients(data.ingredients)
+  const stdSteps = parseSteps(data.instructions_standard)
+  const tmSteps = parseSteps(data.instructions_thermomix)
+
+  return (
+    <div style={{padding:'0 20px 40px'}}>
+      {data.has_thermomix_version&&(
+        <div style={{display:'inline-flex',alignItems:'center',gap:6,background:C.primary,borderRadius:99,padding:'5px 12px',marginTop:16,marginBottom:12}}>
+          <span style={{fontSize:12}}>⚡</span>
+          <span style={{...mn,fontSize:10,fontWeight:700,color:C.onPrimary,letterSpacing:'0.08em'}}>THERMOMIX RECIPE: YES</span>
+        </div>
+      )}
+      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:20,gap:12}}>
+        <div style={{...ep,fontSize:24,fontWeight:700,color:C.onSurface,flex:1,lineHeight:1.2}}>{data.name}</div>
+        <span style={{fontSize:22,marginTop:2}}>🔖</span>
+      </div>
+
+      {/* Prep / Cook */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
+        {[['🕒 PREP TIME',data.prep_time_raw||(data.prep_time_minutes?`${data.prep_time_minutes}m`:null)],['🍳 COOK TIME',data.cook_time_raw||(data.cook_time_minutes?`${data.cook_time_minutes}m`:null)]].map(([lbl,val])=>val?(
+          <div key={lbl} style={{...CARD,padding:'12px 14px'}}>
+            <div style={{...mn,fontSize:10,fontWeight:700,color:C.onSurfaceVariant,letterSpacing:'0.06em',marginBottom:4}}>{lbl}</div>
+            <div style={{...ep,fontSize:17,fontWeight:700,color:C.onSurface}}>{val}</div>
+          </div>
+        ):null)}
+      </div>
+
+      {/* Portions */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
+        <div style={{...CARD,padding:'12px 14px'}}>
+          <div style={{...mn,fontSize:10,fontWeight:700,color:C.onSurfaceVariant,letterSpacing:'0.06em',marginBottom:6}}>SAVED PORTIONS</div>
+          <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <span style={{...ep,fontSize:15,fontWeight:700,color:C.onSurface}}>{scaledFor} servings</span>
+            {scale!==1&&<span style={{...mn,fontSize:11,fontWeight:700,background:C.primaryFixed,color:C.primary,padding:'2px 7px',borderRadius:99}}>{scale.toFixed(1)}x</span>}
+          </div>
+        </div>
+        <div style={{...CARD,padding:'12px 14px'}}>
+          <div style={{...mn,fontSize:10,fontWeight:700,color:C.onSurfaceVariant,letterSpacing:'0.06em',marginBottom:6}}>MIN. PORTIONS</div>
+          <span style={{...ep,fontSize:15,fontWeight:700,color:C.onSurface}}>{data.min_portions||1} servings</span>
+        </div>
+      </div>
+
+      {/* Storage */}
+      {(data.fridge_storage||data.freezer_storage)&&(
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:16}}>
+          {data.fridge_storage&&<div style={{...CARD,padding:'12px 14px'}}><div style={{...mn,fontSize:10,fontWeight:700,color:C.onSurfaceVariant,letterSpacing:'0.06em',marginBottom:4}}>🧊 FRIDGE</div><div style={{...mn,fontSize:12,color:C.onSurface,lineHeight:1.5}}>{data.fridge_storage}</div></div>}
+          {data.freezer_storage&&<div style={{...CARD,padding:'12px 14px'}}><div style={{...mn,fontSize:10,fontWeight:700,color:C.onSurfaceVariant,letterSpacing:'0.06em',marginBottom:4}}>❄️ FREEZER</div><div style={{...mn,fontSize:12,color:C.onSurface,lineHeight:1.5}}>{data.freezer_storage}</div></div>}
+        </div>
+      )}
+
+      {/* Ingredients */}
+      {ingSections.length>0&&(
+        <div style={{marginBottom:20}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+            <span style={{...ep,fontSize:18,fontWeight:700,color:C.onSurface}}>Ingredients</span>
+            <span style={{...mn,fontSize:11,fontWeight:700,background:C.primaryFixed,color:C.primary,padding:'3px 10px',borderRadius:99}}>Scaled for {scaledFor} portions</span>
+          </div>
+          {ingSections.map((sec,si)=>(
+            <div key={si} style={{marginBottom:12}}>
+              {sec.title&&<div style={{...mn,fontSize:11,fontWeight:700,color:C.onSurfaceVariant,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:6}}>{sec.title}</div>}
+              <div style={{...CARD,overflow:'hidden'}}>
+                {sec.items.map((item,ii)=>{
+                  const {qty,name}=parseIngredientParts(item,scale)
+                  return(
+                    <div key={ii} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 14px',borderBottom:ii<sec.items.length-1?`1px solid ${C.outlineVariant}20`:undefined,gap:12}}>
+                      <span style={{...mn,fontSize:13,color:C.onSurface,flex:1}}>{name||item}</span>
+                      {qty&&<span style={{...mn,fontSize:13,fontWeight:700,color:C.onSurface,whiteSpace:'nowrap'}}>{qty}</span>}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Preparation Methods */}
+      {(stdSteps.length>0||tmSteps.length>0)&&(
+        <div style={{marginBottom:20}}>
+          <div style={{...ep,fontSize:18,fontWeight:700,color:C.onSurface,marginBottom:12}}>Preparation Methods</div>
+          {stdSteps.length>0&&(
+            <div style={{...CARD,marginBottom:10,overflow:'hidden'}}>
+              <button onClick={()=>setShowStd(s=>!s)} style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 16px',background:'none',border:'none',cursor:'pointer',borderBottom:showStd?`1px solid ${C.outlineVariant}25`:'none'}}>
+                <span style={{...mn,fontSize:14,fontWeight:700,color:C.onSurface}}>Standard Method (No Thermomix)</span>
+                <span style={{color:C.onSurfaceVariant,fontSize:16}}>{showStd?'∧':'∨'}</span>
+              </button>
+              {showStd&&(
+                <div style={{padding:'12px 16px',display:'flex',flexDirection:'column',gap:14}}>
+                  {stdSteps.map((step,i)=>(
+                    <div key={i} style={{display:'flex',gap:12}}>
+                      <div style={{width:24,height:24,borderRadius:99,background:C.secondaryContainer,color:C.primary,...mn,fontSize:12,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:2}}>{step.num}</div>
+                      <p style={{...mn,fontSize:13,color:C.onSurface,lineHeight:1.7,margin:0,flex:1}}>{step.text}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {tmSteps.length>0&&(
+            <div style={{...CARD,overflow:'hidden',background:'#f0fffe'}}>
+              <button onClick={()=>setShowTM(s=>!s)} style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 16px',background:'none',border:'none',cursor:'pointer',borderBottom:showTM?`1px solid ${C.outlineVariant}25`:'none'}}>
+                <div style={{display:'flex',alignItems:'center',gap:8}}>
+                  <span style={{fontSize:16}}>⚡</span>
+                  <span style={{...mn,fontSize:14,fontWeight:700,color:C.primary}}>Thermomix TM6 Method</span>
+                </div>
+                <span style={{color:C.onSurfaceVariant,fontSize:16}}>{showTM?'∧':'∨'}</span>
+              </button>
+              {showTM&&(
+                <div style={{padding:'12px 16px',display:'flex',flexDirection:'column',gap:14}}>
+                  {tmSteps.map((step,i)=>(
+                    <div key={i} style={{display:'flex',gap:12}}>
+                      <div style={{width:24,height:24,borderRadius:99,background:C.primary,color:C.onPrimary,...mn,fontSize:12,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:2}}>{step.num}</div>
+                      <p style={{...mn,fontSize:13,color:C.onSurface,lineHeight:1.7,margin:0,flex:1}}>{step.text}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* The Extras */}
+      {(data.chef_notes||data.husband_variations||data.toddler_variations||(data.side_recommendation&&data.side_recommendation!=='Not Recommended'))&&(
+        <div>
+          <div style={{...ep,fontSize:18,fontWeight:700,color:C.onSurface,marginBottom:12}}>The Extras</div>
+          {data.chef_notes&&(
+            <div style={{...CARD,padding:'14px 16px',marginBottom:10}}>
+              <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}><span style={{fontSize:14}}>📖</span><span style={{...mn,fontSize:10,fontWeight:700,color:C.onSurfaceVariant,letterSpacing:'0.07em',textTransform:'uppercase'}}>Chef's Notes</span></div>
+              <p style={{...mn,fontSize:13,color:C.onSurface,lineHeight:1.7,margin:0}}>{data.chef_notes}</p>
+            </div>
+          )}
+          {data.husband_variations&&(
+            <div style={{...CARD,padding:'14px 16px',marginBottom:10,background:'#fff8f0'}}>
+              <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}><span style={{fontSize:14}}>❤️</span><span style={{...mn,fontSize:10,fontWeight:700,color:'#A86000',letterSpacing:'0.07em',textTransform:'uppercase'}}>Husband Variations</span></div>
+              <p style={{...mn,fontSize:13,color:C.onSurface,lineHeight:1.7,margin:0}}>{data.husband_variations}</p>
+            </div>
+          )}
+          {data.toddler_variations&&(
+            <div style={{...CARD,padding:'14px 16px',marginBottom:10,background:'#f0f8ff'}}>
+              <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}><span style={{fontSize:14}}>👶</span><span style={{...mn,fontSize:10,fontWeight:700,color:'#0050A0',letterSpacing:'0.07em',textTransform:'uppercase'}}>Toddler Variations</span></div>
+              <p style={{...mn,fontSize:13,color:C.onSurface,lineHeight:1.7,margin:0}}>{data.toddler_variations}</p>
+            </div>
+          )}
+          {data.side_recommendation&&data.side_recommendation!=='Not Recommended'&&(
+            <div style={{...CARD,padding:'14px 16px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+              <div>
+                <div style={{...mn,fontSize:10,fontWeight:700,color:C.onSurfaceVariant,letterSpacing:'0.07em',textTransform:'uppercase',marginBottom:4}}>Recommended Side</div>
+                <div style={{...mn,fontSize:14,fontWeight:600,color:C.onSurface}}>{data.side_recommendation}</div>
+              </div>
+              <span style={{color:C.primary,fontSize:20}}>›</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Home ──────────────────────────────────────────────────────────
-function HomeScreen({plan,ratings,onRate,onPlanToday}){
+function HomeScreen({plan,ratings,onRate,onPlanToday,onOpenRecipe,onCopy}){
   const tm=[...plan[TODAY].breakfast,...plan[TODAY].main,...plan[TODAY].side]
   const ym=[...plan[YEST].breakfast,...plan[YEST].main,...plan[YEST].side]
+  const todayIdx=DAYS.indexOf(TODAY)
+  const restDays=DAYS.slice(todayIdx+1).filter(d=>[...plan[d].breakfast,...plan[d].main,...plan[d].side].length>0)
+  const [copied,setCopied]=useState(false)
+  const handleCopy=()=>{onCopy();setCopied(true);setTimeout(()=>setCopied(false),2000)}
   return(
     <div style={{padding:'16px 20px 20px'}}>
-      <div style={{...ep,fontSize:22,fontWeight:700,color:C.onSurface,marginBottom:14}}>Today's Plan</div>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
+        <div style={{...ep,fontSize:22,fontWeight:700,color:C.onSurface}}>Today's Plan</div>
+        <button onClick={handleCopy} style={{...mn,background:copied?'#f0fff4':C.secondaryContainer,color:copied?'#1a7a3a':C.primary,border:'none',borderRadius:99,padding:'6px 12px',fontSize:12,fontWeight:700,cursor:'pointer',transition:'all 0.2s'}}>
+          {copied?'✓ Copied':'📋 Copy week'}
+        </button>
+      </div>
       {tm.length===0?(
         <div style={{...CARD,padding:24,textAlign:'center'}}>
           <div style={{fontSize:30,marginBottom:10}}>🍽</div>
@@ -165,7 +391,7 @@ function HomeScreen({plan,ratings,onRate,onPlanToday}){
       ):(
         <div style={{display:'flex',flexDirection:'column',gap:12,marginBottom:24}}>
           {tm.map(m=>(
-            <div key={m.id} onClick={onPlanToday} style={{...CARD,padding:'14px 16px',cursor:'pointer'}}>
+            <div key={m.id} onClick={()=>onOpenRecipe(m.recipeId,m.portion)} style={{...CARD,padding:'14px 16px',cursor:'pointer'}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8,marginBottom:8}}>
                 <span style={{...ep,fontSize:18,fontWeight:700,color:C.onSurface}}>{m.name}</span>
                 <TodayTag/>
@@ -185,7 +411,7 @@ function HomeScreen({plan,ratings,onRate,onPlanToday}){
             <span style={{...ep,fontSize:20,fontWeight:700,color:C.primary}}>How was it?</span>
             <span style={{...mn,fontSize:12,color:C.onSurfaceVariant}}>Yesterday</span>
           </div>
-          <div style={{display:'flex',flexDirection:'column',gap:10}}>
+          <div style={{display:'flex',flexDirection:'column',gap:10,marginBottom:24}}>
             {ym.map(m=>(
               <div key={m.id} style={{...CARD,padding:'14px 16px'}}>
                 <div style={{display:'flex',alignItems:'center',gap:12}}>
@@ -198,6 +424,35 @@ function HomeScreen({plan,ratings,onRate,onPlanToday}){
                 </div>
               </div>
             ))}
+          </div>
+        </>
+      )}
+      {restDays.length>0&&(
+        <>
+          <div style={{...ep,fontSize:20,fontWeight:700,color:C.onSurface,marginBottom:14}}>Rest of the Week</div>
+          <div style={{display:'flex',flexDirection:'column',gap:14}}>
+            {restDays.map(day=>{
+              const meals=[...plan[day].breakfast,...plan[day].main,...plan[day].side]
+              return(
+                <div key={day}>
+                  <div style={{...mn,fontSize:11,fontWeight:700,letterSpacing:'0.07em',color:C.onSurfaceVariant,textTransform:'uppercase',marginBottom:6}}>{DAY_LBL[day]}</div>
+                  <div style={{...CARD,overflow:'hidden'}}>
+                    {meals.map((m,i)=>(
+                      <div key={m.id} onClick={()=>onOpenRecipe(m.recipeId,m.portion)} style={{padding:'10px 14px',borderBottom:i<meals.length-1?`1px solid ${C.outlineVariant}25`:undefined,display:'flex',alignItems:'center',gap:10,cursor:'pointer'}}>
+                        <div style={{flex:1}}>
+                          <div style={{...mn,fontSize:13,fontWeight:600,color:C.onSurface}}>{m.name}</div>
+                          <div style={{display:'flex',gap:8,marginTop:2}}>
+                            <CapLabel text={m.section==='breakfast'?'Breakfast':m.section==='main'?'Main':'Side'}/>
+                            <span style={{...mn,fontSize:11,color:C.onSurfaceVariant}}>🕒 {m.prep}m</span>
+                          </div>
+                        </div>
+                        <span style={{color:C.outlineVariant,fontSize:16}}>›</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </>
       )}
@@ -486,6 +741,11 @@ function ShoppingListScreen({shopping,onToggle,loading,error,onRegenerate}){
   // Surface any aisles returned by AI that aren't in the canonical list
   const extra=[...new Set(shopping.map(s=>s.aisle).filter(a=>a&&!AISLES.includes(a)))]
   const orderedAisles=[...AISLES,...extra]
+  const copyUnchecked=()=>{
+    const items=orderedAisles.flatMap(aisle=>shopping.filter(s=>s.aisle===aisle&&!s.checked))
+    if(!items.length)return
+    navigator.clipboard.writeText(items.map(item=>`• ${item.name}${item.amount?' — '+item.amount+(item.unit?' '+item.unit:''):''}`).join('\n'))
+  }
   return(
     <div style={{padding:'16px 20px 20px'}}>
       <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12}}>
@@ -494,7 +754,10 @@ function ShoppingListScreen({shopping,onToggle,loading,error,onRegenerate}){
           <div style={{...mn,fontSize:12,color:C.onSurfaceVariant,marginTop:2}}>{WEEK_LBL}</div>
           {!loading&&shopping.length>0&&<div style={{...mn,fontSize:12,color:C.primary,marginTop:2,fontWeight:600}}>{unc} item{unc!==1?'s':''} remaining</div>}
         </div>
-        {shopping.length>0&&!loading&&<button onClick={onRegenerate} style={{...mn,background:C.secondaryContainer,color:C.primary,border:'none',borderRadius:99,padding:'7px 12px',fontSize:12,fontWeight:700,cursor:'pointer',flexShrink:0}}>✨ Regenerate</button>}
+        {shopping.length>0&&!loading&&<div style={{display:'flex',gap:8,alignItems:'center'}}>
+          {unc>0&&<button onClick={copyUnchecked} style={{...mn,background:C.secondaryContainer,color:C.primary,border:'none',borderRadius:99,padding:'7px 12px',fontSize:12,fontWeight:700,cursor:'pointer',flexShrink:0}}>Copy list</button>}
+          <button onClick={onRegenerate} style={{...mn,background:C.secondaryContainer,color:C.primary,border:'none',borderRadius:99,padding:'7px 12px',fontSize:12,fontWeight:700,cursor:'pointer',flexShrink:0}}>✨ Regenerate</button>
+        </div>}
       </div>
       <HDivider/>
       {loading?(
@@ -637,6 +900,8 @@ export default function App() {
   const [selSec,    setSelSec]   = useState('main')
   const [batchTab,  setBatchTab] = useState('big')
   const [nutriProf, setNutriProf]= useState('adult')
+  const [selRecipeId,      setSelRecipeId]      = useState(null)
+  const [recipeDetailPortion, setRecipeDetailPortion] = useState(4)
 
   // Data
   const [loading,     setLoading]     = useState(true)
@@ -802,10 +1067,11 @@ export default function App() {
         aisle: (it.aisle || 'OTHER').toUpperCase(),
         checked: false,
       }))
-      // Optimistic render before save
       setShopping(items.map((it, i) => ({ ...it, id: `tmp-${i}` })))
       const sid = await saveShoppingList(planId, items)
       setShoppingId(sid)
+      const sl = await fetchShoppingList(planId)
+      if (sl) setShopping(sl.shopping_list_items || [])
     } catch (e) {
       setShoppingError(e.message)
     } finally {
@@ -844,7 +1110,16 @@ export default function App() {
         callEdgeFn('nutrition', { ...basePayload, profile: 'female_adult', portionsPerDay: 1 }),
         callEdgeFn('nutrition', { ...basePayload, profile: 'toddler',      portionsPerDay: 0.5, dob: TODDLER_DOB }),
       ])
-      setNutriData({ adult: adultResult, toddler: toddlerResult })
+      const normalize = r => ({
+        scores: r.scores,
+        general: r.generalRecommendations || r.general || [],
+        meals: (r.mealRecommendations || r.meals || []).map(x => ({
+          meal: x.forMeal || x.meal || '',
+          text: x.text,
+          type: x.type,
+        })),
+      })
+      setNutriData({ adult: normalize(adultResult), toddler: normalize(toddlerResult) })
     } catch(e) {
       setNutriError(e.message)
     } finally {
@@ -865,8 +1140,23 @@ export default function App() {
   }
 
   // ── Nav ─────────────────────────────────────────────────────────
-  const openDayPlan = day => { setSelDay(day); setScreen('dailyPlan') }
-  const openAddSec  = (day, sec) => { setSelDay(day); setSelSec(sec); setScreen('recipeSelection') }
+  const openDayPlan   = day => { setSelDay(day); setScreen('dailyPlan') }
+  const openAddSec    = (day, sec) => { setSelDay(day); setSelSec(sec); setScreen('recipeSelection') }
+  const openRecipe    = (recipeId, portion) => { setSelRecipeId(recipeId); setRecipeDetailPortion(portion || 4); setScreen('recipe') }
+  const copyWeekPlan  = () => {
+    const lines = [`5 Minutes to Dinner — ${WEEK_LBL}\n`]
+    DAYS.forEach(day => {
+      const meals = [...plan[day].breakfast, ...plan[day].main, ...plan[day].side]
+      if (!meals.length) return
+      lines.push(DAY_LBL[day])
+      meals.forEach(m => {
+        const sec = m.section === 'breakfast' ? 'Breakfast' : m.section === 'main' ? 'Main' : 'Side'
+        lines.push(`• ${m.name} — ${sec} (${m.portion} portions)`)
+      })
+      lines.push('')
+    })
+    navigator.clipboard.writeText(lines.join('\n'))
+  }
   const goBack = () => screen === 'recipeSelection' ? setScreen('dailyPlan') : setScreen(null)
 
   const headerTitle =
@@ -874,6 +1164,7 @@ export default function App() {
     : screen === 'dailyPlan'     ? 'Daily Plan'
     : screen === 'recipeSelection' ? `${DAY_LBL[selDay]} | ${selSec === 'breakfast' ? 'Breakfast' : selSec === 'main' ? 'Mains' : 'Sides'}`
     : screen === 'nutrition'     ? 'Nutrition Insights'
+    : screen === 'recipe'        ? 'Recipe Details'
     : '5 Minutes to Dinner'
 
   const NAV = [{id:'home',icon:'🏠',label:'Home'},{id:'planner',icon:'📅',label:'Planner'},{id:'list',icon:'🛒',label:'List'},{id:'batch',icon:'🍲',label:'Batch Cooking'}]
@@ -892,7 +1183,8 @@ export default function App() {
     if (screen === 'nutrition')       return <NutritionScreen profile={nutriProf} setProfile={setNutriProf} nutriData={nutriData} nutriLoading={nutriLoading} nutriError={nutriError} onAnalyse={analyseNutrition}/>
     if (screen === 'dailyPlan')       return <DailyPlanScreen day={selDay} plan={plan} updatePortion={updatePortion} removeMeal={removeMeal} onAddToSection={openAddSec} onSave={()=>setScreen(null)}/>
     if (screen === 'recipeSelection') return <RecipeSelectionScreen day={selDay} section={selSec} plan={plan} recipes={recipes} onAdd={addMeals}/>
-    if (tab === 'home')    return <HomeScreen plan={plan} ratings={ratings} onRate={onRate} onPlanToday={()=>openDayPlan(TODAY)}/>
+    if (screen === 'recipe')          return <RecipeScreen recipeId={selRecipeId} portion={recipeDetailPortion}/>
+    if (tab === 'home')    return <HomeScreen plan={plan} ratings={ratings} onRate={onRate} onPlanToday={()=>openDayPlan(TODAY)} onOpenRecipe={openRecipe} onCopy={copyWeekPlan}/>
     if (tab === 'planner') return <PlannerScreen plan={plan} removeMeal={removeMeal} onDayOpen={openDayPlan} onNutrition={()=>{ setScreen('nutrition'); if(!nutriData) analyseNutrition() }} onShoppingList={generateShoppingList}/>
     if (tab === 'list')    return <ShoppingListScreen shopping={shopping} onToggle={onShoppingToggle} loading={shoppingLoading} error={shoppingError} onRegenerate={generateShoppingList}/>
     if (tab === 'batch')   return <BatchScreen activeTab={batchTab} setActiveTab={setBatchTab} batchData={batchData} batchLoading={batchLoading} batchError={batchError} onGenerate={generateBatch}/>

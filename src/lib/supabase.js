@@ -206,3 +206,14 @@ export async function saveShoppingList(planId, items) {
 export async function updateShoppingItem(id, checked) {
   await supabase.from('shopping_list_items').update({ checked }).eq('id', id)
 }
+
+// ─── Recipe detail ────────────────────────────────────────────────
+export async function fetchRecipeDetails(id) {
+  const { data, error } = await supabase
+    .from('recipes')
+    .select('id, name, prep_time_raw, cook_time_raw, prep_time_minutes, cook_time_minutes, portion_size, min_portions, fridge_storage, freezer_storage, has_thermomix_version, ingredients, instructions_standard, instructions_thermomix, chef_notes, toddler_variations, husband_variations, side_recommendation')
+    .eq('id', id)
+    .single()
+  if (error) throw error
+  return data
+}
