@@ -741,6 +741,11 @@ function ShoppingListScreen({shopping,onToggle,loading,error,onRegenerate}){
   // Surface any aisles returned by AI that aren't in the canonical list
   const extra=[...new Set(shopping.map(s=>s.aisle).filter(a=>a&&!AISLES.includes(a)))]
   const orderedAisles=[...AISLES,...extra]
+  const copyUnchecked=()=>{
+    const items=orderedAisles.flatMap(aisle=>shopping.filter(s=>s.aisle===aisle&&!s.checked))
+    if(!items.length)return
+    navigator.clipboard.writeText(items.map(item=>`• ${item.name}${item.amount?' — '+item.amount+(item.unit?' '+item.unit:''):''}`).join('\n'))
+  }
   return(
     <div style={{padding:'16px 20px 20px'}}>
       <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12}}>
@@ -749,7 +754,10 @@ function ShoppingListScreen({shopping,onToggle,loading,error,onRegenerate}){
           <div style={{...mn,fontSize:12,color:C.onSurfaceVariant,marginTop:2}}>{WEEK_LBL}</div>
           {!loading&&shopping.length>0&&<div style={{...mn,fontSize:12,color:C.primary,marginTop:2,fontWeight:600}}>{unc} item{unc!==1?'s':''} remaining</div>}
         </div>
-        {shopping.length>0&&!loading&&<button onClick={onRegenerate} style={{...mn,background:C.secondaryContainer,color:C.primary,border:'none',borderRadius:99,padding:'7px 12px',fontSize:12,fontWeight:700,cursor:'pointer',flexShrink:0}}>✨ Regenerate</button>}
+        {shopping.length>0&&!loading&&<div style={{display:'flex',gap:8,alignItems:'center'}}>
+          {unc>0&&<button onClick={copyUnchecked} style={{...mn,background:C.secondaryContainer,color:C.primary,border:'none',borderRadius:99,padding:'7px 12px',fontSize:12,fontWeight:700,cursor:'pointer',flexShrink:0}}>Copy list</button>}
+          <button onClick={onRegenerate} style={{...mn,background:C.secondaryContainer,color:C.primary,border:'none',borderRadius:99,padding:'7px 12px',fontSize:12,fontWeight:700,cursor:'pointer',flexShrink:0}}>✨ Regenerate</button>
+        </div>}
       </div>
       <HDivider/>
       {loading?(
