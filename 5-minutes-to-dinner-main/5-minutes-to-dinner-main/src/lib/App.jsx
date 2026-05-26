@@ -10,8 +10,8 @@ import {
 
 
 // ─── Edge Function URLs ───────────────────────────────────────────
-const SUPA_URL = 'https://chcjytxvpvhzdgvwllss.supabase.co/functions/v1'
-const SUPA_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNoY2p5dHh2cHZoemRndndsbHNzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1NzYxMDQsImV4cCI6MjA5MzE1MjEwNH0.BxAHDZYTBNj5L5KKrNU0HLEKYYXK2Jffv3ejnL1YUkg'
+const SUPA_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
+const SUPA_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 async function callEdgeFn(name, body) {
   const r = await fetch(`${SUPA_URL}/${name}`, {
