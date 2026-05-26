@@ -625,12 +625,14 @@ function RecipeSelectionScreen({day,section,plan,recipes,onAdd}){
   const available=filtered.filter(r=>!currentDayIds.includes(r.id))
 
   // Bucket order requested: Already Planned This Week → Default → Try Out → Order Out → Other
+  // Default takes priority: if a recipe has this day in defaultDays it always lands here
   const alreadyWeek=available.filter(r=>otherDaysIds.includes(r.id))
   const rest=available.filter(r=>!otherDaysIds.includes(r.id))
-  const defaults=rest.filter(r=>(r.defaultDays||[]).includes(day)&&!r.tryOut&&!r.orderOut)
-  const tryOut=rest.filter(r=>r.tryOut&&!r.orderOut)
-  const orderOut=rest.filter(r=>r.orderOut)
-  const other=rest.filter(r=>!(r.defaultDays||[]).includes(day)&&!r.tryOut&&!r.orderOut)
+  const defaults=rest.filter(r=>(r.defaultDays||[]).includes(day))
+  const notDefault=rest.filter(r=>!(r.defaultDays||[]).includes(day))
+  const tryOut=notDefault.filter(r=>r.tryOut&&!r.orderOut)
+  const orderOut=notDefault.filter(r=>r.orderOut)
+  const other=notDefault.filter(r=>!r.tryOut&&!r.orderOut)
 
   const toggle=rid=>setSelected(s=>s.includes(rid)?s.filter(x=>x!==rid):[...s,rid])
   return(
