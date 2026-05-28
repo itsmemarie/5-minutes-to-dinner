@@ -59,6 +59,22 @@ export async function fetchRecipes() {
   })
 }
 
+export async function createRecipe(fields) {
+  const { diet, ...dbFields } = fields
+  const id = crypto.randomUUID()
+  const { data, error } = await supabase
+    .from('recipes')
+    .insert({ id, ...dbFields })
+    .select('id')
+    .single()
+  if (error) throw error
+  if (diet === 'vegan' || diet === 'veg') {
+    const tagId = diet === 'vegan' ? 'vegan' : 'vegetarian'
+    await supabase.from('recipe_dietary_tags').insert({ recipe_id: data.id, dietary_tag_id: tagId })
+  }
+  return data.id
+}
+
 // ─── App settings ─────────────────────────────────────────────────
 export async function fetchSettings() {
   const { data } = await supabase
