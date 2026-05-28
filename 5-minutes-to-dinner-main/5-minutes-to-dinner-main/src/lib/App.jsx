@@ -14,9 +14,9 @@ const SUPA_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
 const SUPA_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 async function callEdgeFn(name, body) {
-  const r = await fetch(`${SUPA_URL}/${name}`, {
+  const r = await fetch(`${SUPA_URL}/${name}?apikey=${SUPA_ANON}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'apikey': SUPA_ANON },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
   const d = await r.json()
