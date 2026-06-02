@@ -61,7 +61,7 @@ export async function fetchRecipes() {
 
 export async function createRecipe(fields) {
   const { diet, ...dbFields } = fields
-  const id = crypto.randomUUID()
+  const id = 'mp-' + crypto.randomUUID()
   const { data, error } = await supabase
     .from('recipes')
     .insert({ id, ...dbFields })

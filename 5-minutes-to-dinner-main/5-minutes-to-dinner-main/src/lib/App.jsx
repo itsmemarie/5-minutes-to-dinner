@@ -655,7 +655,7 @@ function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
         fun_recipe: f.fun_recipe,
         husband_approved: f.husband_approved,
         has_thermomix_version: f.has_thermomix_version,
-        weekdays: f.weekdays.length ? f.weekdays : null,
+        weekdays: f.weekdays,
         ingredients: f.ingredients || null,
         instructions_standard: f.instructions_standard || null,
         instructions_thermomix: f.instructions_thermomix || null,
