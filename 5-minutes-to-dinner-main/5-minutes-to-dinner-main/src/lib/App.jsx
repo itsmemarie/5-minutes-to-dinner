@@ -6,6 +6,7 @@ import {
   fetchRatings, upsertRating,
   fetchShoppingList, saveShoppingList, updateShoppingItem,
   fetchRecipeDetails, createRecipe,
+  fetchRecipeNotes, saveRecipeNotes,
 } from './supabase.js'
 
 
@@ -194,11 +195,27 @@ function RecipeScreen({ recipeId, portion }) {
   const [err, setErr] = useState(null)
   const [showStd, setShowStd] = useState(false)
   const [showTM, setShowTM] = useState(false)
+  const [notes, setNotes] = useState('')
+  const [notesSaved, setNotesSaved] = useState(true)
+  const [notesSaving, setNotesSaving] = useState(false)
 
   useEffect(() => {
     fetchRecipeDetails(recipeId)
       .then(setData).catch(e => setErr(e.message)).finally(() => setLoading(false))
+    fetchRecipeNotes(recipeId).then(n => { setNotes(n); setNotesSaved(true) })
   }, [recipeId])
+
+  function handleNotesChange(e) {
+    setNotes(e.target.value)
+    setNotesSaved(false)
+  }
+
+  async function handleNotesSave() {
+    setNotesSaving(true)
+    await saveRecipeNotes(recipeId, notes)
+    setNotesSaving(false)
+    setNotesSaved(true)
+  }
 
   if (loading) return <Spinner msg='Loading recipe…'/>
   if (err) return <div style={{padding:20}}><p style={{...mn,color:C.error}}>⚠️ {err}</p></div>
@@ -362,6 +379,35 @@ function RecipeScreen({ recipeId, portion }) {
           )}
         </div>
       )}
+
+      {/* Cooking Notes */}
+      <div style={{marginTop:24}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+          <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <span style={{fontSize:18}}>✏️</span>
+            <span style={{...ep,fontSize:18,fontWeight:700,color:C.onSurface}}>My Cooking Notes</span>
+          </div>
+          {!notesSaved&&(
+            <button
+              onClick={handleNotesSave}
+              disabled={notesSaving}
+              style={{...mn,fontSize:12,fontWeight:700,color:C.onPrimary,background:C.primary,border:'none',borderRadius:99,padding:'5px 14px',cursor:'pointer',opacity:notesSaving?0.6:1}}
+            >
+              {notesSaving?'Saving…':'Save'}
+            </button>
+          )}
+          {notesSaved&&notes&&(
+            <span style={{...mn,fontSize:11,color:C.onSurfaceVariant}}>Saved</span>
+          )}
+        </div>
+        <textarea
+          value={notes}
+          onChange={handleNotesChange}
+          onBlur={notesSaved?undefined:handleNotesSave}
+          placeholder="Add notes as you cook — tweaks, timings, what worked well…"
+          style={{width:'100%',minHeight:120,padding:'12px 14px',borderRadius:12,border:`1.5px solid ${notesSaved?C.outlineVariant:C.primary}`,background:C.surface,...mn,fontSize:13,color:C.onSurface,lineHeight:1.7,resize:'vertical',boxSizing:'border-box',outline:'none',transition:'border-color 0.15s'}}
+        />
+      </div>
     </div>
   )
 }
@@ -564,12 +610,15 @@ function DailyPlanScreen({day,plan,updatePortion,removeMeal,onAddToSection,onSav
 }
 
 // ─── Recipe Card + Bucket ───────────────────────────────────────────
-function RecipeCard({r,disabled,selected,onToggle}){
+function RecipeCard({r,disabled,selected,onToggle,onPreview}){
   const sel=selected.includes(r.id)
   return(
     <div onClick={disabled?undefined:()=>onToggle(r.id)} style={{...CARD,padding:'12px 14px',display:'flex',alignItems:'center',gap:12,cursor:disabled?'default':'pointer',opacity:disabled?0.55:1,marginBottom:8}}>
       <div style={{flex:1}}>
-        <div style={{...mn,fontSize:14,fontWeight:600,color:C.onSurface,marginBottom:4}}>{r.name}</div>
+        <div
+          onClick={onPreview?e=>{e.stopPropagation();onPreview(r.id)}:undefined}
+          style={{...mn,fontSize:14,fontWeight:600,color:onPreview?C.primary:C.onSurface,marginBottom:4,textDecorationLine:onPreview?'underline':'none',textDecorationStyle:'dotted',cursor:onPreview?'pointer':'default',display:'inline-block'}}
+        >{r.name}</div>
         <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
           <CapLabel text={`${Math.max(r.base,r.min)}p`}/>
           <span style={{...mn,fontSize:11,color:C.onSurfaceVariant}}>🕒 {r.prep}m prep</span>
@@ -585,12 +634,12 @@ function RecipeCard({r,disabled,selected,onToggle}){
     </div>
   )
 }
-function RecipeBucket({title,items,disabled,selected,onToggle}){
+function RecipeBucket({title,items,disabled,selected,onToggle,onPreview}){
   if(!items.length)return null
   return(
     <div style={{marginBottom:16}}>
       <div style={{...mn,fontSize:11,fontWeight:700,color:C.onSurfaceVariant,letterSpacing:'0.05em',textTransform:'uppercase',marginBottom:8}}>{title}</div>
-      {items.map(r=><RecipeCard key={r.id} r={r} disabled={disabled} selected={selected} onToggle={onToggle}/>)}
+      {items.map(r=><RecipeCard key={r.id} r={r} disabled={disabled} selected={selected} onToggle={onToggle} onPreview={onPreview}/>)}
     </div>
   )
 }
@@ -813,7 +862,7 @@ function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
 }
 
 // ─── Recipe Selection ────────────────────────────────────────────────
-function RecipeSelectionScreen({day,section,plan,recipes,onAdd,onRecipeCreated}){
+function RecipeSelectionScreen({day,section,plan,recipes,onAdd,onRecipeCreated,onPreview}){
   const [search,setSearch]=useState('')
   const [chip,setChip]=useState('cat')
   const [selected,setSelected]=useState([])
@@ -880,11 +929,11 @@ function RecipeSelectionScreen({day,section,plan,recipes,onAdd,onRecipeCreated})
           </div>
         ):(
           <>
-            <RecipeBucket title='Already Planned This Week' items={alreadyWeek} disabled={false} selected={selected} onToggle={toggle}/>
-            <RecipeBucket title='Default' items={defaults} disabled={false} selected={selected} onToggle={toggle}/>
-            <RecipeBucket title='Try Out' items={tryOut} disabled={false} selected={selected} onToggle={toggle}/>
-            <RecipeBucket title='Order Out' items={orderOut} disabled={false} selected={selected} onToggle={toggle}/>
-            <RecipeBucket title='Other Meals' items={other} disabled={false} selected={selected} onToggle={toggle}/>
+            <RecipeBucket title='Already Planned This Week' items={alreadyWeek} disabled={false} selected={selected} onToggle={toggle} onPreview={onPreview}/>
+            <RecipeBucket title='Default' items={defaults} disabled={false} selected={selected} onToggle={toggle} onPreview={onPreview}/>
+            <RecipeBucket title='Try Out' items={tryOut} disabled={false} selected={selected} onToggle={toggle} onPreview={onPreview}/>
+            <RecipeBucket title='Order Out' items={orderOut} disabled={false} selected={selected} onToggle={toggle} onPreview={onPreview}/>
+            <RecipeBucket title='Other Meals' items={other} disabled={false} selected={selected} onToggle={toggle} onPreview={onPreview}/>
           </>
         )}
       </div>
@@ -1133,6 +1182,7 @@ export default function App() {
   const [nutriProf, setNutriProf]= useState('adult')
   const [selRecipeId,      setSelRecipeId]      = useState(null)
   const [recipeDetailPortion, setRecipeDetailPortion] = useState(4)
+  const [prevScreen,       setPrevScreen]       = useState(null)
 
   // Data
   const [loading,     setLoading]     = useState(true)
@@ -1374,6 +1424,7 @@ export default function App() {
   const openDayPlan   = day => { setSelDay(day); setScreen('dailyPlan') }
   const openAddSec    = (day, sec) => { setSelDay(day); setSelSec(sec); setScreen('recipeSelection') }
   const openRecipe    = (recipeId, portion) => { setSelRecipeId(recipeId); setRecipeDetailPortion(portion || 4); setScreen('recipe') }
+  const openRecipeFromSelection = recipeId => { setPrevScreen('recipeSelection'); setSelRecipeId(recipeId); setRecipeDetailPortion(4); setScreen('recipe') }
   const copyWeekPlan  = () => {
     const lines = [`5 Minutes to Dinner — ${WEEK_LBL}\n`]
     DAYS.forEach(day => {
@@ -1388,7 +1439,16 @@ export default function App() {
     })
     navigator.clipboard.writeText(lines.join('\n'))
   }
-  const goBack = () => screen === 'recipeSelection' ? setScreen('dailyPlan') : setScreen(null)
+  const goBack = () => {
+    if (screen === 'recipe' && prevScreen === 'recipeSelection') {
+      setPrevScreen(null)
+      setScreen('recipeSelection')
+    } else if (screen === 'recipeSelection') {
+      setScreen('dailyPlan')
+    } else {
+      setScreen(null)
+    }
+  }
 
   const headerTitle =
     screen === 'settings'        ? 'Settings'
@@ -1413,7 +1473,7 @@ export default function App() {
     if (screen === 'settings')        return <SettingsScreen defPort={defPort} setDefPort={setDefPort}/>
     if (screen === 'nutrition')       return <NutritionScreen profile={nutriProf} setProfile={setNutriProf} nutriData={nutriData} nutriLoading={nutriLoading} nutriError={nutriError} onAnalyse={analyseNutrition}/>
     if (screen === 'dailyPlan')       return <DailyPlanScreen day={selDay} plan={plan} updatePortion={updatePortion} removeMeal={removeMeal} onAddToSection={openAddSec} onSave={()=>setScreen(null)}/>
-    if (screen === 'recipeSelection') return <RecipeSelectionScreen day={selDay} section={selSec} plan={plan} recipes={recipes} onAdd={addMeals} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))}/>
+    if (screen === 'recipeSelection') return <RecipeSelectionScreen day={selDay} section={selSec} plan={plan} recipes={recipes} onAdd={addMeals} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))} onPreview={openRecipeFromSelection}/>
     if (screen === 'recipe')          return <RecipeScreen recipeId={selRecipeId} portion={recipeDetailPortion}/>
     if (tab === 'home')    return <HomeScreen plan={plan} ratings={ratings} onRate={onRate} onPlanToday={()=>openDayPlan(TODAY)} onOpenRecipe={openRecipe} onCopy={copyWeekPlan}/>
     if (tab === 'planner') return <PlannerScreen plan={plan} removeMeal={removeMeal} onDayOpen={openDayPlan} onNutrition={()=>{ setScreen('nutrition'); if(!nutriData) analyseNutrition() }} onShoppingList={generateShoppingList}/>

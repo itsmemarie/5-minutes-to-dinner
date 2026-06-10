@@ -223,6 +223,23 @@ export async function updateShoppingItem(id, checked) {
   await supabase.from('shopping_list_items').update({ checked }).eq('id', id)
 }
 
+// ─── Recipe notes ─────────────────────────────────────────────────
+export async function fetchRecipeNotes(recipeId) {
+  const { data } = await supabase
+    .from('recipe_notes')
+    .select('notes')
+    .eq('recipe_id', recipeId)
+    .single()
+  return data?.notes ?? ''
+}
+
+export async function saveRecipeNotes(recipeId, notes) {
+  await supabase
+    .from('recipe_notes')
+    .upsert({ recipe_id: recipeId, notes, updated_at: new Date().toISOString() },
+             { onConflict: 'recipe_id' })
+}
+
 // ─── Recipe detail ────────────────────────────────────────────────
 export async function fetchRecipeDetails(id) {
   const { data, error } = await supabase
