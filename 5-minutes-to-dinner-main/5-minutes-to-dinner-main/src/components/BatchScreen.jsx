@@ -53,7 +53,7 @@ export function BatchScreen({activeTab,setActiveTab,batchData,batchLoading,batch
       </div>
       {session.overview&&(
         <div style={{...CARD,padding:'14px 16px',marginBottom:16}}>
-          <div style={{...ep,fontSize:15,fontWeight:700,color:C.onSurface,marginBottom:10}}>✓ Session Overview</div>
+          <div style={{...ep,fontSize:15,color:C.onSurface,marginBottom:10}}>✓ Session Overview</div>
           {session.overview.map((o,i)=><div key={i} style={{...mn,fontSize:13,color:C.onSurfaceVariant,padding:'4px 0',display:'flex',gap:8}}><span>{o.e}</span><span>{o.t}</span></div>)}
         </div>
       )}

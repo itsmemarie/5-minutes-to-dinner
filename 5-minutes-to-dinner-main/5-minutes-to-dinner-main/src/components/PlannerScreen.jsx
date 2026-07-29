@@ -20,15 +20,15 @@ export function PlannerScreen({plan,removeMeal,moveMeal,duplicateMeal,onDayOpen,
       {showNewRecipe&&<NewRecipeForm defaultMealType='main' onSave={r=>{onRecipeCreated(r);setShowNewRecipe(false)}} onCancel={()=>setShowNewRecipe(false)}/>}
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 0 0'}}>
         <Btn label='+ New Recipe' small onClick={()=>setShowNewRecipe(true)}/>
-        <button onClick={handleCopy} style={{...mn,background:copied?'#f0fff4':C.secondaryContainer,color:copied?'#1a7a3a':C.primary,border:'none',borderRadius:99,padding:'6px 12px',fontSize:12,fontWeight:700,cursor:'pointer',transition:'all 0.2s'}}>
+        <button onClick={handleCopy} style={{...mn,background:copied?'#f0fff4':C.secondaryContainer,color:copied?'#1a7a3a':C.onSecondaryContainer,border:'none',borderRadius:99,padding:'6px 12px',fontSize:12,fontWeight:700,cursor:'pointer',transition:'all 0.2s'}}>
           {copied?'✓ Copied':'📋 Copy week'}
         </button>
       </div>
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 0 12px'}}>
-        <div style={{...ep,fontSize:22,fontWeight:700,color:C.onSurface}}>Weekly Planner</div>
+        <div style={{...ep,fontSize:22,color:C.onSurface}}>Weekly Planner</div>
         <div style={{...mn,fontSize:12,color:C.onSurfaceVariant,background:C.surfaceContainerHigh,padding:'5px 10px',borderRadius:99}}>{WEEK_LBL} ▾</div>
       </div>
-      <button onClick={onNutrition} style={{width:'100%',background:C.secondaryContainer,color:C.primary,border:'none',borderRadius:12,padding:'13px',...mn,fontSize:14,fontWeight:700,cursor:'pointer',marginBottom:16,display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+      <button onClick={onNutrition} style={{width:'100%',background:C.secondaryContainer,color:C.onSecondaryContainer,border:'none',borderRadius:12,padding:'13px',...mn,fontSize:14,fontWeight:700,cursor:'pointer',marginBottom:16,display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
         📊 Calculate Nutritional Insights
       </button>
       {DAYS.map(day=>{
@@ -37,8 +37,8 @@ export function PlannerScreen({plan,removeMeal,moveMeal,duplicateMeal,onDayOpen,
         return(
           <div key={day} style={{marginBottom:16}}>
             <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
-              <span style={{...ep,fontSize:16,fontWeight:700,color:isToday?C.primary:C.onSurface}}>{DAY_LBL[day]}</span>
-              {isToday&&<span style={{...mn,fontSize:10,fontWeight:700,background:C.primary,color:C.onPrimary,padding:'2px 7px',borderRadius:99}}>TODAY</span>}
+              <span style={{...ep,fontSize:16,color:isToday?C.primary:C.onSurface}}>{DAY_LBL[day]}</span>
+              {isToday&&<span style={{...mn,fontSize:10,fontWeight:700,background:'transparent',border:`1px solid ${C.tertiary}`,color:C.tertiary,padding:'2px 7px',borderRadius:99}}>Today</span>}
             </div>
             {meals.length===0?(
               <div onDragOver={e=>onDragOver(e,day)} onDragLeave={onDragLeave} onDrop={e=>onDrop(e,day)} style={{...CARD,padding:22,display:'flex',flexDirection:'column',alignItems:'center',gap:8,outline:over===day&&drag?.fromDay!==day?`2px solid ${C.primary}`:'2px solid transparent',transition:'outline 0.12s'}}>
@@ -77,7 +77,7 @@ export function PlannerScreen({plan,removeMeal,moveMeal,duplicateMeal,onDayOpen,
         )
       })}
       <div style={{position:'sticky',bottom:10,padding:'8px 0'}}>
-        <button onClick={onShoppingList} style={{width:'100%',background:C.primary,color:C.onPrimary,border:'none',borderRadius:12,padding:'14px',...mn,fontSize:14,fontWeight:700,cursor:'pointer',boxShadow:'0 4px 20px rgba(0,68,64,0.3)'}}>
+        <button onClick={onShoppingList} style={{width:'100%',background:C.primary,color:C.onPrimary,border:'none',borderRadius:12,padding:'14px',...mn,fontSize:14,fontWeight:700,cursor:'pointer',boxShadow:'0 4px 20px rgba(45,96,47,0.3)'}}>
           🛒 Generate Shopping List
         </button>
       </div>

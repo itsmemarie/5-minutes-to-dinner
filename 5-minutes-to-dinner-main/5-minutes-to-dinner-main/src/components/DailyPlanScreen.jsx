@@ -9,15 +9,15 @@ export function DailyPlanScreen({day,plan,updatePortion,removeMeal,duplicateMeal
   const go=()=>{setSaved(true);setTimeout(()=>{setSaved(false);onSave()},1000)}
   return(
     <div style={{padding:'0 20px'}}>
-      <div style={{...ep,fontSize:24,fontWeight:700,color:C.onSurface,padding:'16px 0 12px'}}>{DAY_LBL[day]}</div>
+      <div style={{...ep,fontSize:24,color:C.onSurface,padding:'16px 0 12px'}}>{DAY_LBL[day]}</div>
       {secs.map(s=>(
         <div key={s.key} style={{marginBottom:20}}>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
-            <span style={{...ep,fontSize:15,fontWeight:700,color:C.onSurface}}>{s.label}</span>
+            <span style={{...ep,fontSize:15,color:C.onSurface}}>{s.label}</span>
             <button onClick={()=>onAddToSection(day,s.key)} style={{...mn,background:'none',border:'none',color:C.primary,fontWeight:700,fontSize:13,cursor:'pointer'}}>＋ Add</button>
           </div>
           {plan[day][s.key].length===0?(
-            <div onClick={()=>onAddToSection(day,s.key)} style={{border:`2px dashed ${C.outlineVariant}`,borderRadius:16,padding:20,display:'flex',flexDirection:'column',alignItems:'center',gap:6,cursor:'pointer'}}>
+            <div onClick={()=>onAddToSection(day,s.key)} style={{border:`2px dashed ${C.outlineVariant}`,borderRadius:10,padding:20,display:'flex',flexDirection:'column',alignItems:'center',gap:6,cursor:'pointer'}}>
               <span style={{fontSize:22,color:C.outlineVariant}}>⊕</span>
               <span style={{...mn,fontSize:13,color:C.outlineVariant}}>Tap to add {s.label.toLowerCase()}</span>
             </div>

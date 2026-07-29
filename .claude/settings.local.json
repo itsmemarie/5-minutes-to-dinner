@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx skills *)"
+      "Bash(npx skills *)",
+      "Bash(claude mcp *)",
+      "PowerShell(claude mcp add --scope user --transport http claude-design https://api.anthropic.com/v1/design/mcp)"
     ]
   }
 }

@@ -8,8 +8,9 @@ import {
 import { callEdgeFn } from './ai.js'
 import { C, ep, mn } from './theme.js'
 import { TODAY, DAYS, DAY_LBL, WEEK_OF, WEEK_LBL, uid, emptyWeek } from './dateHelpers.js'
-import { Spinner, Btn } from '../components/ui/index.js'
+import { Spinner, Btn, Icon } from '../components/ui/index.js'
 import { RecipeScreen } from '../components/RecipeScreen.jsx'
+import { HomeScreen } from '../components/HomeScreen.jsx'
 import { PlannerScreen } from '../components/PlannerScreen.jsx'
 import { DailyPlanScreen } from '../components/DailyPlanScreen.jsx'
 import { RecipeSelectionScreen } from '../components/RecipeSelectionScreen.jsx'
@@ -330,14 +331,14 @@ export default function App() {
     : screen === 'recipe'        ? 'Recipe Details'
     : '5 Minutes to Dinner'
 
-  const NAV = [{id:'home',icon:'🏠',label:'Home'},{id:'planner',icon:'📅',label:'Planner'},{id:'list',icon:'🛒',label:'List'},{id:'batch',icon:'🍲',label:'Batch Cooking'}]
+  const NAV = [{id:'home',icon:'home',label:'Home'},{id:'planner',icon:'calendar',label:'Planner'},{id:'list',icon:'cart',label:'Shopping'},{id:'batch',icon:'chefHat',label:'Batch'}]
 
   const renderScreen = () => {
     if (loading) return <Spinner msg={loadMsg}/>
     if (error) return (
       <div style={{padding:32,textAlign:'center'}}>
         <div style={{fontSize:36,marginBottom:12}}>⚠️</div>
-        <div style={{...ep,fontSize:16,fontWeight:700,color:C.error,marginBottom:8}}>Couldn't connect</div>
+        <div style={{...ep,fontSize:16,color:C.error,marginBottom:8}}>Couldn't connect</div>
         <div style={{...mn,fontSize:12,color:C.onSurfaceVariant,lineHeight:1.6,marginBottom:20}}>{error}</div>
         <Btn label='Retry' onClick={()=>window.location.reload()} secondary/>
       </div>
@@ -347,24 +348,25 @@ export default function App() {
     if (screen === 'dailyPlan')       return <DailyPlanScreen day={selDay} plan={plan} updatePortion={updatePortion} removeMeal={removeMeal} duplicateMeal={duplicateMeal} onAddToSection={openAddSec} onSave={()=>setScreen(null)}/>
     if (screen === 'recipeSelection') return <RecipeSelectionScreen day={selDay} section={selSec} plan={plan} recipes={recipes} onAdd={addMeals} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))} onPreview={openRecipeFromSelection}/>
     if (screen === 'recipe')          return <RecipeScreen recipeId={selRecipeId} portion={recipeDetailPortion}/>
-    if (tab === 'home' || tab === 'planner') return <PlannerScreen plan={plan} removeMeal={removeMeal} moveMeal={moveMeal} duplicateMeal={duplicateMeal} onDayOpen={openDayPlan} onNutrition={()=>{ setScreen('nutrition'); if(!nutriData) analyseNutrition() }} onShoppingList={generateShoppingList} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))} onCopy={copyWeekPlan}/>
+    if (tab === 'home')    return <HomeScreen plan={plan} onDayOpen={openDayPlan} onCopy={copyWeekPlan} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))}/>
+    if (tab === 'planner') return <PlannerScreen plan={plan} removeMeal={removeMeal} moveMeal={moveMeal} duplicateMeal={duplicateMeal} onDayOpen={openDayPlan} onNutrition={()=>{ setScreen('nutrition'); if(!nutriData) analyseNutrition() }} onShoppingList={generateShoppingList} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))} onCopy={copyWeekPlan}/>
     if (tab === 'list')    return <ShoppingListScreen shopping={shopping} onToggle={onShoppingToggle} loading={shoppingLoading} error={shoppingError} onRegenerate={generateShoppingList}/>
     if (tab === 'batch')   return <BatchScreen activeTab={batchTab} setActiveTab={setBatchTab} batchData={batchData} batchLoading={batchLoading} batchError={batchError} onGenerate={generateBatch}/>
   }
 
   return (
-    <div style={{display:'flex',justifyContent:'center',background:'#cdd5d4',minHeight:'100vh'}}>
-      <div style={{width:'100%',maxWidth:430,background:C.surface,display:'flex',flexDirection:'column',minHeight:'100vh',position:'relative',...mn}}>
-        <div style={{background:C.white,borderBottom:`1px solid ${C.outlineVariant}25`,padding:'11px 20px',display:'flex',alignItems:'center',gap:10,flexShrink:0,position:'sticky',top:0,zIndex:20}}>
+    <div style={{display:'flex',justifyContent:'center',background:'#dbe6d8',minHeight:'100vh'}}>
+      <div style={{width:'100%',maxWidth:430,background:C.white,display:'flex',flexDirection:'column',minHeight:'100vh',position:'relative',...mn}}>
+        <div style={{background:C.primary,padding:'16px 20px',display:'flex',alignItems:'center',gap:10,flexShrink:0,position:'sticky',top:0,zIndex:20}}>
           {screen
-            ? <button onClick={goBack} style={{border:'none',background:'none',color:C.primary,fontSize:22,cursor:'pointer',padding:'2px 8px 2px 0',display:'flex',alignItems:'center'}}>←</button>
-            : <div style={{width:32,height:32,background:C.primary,borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}><span style={{...ep,fontSize:11,fontWeight:700,color:C.onPrimary,letterSpacing:'-0.02em'}}>5M</span></div>
+            ? <button onClick={goBack} style={{border:'none',background:'none',color:C.onPrimary,cursor:'pointer',padding:'2px 8px 2px 0',display:'flex',alignItems:'center'}}><Icon name='back' color={C.onPrimary}/></button>
+            : <img src='/dino-logo.png' alt='' style={{width:30,height:30,objectFit:'contain',flexShrink:0}}/>
           }
-          <span style={{...ep,fontSize:screen?16:17,fontWeight:700,color:screen?C.onSurface:C.primary,flex:1}}>{headerTitle}</span>
+          <span style={{...ep,fontSize:screen?17:19,color:C.onPrimary,flex:1}}>{headerTitle}</span>
           {!loading && !screen && (
             <div style={{display:'flex',alignItems:'center',gap:8}}>
-              <div style={{width:6,height:6,borderRadius:99,background:error?'#ba1a1a':'#1a7a3a'}} title={error?'DB error':'Connected to Supabase'}/>
-              <button onClick={()=>setScreen('settings')} style={{border:'none',background:'none',color:C.onSurfaceVariant,fontSize:18,cursor:'pointer',padding:4}}>⚙</button>
+              {error && <div style={{width:6,height:6,borderRadius:99,background:'#ffb4a9'}} title='DB error'/>}
+              <button onClick={()=>setScreen('settings')} style={{border:'none',background:'rgba(255,255,255,0.16)',borderRadius:99,cursor:'pointer',width:34,height:34,display:'flex',alignItems:'center',justifyContent:'center'}}><Icon name='settings' size={17} color={C.onPrimary}/></button>
             </div>
           )}
         </div>
@@ -372,12 +374,12 @@ export default function App() {
           {renderScreen()}
         </div>
         {screen !== 'settings' && (
-          <div style={{background:C.white,borderTop:`1px solid ${C.outlineVariant}30`,display:'flex',padding:'8px 0 14px',flexShrink:0,position:'sticky',bottom:0,zIndex:20}}>
+          <div style={{background:C.primaryFixed,borderTop:`1px solid ${C.outlineVariant}30`,display:'flex',padding:'8px 0 14px',flexShrink:0,position:'sticky',bottom:0,zIndex:20}}>
             {NAV.map(t => {
               const active = tab === t.id && !screen
               return (
                 <button key={t.id} onClick={()=>{setTab(t.id);setScreen(null)}} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:2,border:'none',background:'none',color:active?C.primary:C.onSurfaceVariant,cursor:'pointer',padding:'4px 2px'}}>
-                  <span style={{fontSize:active?22:19}}>{t.icon}</span>
+                  <Icon name={t.icon} size={active?22:20}/>
                   <span style={{...mn,fontSize:10,fontWeight:active?700:500}}>{t.label}</span>
                   {active && <div style={{width:18,height:2,background:C.primary,borderRadius:2}}/>}
                 </button>

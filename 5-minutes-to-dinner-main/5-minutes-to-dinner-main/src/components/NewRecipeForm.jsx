@@ -194,7 +194,7 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
     <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: C.surface, overflowY: 'auto', maxWidth: 430, margin: '0 auto' }}>
       <div style={{ background: C.white, borderBottom: `1px solid ${C.outlineVariant}25`, padding: '11px 20px', display: 'flex', alignItems: 'center', gap: 10, position: 'sticky', top: 0, zIndex: 10 }}>
         <button onClick={onCancel} style={{ border: 'none', background: 'none', color: C.primary, fontSize: 22, cursor: 'pointer', padding: '2px 8px 2px 0' }}>←</button>
-        <span style={{ ...ep, fontSize: 16, fontWeight: 700, color: C.onSurface, flex: 1 }}>New Recipe</span>
+        <span style={{ ...ep, fontSize: 16, color: C.onSurface, flex: 1 }}>New Recipe</span>
         <Btn label={saving ? 'Saving…' : 'Save'} small onClick={handleSave} disabled={saving || !f.name.trim()}/>
       </div>
 

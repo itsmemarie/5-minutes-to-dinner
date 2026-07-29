@@ -42,10 +42,10 @@ export function NutritionScreen({profile,setProfile,nutriData,nutriLoading,nutri
         <p style={{...mn,fontSize:13,color:C.onSurfaceVariant,marginBottom:14,lineHeight:1.6}}>Get AI-powered nutritional insights for your week's meal plan.</p>
         <Btn label='✨ Analyse This Week' onClick={onAnalyse}/>
       </div>}
-      <div style={{background:C.primary,borderRadius:16,padding:'24px 20px',textAlign:'center',marginBottom:16}}>
+      <div style={{background:C.primary,borderRadius:10,padding:'24px 20px',textAlign:'center',marginBottom:16}}>
         <div style={{...mn,fontSize:11,fontWeight:700,letterSpacing:'0.07em',color:'rgba(255,255,255,0.65)',marginBottom:14,textTransform:'uppercase'}}>Overall Weekly Healthiness Score</div>
         <div style={{width:88,height:88,borderRadius:99,border:'4px solid rgba(255,255,255,0.28)',display:'inline-flex',flexDirection:'column',alignItems:'center',justifyContent:'center',marginBottom:8}}>
-          <div style={{...ep,fontSize:28,fontWeight:700,color:'#fff',lineHeight:1}}>{data.scores.overall}</div>
+          <div style={{...ep,fontSize:28,color:'#fff',lineHeight:1}}>{data.scores.overall}</div>
           <div style={{...mn,fontSize:10,color:'rgba(255,255,255,0.6)'}}>/ 100</div>
         </div>
         <div style={{...mn,fontSize:10,letterSpacing:'0.07em',color:'rgba(255,255,255,0.55)',textTransform:'uppercase'}}>Out of 100</div>
@@ -54,7 +54,7 @@ export function NutritionScreen({profile,setProfile,nutriData,nutriLoading,nutri
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:20}}>
         {metrics.map(m=>(
           <div key={m.key} style={{...CARD,padding:'14px 12px',background:m.key==='overall'?C.primary:C.white}}>
-            <div style={{...ep,fontSize:20,fontWeight:700,color:m.key==='overall'?C.onPrimary:C.onSurface}}>{data.scores[m.key]}<span style={{fontSize:12,fontWeight:400,opacity:0.55}}>/100</span></div>
+            <div style={{...ep,fontSize:20,color:m.key==='overall'?C.onPrimary:C.onSurface}}>{data.scores[m.key]}<span style={{...mn,fontSize:12,opacity:0.55}}>/100</span></div>
             <div style={{display:'flex',alignItems:'center',gap:4,marginTop:4}}>
               <span style={{fontSize:14}}>{m.icon}</span>
               <span style={{...mn,fontSize:11,fontWeight:600,color:m.key==='overall'?'rgba(255,255,255,0.8)':C.onSurfaceVariant}}>{m.label}</span>

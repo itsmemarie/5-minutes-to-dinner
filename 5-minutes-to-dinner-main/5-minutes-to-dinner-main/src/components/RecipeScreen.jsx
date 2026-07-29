@@ -52,7 +52,7 @@ export function RecipeScreen({ recipeId, portion }) {
         </div>
       )}
       <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:20,gap:12}}>
-        <div style={{...ep,fontSize:24,fontWeight:700,color:C.onSurface,flex:1,lineHeight:1.2}}>{data.name}</div>
+        <div style={{...ep,fontSize:24,color:C.onSurface,flex:1,lineHeight:1.2}}>{data.name}</div>
         <span style={{fontSize:22,marginTop:2}}>🔖</span>
       </div>
 
@@ -61,7 +61,7 @@ export function RecipeScreen({ recipeId, portion }) {
         {[['🕒 PREP TIME',data.prep_time_raw||(data.prep_time_minutes?`${data.prep_time_minutes}m`:null)],['🍳 COOK TIME',data.cook_time_raw||(data.cook_time_minutes?`${data.cook_time_minutes}m`:null)]].map(([lbl,val])=>val?(
           <div key={lbl} style={{...CARD,padding:'12px 14px'}}>
             <div style={{...mn,fontSize:10,fontWeight:700,color:C.onSurfaceVariant,letterSpacing:'0.06em',marginBottom:4}}>{lbl}</div>
-            <div style={{...ep,fontSize:17,fontWeight:700,color:C.onSurface}}>{val}</div>
+            <div style={{...ep,fontSize:17,color:C.onSurface}}>{val}</div>
           </div>
         ):null)}
       </div>
@@ -71,13 +71,13 @@ export function RecipeScreen({ recipeId, portion }) {
         <div style={{...CARD,padding:'12px 14px'}}>
           <div style={{...mn,fontSize:10,fontWeight:700,color:C.onSurfaceVariant,letterSpacing:'0.06em',marginBottom:6}}>SAVED PORTIONS</div>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
-            <span style={{...ep,fontSize:15,fontWeight:700,color:C.onSurface}}>{scaledFor} servings</span>
+            <span style={{...ep,fontSize:15,color:C.onSurface}}>{scaledFor} servings</span>
             {scale!==1&&<span style={{...mn,fontSize:11,fontWeight:700,background:C.primaryFixed,color:C.primary,padding:'2px 7px',borderRadius:99}}>{scale.toFixed(1)}x</span>}
           </div>
         </div>
         <div style={{...CARD,padding:'12px 14px'}}>
           <div style={{...mn,fontSize:10,fontWeight:700,color:C.onSurfaceVariant,letterSpacing:'0.06em',marginBottom:6}}>MIN. PORTIONS</div>
-          <span style={{...ep,fontSize:15,fontWeight:700,color:C.onSurface}}>{data.min_portions||1} servings</span>
+          <span style={{...ep,fontSize:15,color:C.onSurface}}>{data.min_portions||1} servings</span>
         </div>
       </div>
 
@@ -93,7 +93,7 @@ export function RecipeScreen({ recipeId, portion }) {
       {ingSections.length>0&&(
         <div style={{marginBottom:20}}>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
-            <span style={{...ep,fontSize:18,fontWeight:700,color:C.onSurface}}>Ingredients</span>
+            <span style={{...ep,fontSize:18,color:C.onSurface}}>Ingredients</span>
             <span style={{...mn,fontSize:11,fontWeight:700,background:C.primaryFixed,color:C.primary,padding:'3px 10px',borderRadius:99}}>Scaled for {scaledFor} portions</span>
           </div>
           {ingSections.map((sec,si)=>(
@@ -118,7 +118,7 @@ export function RecipeScreen({ recipeId, portion }) {
       {/* Preparation Methods */}
       {(stdSteps.length>0||tmSteps.length>0)&&(
         <div style={{marginBottom:20}}>
-          <div style={{...ep,fontSize:18,fontWeight:700,color:C.onSurface,marginBottom:12}}>Preparation Methods</div>
+          <div style={{...ep,fontSize:18,color:C.onSurface,marginBottom:12}}>Preparation Methods</div>
           {stdSteps.length>0&&(
             <div style={{...CARD,marginBottom:10,overflow:'hidden'}}>
               <button onClick={()=>setShowStd(s=>!s)} style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 16px',background:'none',border:'none',cursor:'pointer',borderBottom:showStd?`1px solid ${C.outlineVariant}25`:'none'}}>
@@ -129,7 +129,7 @@ export function RecipeScreen({ recipeId, portion }) {
                 <div style={{padding:'12px 16px',display:'flex',flexDirection:'column',gap:14}}>
                   {stdSteps.map((step,i)=>(
                     <div key={i} style={{display:'flex',gap:12}}>
-                      <div style={{width:24,height:24,borderRadius:99,background:C.secondaryContainer,color:C.primary,...mn,fontSize:12,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:2}}>{step.num}</div>
+                      <div style={{width:24,height:24,borderRadius:99,background:C.secondaryContainer,color:C.onSecondaryContainer,...mn,fontSize:12,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:2}}>{step.num}</div>
                       <p style={{...mn,fontSize:13,color:C.onSurface,lineHeight:1.7,margin:0,flex:1}}>{step.text}</p>
                     </div>
                   ))}
@@ -138,7 +138,7 @@ export function RecipeScreen({ recipeId, portion }) {
             </div>
           )}
           {tmSteps.length>0&&(
-            <div style={{...CARD,overflow:'hidden',background:'#f0fffe'}}>
+            <div style={{...CARD,overflow:'hidden',background:'#eaf6ea'}}>
               <button onClick={()=>setShowTM(s=>!s)} style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 16px',background:'none',border:'none',cursor:'pointer',borderBottom:showTM?`1px solid ${C.outlineVariant}25`:'none'}}>
                 <div style={{display:'flex',alignItems:'center',gap:8}}>
                   <span style={{fontSize:16}}>⚡</span>
@@ -164,7 +164,7 @@ export function RecipeScreen({ recipeId, portion }) {
       {/* The Extras */}
       {(data.chef_notes||data.husband_variations||data.toddler_variations||(data.side_recommendation&&data.side_recommendation!=='Not Recommended'))&&(
         <div>
-          <div style={{...ep,fontSize:18,fontWeight:700,color:C.onSurface,marginBottom:12}}>The Extras</div>
+          <div style={{...ep,fontSize:18,color:C.onSurface,marginBottom:12}}>The Extras</div>
           {data.chef_notes&&(
             <div style={{...CARD,padding:'14px 16px',marginBottom:10}}>
               <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}><span style={{fontSize:14}}>📖</span><span style={{...mn,fontSize:10,fontWeight:700,color:C.onSurfaceVariant,letterSpacing:'0.07em',textTransform:'uppercase'}}>Chef's Notes</span></div>
@@ -200,7 +200,7 @@ export function RecipeScreen({ recipeId, portion }) {
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
             <span style={{fontSize:18}}>✏️</span>
-            <span style={{...ep,fontSize:18,fontWeight:700,color:C.onSurface}}>My Cooking Notes</span>
+            <span style={{...ep,fontSize:18,color:C.onSurface}}>My Cooking Notes</span>
           </div>
           {!notesSaved&&(
             <button

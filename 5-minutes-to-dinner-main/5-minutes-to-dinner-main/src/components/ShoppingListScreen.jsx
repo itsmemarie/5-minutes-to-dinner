@@ -17,13 +17,13 @@ export function ShoppingListScreen({shopping,onToggle,loading,error,onRegenerate
     <div style={{padding:'16px 20px 20px'}}>
       <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12}}>
         <div>
-          <div style={{...ep,fontSize:22,fontWeight:700,color:C.onSurface}}>Shopping List</div>
+          <div style={{...ep,fontSize:22,color:C.onSurface}}>Shopping List</div>
           <div style={{...mn,fontSize:12,color:C.onSurfaceVariant,marginTop:2}}>{WEEK_LBL}</div>
           {!loading&&shopping.length>0&&<div style={{...mn,fontSize:12,color:C.primary,marginTop:2,fontWeight:600}}>{unc} item{unc!==1?'s':''} remaining</div>}
         </div>
         {shopping.length>0&&!loading&&<div style={{display:'flex',gap:8,alignItems:'center'}}>
-          {unc>0&&<button onClick={copyUnchecked} style={{...mn,background:C.secondaryContainer,color:C.primary,border:'none',borderRadius:99,padding:'7px 12px',fontSize:12,fontWeight:700,cursor:'pointer',flexShrink:0}}>Copy list</button>}
-          <button onClick={onRegenerate} style={{...mn,background:C.secondaryContainer,color:C.primary,border:'none',borderRadius:99,padding:'7px 12px',fontSize:12,fontWeight:700,cursor:'pointer',flexShrink:0}}>✨ Regenerate</button>
+          {unc>0&&<button onClick={copyUnchecked} style={{...mn,background:C.secondaryContainer,color:C.onSecondaryContainer,border:'none',borderRadius:99,padding:'7px 12px',fontSize:12,fontWeight:700,cursor:'pointer',flexShrink:0}}>Copy list</button>}
+          <button onClick={onRegenerate} style={{...mn,background:C.secondaryContainer,color:C.onSecondaryContainer,border:'none',borderRadius:99,padding:'7px 12px',fontSize:12,fontWeight:700,cursor:'pointer',flexShrink:0}}>✨ Regenerate</button>
         </div>}
       </div>
       <HDivider/>
@@ -53,7 +53,7 @@ export function ShoppingListScreen({shopping,onToggle,loading,error,onRegenerate
                     {item.checked&&'✓'}
                   </div>
                   <span style={{...mn,fontSize:14,flex:1,color:item.checked?C.outlineVariant:C.onSurface,textDecoration:item.checked?'line-through':'none'}}>{item.name}</span>
-                  {(item.amount||item.unit)&&<span style={{...mn,fontSize:13,fontWeight:600,color:item.checked?C.outlineVariant:C.primary,background:item.checked?C.surfaceContainerHigh:C.secondaryContainer,padding:'3px 10px',borderRadius:99,textDecoration:item.checked?'line-through':'none'}}>{item.amount}{item.unit?' '+item.unit:''}</span>}
+                  {(item.amount||item.unit)&&<span style={{...mn,fontSize:13,fontWeight:600,color:item.checked?C.outlineVariant:C.onSecondaryContainer,background:item.checked?C.surfaceContainerHigh:C.secondaryContainer,padding:'3px 10px',borderRadius:99,textDecoration:item.checked?'line-through':'none'}}>{item.amount}{item.unit?' '+item.unit:''}</span>}
                 </div>
               ))}
             </div>

@@ -1,0 +1,51 @@
+import { useState } from 'react'
+import { C, ep, mn } from '../lib/theme.js'
+import { DAYS, DAY_LBL, TODAY } from '../lib/dateHelpers.js'
+import { Btn, Icon } from './ui/index.js'
+import { NewRecipeForm } from './NewRecipeForm.jsx'
+
+const SEC_LBL = { breakfast:'Breakfast', main:'Main', side:'Side' }
+
+export function HomeScreen({ plan, onDayOpen, onCopy, onRecipeCreated }) {
+  const [showNewRecipe, setShowNewRecipe] = useState(false)
+  return (
+    <div style={{ padding:'16px 20px 20px' }}>
+      {showNewRecipe && <NewRecipeForm defaultMealType='main' onSave={r=>{onRecipeCreated(r);setShowNewRecipe(false)}} onCancel={()=>setShowNewRecipe(false)}/>}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:18 }}>
+        <div style={{...ep, fontSize:28, color:C.onSurface}}>This week</div>
+        <Btn label='+ Add recipe' small secondary onClick={()=>setShowNewRecipe(true)}/>
+      </div>
+      {DAYS.map(day => {
+        const meals = [...plan[day].breakfast, ...plan[day].main, ...plan[day].side]
+        const isToday = day === TODAY
+        return (
+          <div key={day} style={{ marginBottom:16 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+              <span style={{...mn,fontSize:11,fontWeight:700,letterSpacing:'0.06em',color:C.onSurfaceVariant,textTransform:'uppercase'}}>{DAY_LBL[day]}</span>
+              {isToday && <span style={{...mn,fontSize:10,fontWeight:700,background:'transparent',border:`1px solid ${C.tertiary}`,color:C.tertiary,padding:'2px 10px',borderRadius:99}}>Today</span>}
+            </div>
+            {meals.length === 0 ? (
+              <button onClick={()=>onDayOpen(day)} style={{width:'100%',background:C.primaryFixed,border:'none',borderRadius:10,padding:'16px',...mn,fontSize:13,color:C.onSurfaceVariant,fontStyle:'italic',cursor:'pointer',textAlign:'left'}}>+ Add a meal</button>
+            ) : meals.map(m => (
+              <button key={m.id} onClick={()=>onDayOpen(day)} style={{width:'100%',background:C.primaryFixed,border:'none',borderRadius:10,padding:'14px 16px',marginBottom:8,display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,cursor:'pointer',textAlign:'left'}}>
+                <div style={{minWidth:0}}>
+                  <div style={{...mn,fontSize:14,fontWeight:600,color:C.onSurface,marginBottom:6,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.name}</div>
+                  <div style={{display:'flex',alignItems:'center',gap:8}}>
+                    <span style={{...mn,fontSize:11,fontWeight:600,background:C.white,color:C.onSurface,padding:'3px 10px',borderRadius:99}}>{SEC_LBL[m.section]}</span>
+                    <span style={{...mn,fontSize:12,color:C.onSurfaceVariant}}>{m.prep}m</span>
+                  </div>
+                </div>
+                <Icon name='chevronRight' size={18} color={C.outline}/>
+              </button>
+            ))}
+          </div>
+        )
+      })}
+      <div style={{ position:'sticky', bottom:10, padding:'8px 0' }}>
+        <button onClick={onCopy} style={{width:'100%',background:C.primary,color:C.onPrimary,border:'none',borderRadius:99,padding:'15px',...mn,fontSize:15,fontWeight:700,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:8,boxShadow:'0 4px 20px rgba(45,96,47,0.3)'}}>
+          <Icon name='clipboardCheck' size={17} color={C.onPrimary}/> Copy to text
+        </button>
+      </div>
+    </div>
+  )
+}
