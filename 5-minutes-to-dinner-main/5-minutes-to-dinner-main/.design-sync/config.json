@@ -1,0 +1,21 @@
+{
+  "projectId": "c374df03-8aa9-43a3-9f4d-6d0b1e130c38",
+  "shape": "package",
+  "pkg": "5-minutes-to-dinner",
+  "globalName": "FiveMinDinner",
+  "buildCmd": "npm run build:ds",
+  "entry": "./dist-lib/index.es.js",
+  "readmeHeader": ".design-sync/conventions.md",
+  "componentSrcMap": {
+    "Btn": "src/components/ui/Btn.jsx",
+    "PillBtn": "src/components/ui/PillBtn.jsx",
+    "Stepper": "src/components/ui/Stepper.jsx",
+    "CapLabel": "src/components/ui/CapLabel.jsx",
+    "SecHead": "src/components/ui/SecHead.jsx",
+    "HDivider": "src/components/ui/HDivider.jsx",
+    "Spinner": "src/components/ui/Spinner.jsx",
+    "TodayTag": "src/components/ui/TodayTag.jsx",
+    "RecipeCard": "src/components/RecipeCard.jsx",
+    "RecipeBucket": "src/components/RecipeBucket.jsx"
+  }
+}
