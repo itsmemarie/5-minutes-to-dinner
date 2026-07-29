@@ -174,21 +174,13 @@ export async function updatePlannedMealPortion(id, portion) {
   await supabase.from('planned_meals').update({ portion }).eq('id', id)
 }
 
-// ─── Ratings ──────────────────────────────────────────────────────
-export async function fetchRatings(plannedMealIds) {
-  if (!plannedMealIds.length) return []
-  const { data } = await supabase
-    .from('meal_ratings')
-    .select('planned_meal_id, rating')
-    .in('planned_meal_id', plannedMealIds)
-  return data || []
-}
-
-export async function upsertRating(plannedMealId, rating) {
-  await supabase
-    .from('meal_ratings')
-    .upsert({ planned_meal_id: plannedMealId, rating, rated_at: new Date().toISOString() },
-             { onConflict: 'planned_meal_id' })
+// ─── Move meal to a different day ────────────────────────────────
+export async function movePlannedMeal(id, newDayEntryId) {
+  const { error } = await supabase
+    .from('planned_meals')
+    .update({ day_entry_id: newDayEntryId })
+    .eq('id', id)
+  if (error) throw error
 }
 
 // ─── Shopping list ────────────────────────────────────────────────

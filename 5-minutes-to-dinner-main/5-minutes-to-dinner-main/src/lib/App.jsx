@@ -2,8 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import {
   fetchRecipes, fetchSettings, saveSettings,
   getOrCreatePlan, fetchWeekPlan,
-  addPlannedMeals, removePlannedMeal, updatePlannedMealPortion,
-  fetchRatings, upsertRating,
+  addPlannedMeals, removePlannedMeal, updatePlannedMealPortion, movePlannedMeal,
   fetchShoppingList, saveShoppingList, updateShoppingItem,
   fetchRecipeDetails, createRecipe,
   fetchRecipeNotes, saveRecipeNotes,
@@ -25,13 +24,88 @@ async function callEdgeFn(name, body) {
   return d
 }
 
+// ─── Groq recipe extraction ──────────────────────────────────────
+const GROQ_KEY = import.meta.env.VITE_GROQ_API_KEY
+
+const GROQ_SYSTEM = `You are a Michelin-star chef who specialises in approachable home cooking.
+Extract the recipe from the provided content and return ONLY a valid JSON object — no markdown fences, no explanation, just the raw JSON.
+
+Required JSON schema:
+{
+  "name": "Descriptive recipe name (specific — e.g. 'Slow-Roasted Tomato & Ricotta Pasta' not 'Pasta')",
+  "meal_type_id": "main | breakfast | side | dessert | entree",
+  "diet": "omni | veg | vegan",
+  "prep_time_minutes": <number>,
+  "cook_time_minutes": <number>,
+  "portion_size": <number, default 4>,
+  "min_portions": <number>,
+  "should_have_side": <boolean>,
+  "has_thermomix_version": true,
+  "ingredients": "Grouped list. Format each group as:\\n[Category]\\n- 200g ingredient\\n- 3 pieces ingredient",
+  "instructions_standard": "Steps with inline amounts. Format: 'Step Name: Description (200g). Cook X minutes.'",
+  "instructions_thermomix": "Thermomix conversion. Format: 'Step Name: TM6 instructions. X sec / speed Y.'",
+  "fridge_storage": "Days as text e.g. '3-4 days'",
+  "freezer_storage": "Freeze instructions + duration, or 'Not Recommended'",
+  "chef_notes": "2-3 technical tips for a home cook",
+  "husband_variations": "Protein-focused pivot towards chicken where possible",
+  "toddler_variations": "Ages 1-3 adaptations: lower salt, smaller pieces, softer textures",
+  "side_recommendation": "Up to 3 sides, comma-separated"
+}`
+
+async function extractRecipe({ url, imageBase64, mediaType }) {
+  let model, userContent
+
+  if (imageBase64) {
+    model = 'meta-llama/llama-4-scout-17b-16e-instruct'
+    userContent = [
+      { type: 'image_url', image_url: { url: `data:${mediaType ?? 'image/jpeg'};base64,${imageBase64}` } },
+      { type: 'text', text: 'Extract the recipe from this image and return the JSON.' },
+    ]
+  } else {
+    model = 'llama-3.1-8b-instant'
+    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`
+    const res = await fetch(proxyUrl)
+    if (!res.ok) throw new Error(`Could not fetch the URL (try pasting the recipe text instead)`)
+    const html = await res.text()
+    const pageText = html
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 12000)
+    userContent = `Extract the recipe from this page and return the JSON:\n\n${pageText}`
+  }
+
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${GROQ_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      max_tokens: 4096,
+      messages: [
+        { role: 'system', content: GROQ_SYSTEM },
+        { role: 'user', content: userContent },
+      ],
+    }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.error?.message ?? `Groq error ${res.status}`)
+  }
+  const data = await res.json()
+  const text = data.choices[0].message.content
+  const match = text.match(/\{[\s\S]*\}/)
+  if (!match) throw new Error('Could not parse recipe from AI response')
+  return JSON.parse(match[0])
+}
+
 // ─── Date helpers ────────────────────────────────────────────────
 const WD  = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday']
 const toISO = d => { const x = new Date(d); x.setMinutes(x.getMinutes() - x.getTimezoneOffset()); return x.toISOString().split('T')[0] }
 const getMon = (d = new Date()) => { const x = new Date(d), w = x.getDay(); x.setDate(x.getDate() - (w === 0 ? 6 : w - 1)); x.setHours(0,0,0,0); return x }
 const NOW      = new Date()
 const TODAY    = WD[NOW.getDay()]
-const YEST     = WD[new Date(NOW - 86400000).getDay()]
 const MON      = getMon(NOW)
 const SUN      = new Date(MON); SUN.setDate(SUN.getDate() + 6)
 const WEEK_OF  = toISO(MON)
@@ -126,20 +200,6 @@ function Stepper({value,min,onChange}){return(
     <button onClick={()=>onChange(value+1)} style={{width:28,height:28,borderRadius:6,background:C.primary,color:'#fff',border:'none',cursor:'pointer',fontSize:18,lineHeight:1,flexShrink:0}}>+</button>
   </div>
 )}
-function RatingRow({mealId,ratings,onRate}){
-  const cur=ratings[mealId]
-  const btns=[{k:'bad',icon:'😞',label:'Bad',ac:C.error},{k:'okay',icon:'😐',label:'Okay',ac:C.tertiary},{k:'loved',icon:'😊',label:'Loved',ac:C.primary}]
-  return(
-    <div style={{display:'flex',gap:14,marginTop:6}}>
-      {btns.map(b=>(
-        <button key={b.k} onClick={()=>onRate(b.k)} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:2,border:'none',background:'none',cursor:'pointer',opacity:cur&&cur!==b.k?0.38:1,filter:cur&&cur!==b.k?'grayscale(1)':'none',padding:0}}>
-          <span style={{fontSize:20}}>{b.icon}</span>
-          <span style={{...mn,fontSize:10,fontWeight:cur===b.k?700:500,color:cur===b.k?b.ac:C.onSurfaceVariant,letterSpacing:'0.04em',textTransform:'uppercase'}}>{b.label}</span>
-        </button>
-      ))}
-    </div>
-  )
-}
 function CapLabel({text}){return <span style={{...mn,fontSize:11,fontWeight:700,letterSpacing:'0.06em',color:C.onSurfaceVariant,textTransform:'uppercase'}}>{text}</span>}
 function SecHead({text}){return <div style={{...mn,fontSize:11,fontWeight:700,letterSpacing:'0.07em',color:C.onSurfaceVariant,marginBottom:10,textTransform:'uppercase'}}>{text}</div>}
 function HDivider(){return <div style={{height:1,background:`${C.outlineVariant}50`,margin:'10px 0'}}/>}
@@ -412,105 +472,28 @@ function RecipeScreen({ recipeId, portion }) {
   )
 }
 
-// ─── Home ──────────────────────────────────────────────────────────
-function HomeScreen({plan,ratings,onRate,onPlanToday,onOpenRecipe,onCopy}){
-  const tm=[...plan[TODAY].breakfast,...plan[TODAY].main,...plan[TODAY].side]
-  const ym=[...plan[YEST].breakfast,...plan[YEST].main,...plan[YEST].side]
-  const todayIdx=DAYS.indexOf(TODAY)
-  const restDays=DAYS.slice(todayIdx+1).filter(d=>[...plan[d].breakfast,...plan[d].main,...plan[d].side].length>0)
+// ─── Planner ────────────────────────────────────────────────────────
+function PlannerScreen({plan,removeMeal,moveMeal,duplicateMeal,onDayOpen,onNutrition,onShoppingList,onRecipeCreated,onCopy}){
+  const [drag,setDrag]=useState(null)   // {mealId,fromDay,section}
+  const [over,setOver]=useState(null)   // day string being hovered
+  const [showNewRecipe,setShowNewRecipe]=useState(false)
   const [copied,setCopied]=useState(false)
   const handleCopy=()=>{onCopy();setCopied(true);setTimeout(()=>setCopied(false),2000)}
+  const onDragStart=(e,mealId,fromDay,section)=>{e.stopPropagation();e.dataTransfer.effectAllowed='move';setDrag({mealId,fromDay,section})}
+  const onDragEnd=()=>{setDrag(null);setOver(null)}
+  const onDragOver=(e,day)=>{e.preventDefault();e.dataTransfer.dropEffect='move';if(over!==day)setOver(day)}
+  const onDragLeave=(e)=>{if(!e.currentTarget.contains(e.relatedTarget))setOver(null)}
+  const onDrop=(e,day)=>{e.preventDefault();if(!drag)return;const{mealId,fromDay,section}=drag;setDrag(null);setOver(null);moveMeal(fromDay,day,mealId,section)}
   return(
-    <div style={{padding:'16px 20px 20px'}}>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
-        <div style={{...ep,fontSize:22,fontWeight:700,color:C.onSurface}}>Today's Plan</div>
+    <div style={{padding:'0 20px 20px'}}>
+      {showNewRecipe&&<NewRecipeForm defaultMealType='main' onSave={r=>{onRecipeCreated(r);setShowNewRecipe(false)}} onCancel={()=>setShowNewRecipe(false)}/>}
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 0 0'}}>
+        <Btn label='+ New Recipe' small onClick={()=>setShowNewRecipe(true)}/>
         <button onClick={handleCopy} style={{...mn,background:copied?'#f0fff4':C.secondaryContainer,color:copied?'#1a7a3a':C.primary,border:'none',borderRadius:99,padding:'6px 12px',fontSize:12,fontWeight:700,cursor:'pointer',transition:'all 0.2s'}}>
           {copied?'✓ Copied':'📋 Copy week'}
         </button>
       </div>
-      {tm.length===0?(
-        <div style={{...CARD,padding:24,textAlign:'center'}}>
-          <div style={{fontSize:30,marginBottom:10}}>🍽</div>
-          <p style={{...mn,fontSize:13,color:C.onSurfaceVariant,lineHeight:1.6,marginBottom:14}}>Nothing planned for today yet.</p>
-          <Btn label='Plan today' onClick={onPlanToday} secondary small/>
-        </div>
-      ):(
-        <div style={{display:'flex',flexDirection:'column',gap:12,marginBottom:24}}>
-          {tm.map(m=>(
-            <div key={m.id} onClick={()=>onOpenRecipe(m.recipeId,m.portion)} style={{...CARD,padding:'14px 16px',cursor:'pointer'}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8,marginBottom:8}}>
-                <span style={{...ep,fontSize:18,fontWeight:700,color:C.onSurface}}>{m.name}</span>
-                <TodayTag/>
-              </div>
-              <HDivider/>
-              <div style={{display:'flex',gap:20}}>
-                <span style={{...mn,fontSize:12,color:C.onSurfaceVariant}}>🕒 Prep: {m.prep}m</span>
-                <span style={{...mn,fontSize:12,color:C.onSurfaceVariant}}>🍳 Active: {m.active}m</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-      {ym.length>0&&(
-        <>
-          <div style={{display:'flex',alignItems:'baseline',gap:8,marginBottom:12}}>
-            <span style={{...ep,fontSize:20,fontWeight:700,color:C.primary}}>How was it?</span>
-            <span style={{...mn,fontSize:12,color:C.onSurfaceVariant}}>Yesterday</span>
-          </div>
-          <div style={{display:'flex',flexDirection:'column',gap:10,marginBottom:24}}>
-            {ym.map(m=>(
-              <div key={m.id} style={{...CARD,padding:'14px 16px'}}>
-                <div style={{display:'flex',alignItems:'center',gap:12}}>
-                  <div style={{width:42,height:42,borderRadius:10,background:C.surfaceContainerHigh,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>🍴</div>
-                  <div style={{flex:1}}>
-                    <div style={{...mn,fontSize:14,fontWeight:600,color:C.onSurface}}>{m.name}</div>
-                    <RatingRow mealId={m.id} ratings={ratings} onRate={r=>onRate(m.id,r)}/>
-                  </div>
-                  <span style={{color:C.outlineVariant,fontSize:18}}>›</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-      {restDays.length>0&&(
-        <>
-          <div style={{...ep,fontSize:20,fontWeight:700,color:C.onSurface,marginBottom:14}}>Rest of the Week</div>
-          <div style={{display:'flex',flexDirection:'column',gap:14}}>
-            {restDays.map(day=>{
-              const meals=[...plan[day].breakfast,...plan[day].main,...plan[day].side]
-              return(
-                <div key={day}>
-                  <div style={{...mn,fontSize:11,fontWeight:700,letterSpacing:'0.07em',color:C.onSurfaceVariant,textTransform:'uppercase',marginBottom:6}}>{DAY_LBL[day]}</div>
-                  <div style={{...CARD,overflow:'hidden'}}>
-                    {meals.map((m,i)=>(
-                      <div key={m.id} onClick={()=>onOpenRecipe(m.recipeId,m.portion)} style={{padding:'10px 14px',borderBottom:i<meals.length-1?`1px solid ${C.outlineVariant}25`:undefined,display:'flex',alignItems:'center',gap:10,cursor:'pointer'}}>
-                        <div style={{flex:1}}>
-                          <div style={{...mn,fontSize:13,fontWeight:600,color:C.onSurface}}>{m.name}</div>
-                          <div style={{display:'flex',gap:8,marginTop:2}}>
-                            <CapLabel text={m.section==='breakfast'?'Breakfast':m.section==='main'?'Main':'Side'}/>
-                            <span style={{...mn,fontSize:11,color:C.onSurfaceVariant}}>🕒 {m.prep}m</span>
-                          </div>
-                        </div>
-                        <span style={{color:C.outlineVariant,fontSize:16}}>›</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </>
-      )}
-    </div>
-  )
-}
-
-// ─── Planner ────────────────────────────────────────────────────────
-function PlannerScreen({plan,removeMeal,onDayOpen,onNutrition,onShoppingList}){
-  return(
-    <div style={{padding:'0 20px 20px'}}>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 0 12px'}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 0 12px'}}>
         <div style={{...ep,fontSize:22,fontWeight:700,color:C.onSurface}}>Weekly Planner</div>
         <div style={{...mn,fontSize:12,color:C.onSurfaceVariant,background:C.surfaceContainerHigh,padding:'5px 10px',borderRadius:99}}>{WEEK_LBL} ▾</div>
       </div>
@@ -527,24 +510,33 @@ function PlannerScreen({plan,removeMeal,onDayOpen,onNutrition,onShoppingList}){
               {isToday&&<span style={{...mn,fontSize:10,fontWeight:700,background:C.primary,color:C.onPrimary,padding:'2px 7px',borderRadius:99}}>TODAY</span>}
             </div>
             {meals.length===0?(
-              <div style={{...CARD,padding:22,display:'flex',flexDirection:'column',alignItems:'center',gap:8}}>
+              <div onDragOver={e=>onDragOver(e,day)} onDragLeave={onDragLeave} onDrop={e=>onDrop(e,day)} style={{...CARD,padding:22,display:'flex',flexDirection:'column',alignItems:'center',gap:8,outline:over===day&&drag?.fromDay!==day?`2px solid ${C.primary}`:'2px solid transparent',transition:'outline 0.12s'}}>
                 <span style={{fontSize:26,opacity:0.3}}>🍽</span>
                 <span style={{...mn,fontSize:12,color:C.outlineVariant,fontStyle:'italic'}}>"So you're going hungry."</span>
                 <button onClick={()=>onDayOpen(day)} style={{...mn,background:'none',border:`1px solid ${C.primary}`,color:C.primary,borderRadius:8,padding:'6px 14px',fontSize:12,fontWeight:700,cursor:'pointer',marginTop:4}}>+ Plan Meals</button>
               </div>
             ):(
-              <div style={{...CARD,overflow:'hidden'}}>
+              <div onDragOver={e=>onDragOver(e,day)} onDragLeave={onDragLeave} onDrop={e=>onDrop(e,day)} style={{...CARD,overflow:'hidden',outline:over===day&&drag?.fromDay!==day?`2px solid ${C.primary}`:'2px solid transparent',transition:'outline 0.12s'}}>
                 {meals.map((m,i)=>(
-                  <div key={m.id} onClick={()=>onDayOpen(day)} style={{padding:'10px 14px',borderBottom:i<meals.length-1?`1px solid ${C.outlineVariant}25`:undefined,display:'flex',alignItems:'center',cursor:'pointer'}}>
-                    <div style={{flex:1}}>
-                      <div style={{...mn,fontSize:13,fontWeight:600,color:C.onSurface}}>{m.name}</div>
-                      <div style={{display:'flex',gap:8,marginTop:2}}>
-                        <CapLabel text={m.section==='breakfast'?'Breakfast':m.section==='main'?'Main':'Side'}/>
-                        <span style={{...mn,fontSize:11,color:C.onSurfaceVariant}}>🕒 {m.prep}m</span>
-                        {m.portion!==4&&<span style={{...mn,fontSize:11,color:C.onSurfaceVariant}}>👥 {m.portion}</span>}
+                  <div key={m.id} draggable onDragStart={e=>onDragStart(e,m.id,day,m.section)} onDragEnd={onDragEnd} onClick={()=>onDayOpen(day)} style={{padding:'10px 14px',borderBottom:i<meals.length-1?`1px solid ${C.outlineVariant}25`:undefined,display:'flex',flexDirection:isToday?'column':'row',alignItems:isToday?'stretch':'center',gap:isToday?4:0,cursor:drag?'grabbing':'grab',opacity:drag?.mealId===m.id?0.45:1,transition:'opacity 0.15s'}}>
+                    {isToday&&(
+                      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}>
+                        <span style={{...mn,fontSize:13,fontWeight:600,color:C.onSurface}}>{m.name}</span>
+                        <TodayTag/>
                       </div>
+                    )}
+                    <div style={{display:'flex',alignItems:'center'}}>
+                      <div style={{flex:1}}>
+                        {!isToday&&<div style={{...mn,fontSize:13,fontWeight:600,color:C.onSurface}}>{m.name}</div>}
+                        <div style={{display:'flex',gap:8,marginTop:2}}>
+                          <CapLabel text={m.section==='breakfast'?'Breakfast':m.section==='main'?'Main':'Side'}/>
+                          <span style={{...mn,fontSize:11,color:C.onSurfaceVariant}}>🕒 {m.prep}m</span>
+                          {m.portion!==4&&<span style={{...mn,fontSize:11,color:C.onSurfaceVariant}}>👥 {m.portion}</span>}
+                        </div>
+                      </div>
+                      <button onClick={e=>{e.stopPropagation();duplicateMeal(day,m.section,m.id)}} title='Duplicate' style={{border:'none',background:'none',color:C.outlineVariant,cursor:'pointer',fontSize:14,padding:'0 0 0 10px'}}>⧉</button>
+                      <button onClick={e=>{e.stopPropagation();removeMeal(day,m.section,m.id)}} style={{border:'none',background:'none',color:C.outlineVariant,cursor:'pointer',fontSize:14,padding:'0 0 0 10px'}}>✕</button>
                     </div>
-                    <button onClick={e=>{e.stopPropagation();removeMeal(day,m.section,m.id)}} style={{border:'none',background:'none',color:C.outlineVariant,cursor:'pointer',fontSize:14,padding:'0 0 0 10px'}}>✕</button>
                   </div>
                 ))}
                 <button onClick={()=>onDayOpen(day)} style={{width:'100%',background:'none',border:'none',padding:'10px 14px',textAlign:'left',...mn,fontSize:13,color:C.primary,fontWeight:600,cursor:'pointer',borderTop:`1px dashed ${C.outlineVariant}60`}}>＋ Add Meal</button>
@@ -563,7 +555,7 @@ function PlannerScreen({plan,removeMeal,onDayOpen,onNutrition,onShoppingList}){
 }
 
 // ─── Daily Plan ─────────────────────────────────────────────────────
-function DailyPlanScreen({day,plan,updatePortion,removeMeal,onAddToSection,onSave}){
+function DailyPlanScreen({day,plan,updatePortion,removeMeal,duplicateMeal,onAddToSection,onSave}){
   const [saved,setSaved]=useState(false)
   const secs=[{key:'breakfast',label:'Breakfast'},{key:'main',label:'Main Meal'},{key:'side',label:'Side Dish'}]
   const go=()=>{setSaved(true);setTimeout(()=>{setSaved(false);onSave()},1000)}
@@ -587,6 +579,7 @@ function DailyPlanScreen({day,plan,updatePortion,removeMeal,onAddToSection,onSav
                 <div key={m.id} style={{...CARD,padding:'14px 14px 10px'}}>
                   <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:6}}>
                     <span style={{...mn,fontSize:14,fontWeight:600,color:C.onSurface,flex:1,marginRight:8}}>{m.name}</span>
+                    <button onClick={()=>duplicateMeal(day,s.key,m.id)} title='Duplicate' style={{border:'none',background:'none',color:C.onSurfaceVariant,cursor:'pointer',fontSize:16,padding:0,marginRight:12}}>⧉</button>
                     <button onClick={()=>removeMeal(day,s.key,m.id)} style={{border:'none',background:'none',color:C.error,cursor:'pointer',fontSize:16,padding:0}}>🗑</button>
                   </div>
                   <div style={{...mn,fontSize:12,color:C.onSurfaceVariant,marginBottom:10}}>🕒 {m.prep}m prep</div>
@@ -658,6 +651,13 @@ const DAY_SHORT = {monday:'Mon',tuesday:'Tue',wednesday:'Wed',thursday:'Thu',fri
 function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
+  const [aiMode, setAiMode] = useState(false)
+  const [aiUrl, setAiUrl] = useState('')
+  const [aiImageBase64, setAiImageBase64] = useState(null)
+  const [aiImageName, setAiImageName] = useState('')
+  const [aiImageMediaType, setAiImageMediaType] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState(null)
   const [f, setF] = useState({
     name: '',
     meal_type_id: defaultMealType || 'main',
@@ -686,6 +686,69 @@ function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
 
   const set = (k, v) => setF(p => ({ ...p, [k]: v }))
   const toggleDay = d => set('weekdays', f.weekdays.includes(d) ? f.weekdays.filter(x => x !== d) : [...f.weekdays, d])
+
+  const applyAiResult = (data) => {
+    setF(p => ({
+      ...p,
+      name: data.name || p.name,
+      meal_type_id: data.meal_type_id || p.meal_type_id,
+      diet: data.diet || p.diet,
+      prep_time_minutes: data.prep_time_minutes != null ? data.prep_time_minutes : p.prep_time_minutes,
+      cook_time_minutes: data.cook_time_minutes != null ? data.cook_time_minutes : p.cook_time_minutes,
+      portion_size: data.portion_size ?? p.portion_size,
+      min_portions: data.min_portions ?? p.min_portions,
+      should_have_side: data.should_have_side ?? p.should_have_side,
+      has_thermomix_version: data.has_thermomix_version ?? p.has_thermomix_version,
+      ingredients: data.ingredients || p.ingredients,
+      instructions_standard: data.instructions_standard || p.instructions_standard,
+      instructions_thermomix: data.instructions_thermomix || p.instructions_thermomix,
+      fridge_storage: data.fridge_storage || p.fridge_storage,
+      freezer_storage: data.freezer_storage || p.freezer_storage,
+      chef_notes: data.chef_notes || p.chef_notes,
+      husband_variations: data.husband_variations || p.husband_variations,
+      toddler_variations: data.toddler_variations || p.toddler_variations,
+      side_recommendation: data.side_recommendation || p.side_recommendation,
+    }))
+    setAiMode(false)
+  }
+
+  const handleAiFromUrl = async () => {
+    if (!aiUrl.trim()) return
+    setAiLoading(true); setAiError(null)
+    try {
+      const data = await extractRecipe({ url: aiUrl.trim() })
+      applyAiResult(data)
+    } catch (e) {
+      setAiError(e.message)
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
+  const handleImageSelect = (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      setAiImageBase64(ev.target.result.split(',')[1])
+      setAiImageMediaType(file.type)
+      setAiImageName(file.name)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleAiFromImage = async () => {
+    if (!aiImageBase64) return
+    setAiLoading(true); setAiError(null)
+    try {
+      const data = await extractRecipe({ imageBase64: aiImageBase64, mediaType: aiImageMediaType })
+      applyAiResult(data)
+    } catch (e) {
+      setAiError(e.message)
+    } finally {
+      setAiLoading(false)
+    }
+  }
 
   const handleSave = async () => {
     if (!f.name.trim()) return
@@ -770,6 +833,42 @@ function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
       </div>
 
       <div style={{ padding: '20px 20px 120px' }}>
+        <div style={{ display: 'flex', background: C.outlineVariant + '30', borderRadius: 10, padding: 3, marginBottom: 20 }}>
+          <button onClick={() => setAiMode(false)} style={{ flex: 1, padding: '8px', borderRadius: 8, border: 'none', background: !aiMode ? C.white : 'transparent', color: !aiMode ? C.primary : C.onSurfaceVariant, ...mn, fontWeight: 600, fontSize: 13, cursor: 'pointer', boxShadow: !aiMode ? '0 1px 4px rgba(0,0,0,0.1)' : 'none' }}>Manual</button>
+          <button onClick={() => setAiMode(true)} style={{ flex: 1, padding: '8px', borderRadius: 8, border: 'none', background: aiMode ? C.white : 'transparent', color: aiMode ? C.primary : C.onSurfaceVariant, ...mn, fontWeight: 600, fontSize: 13, cursor: 'pointer', boxShadow: aiMode ? '0 1px 4px rgba(0,0,0,0.1)' : 'none' }}>✨ AI Assist</button>
+        </div>
+
+        {aiMode && (
+          <div style={{ background: C.primaryFixed, borderRadius: 14, padding: '18px 16px', marginBottom: 20 }}>
+            <div style={{ ...mn, fontSize: 12, color: C.onSurface, opacity: 0.7, marginBottom: 14 }}>AI will extract the recipe and fill in all fields — you can review and edit everything before saving.</div>
+            {aiError && <div style={{ ...mn, fontSize: 13, color: C.error, background: C.errorContainer, padding: '8px 12px', borderRadius: 8, marginBottom: 12 }}>{aiError}</div>}
+
+            <div style={{ ...mn, fontSize: 11, fontWeight: 700, color: C.onSurface, opacity: 0.6, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>Recipe URL</div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
+              <input value={aiUrl} onChange={e => setAiUrl(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAiFromUrl()} placeholder='https://...' style={{ ...inp(), flex: 1 }} disabled={aiLoading}/>
+              <Btn label={aiLoading ? '…' : 'Extract'} small onClick={handleAiFromUrl} disabled={aiLoading || !aiUrl.trim()}/>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+              <div style={{ flex: 1, height: 1, background: C.outline + '40' }}/>
+              <span style={{ ...mn, fontSize: 11, color: C.onSurfaceVariant }}>or</span>
+              <div style={{ flex: 1, height: 1, background: C.outline + '40' }}/>
+            </div>
+
+            <div style={{ ...mn, fontSize: 11, fontWeight: 700, color: C.onSurface, opacity: 0.6, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>Upload Photo</div>
+            <label style={{ display: 'block', border: `2px dashed ${C.outlineVariant}`, borderRadius: 10, padding: '14px 16px', textAlign: 'center', cursor: aiLoading ? 'not-allowed' : 'pointer', background: C.white }}>
+              <input type='file' accept='image/*' onChange={handleImageSelect} style={{ display: 'none' }} disabled={aiLoading}/>
+              <div style={{ ...mn, fontSize: 13, color: aiImageName ? C.onSurface : C.onSurfaceVariant }}>{aiImageName ? `📷 ${aiImageName}` : 'Tap to choose a photo'}</div>
+            </label>
+            {aiImageName && !aiLoading && (
+              <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end' }}>
+                <Btn label='Extract from photo' small onClick={handleAiFromImage}/>
+              </div>
+            )}
+            {aiLoading && <div style={{ ...mn, fontSize: 13, color: C.onSurfaceVariant, textAlign: 'center', padding: '10px 0 4px' }}>Extracting recipe…</div>}
+          </div>
+        )}
+
         {saveError && <div style={{ ...mn, fontSize: 13, color: C.error, background: C.errorContainer, padding: '10px 14px', borderRadius: 10, marginBottom: 16 }}>{saveError}</div>}
 
         {row('Recipe Name *',
@@ -1107,7 +1206,7 @@ function BatchScreen({activeTab,setActiveTab,batchData,batchLoading,batchError,o
       )}
       <div style={{position:'relative',paddingLeft:52}}>
         <div style={{position:'absolute',left:18,top:8,bottom:8,width:2,background:C.outlineVariant,borderRadius:2}}/>
-        {session.steps.map((step,i)=>{
+        {(session.steps||[]).map((step,i)=>{
           const tc=TAG_C[step.tag]||TAG_C.KNIFE
           return(
             <div key={i} style={{position:'relative',marginBottom:16}}>
@@ -1119,7 +1218,7 @@ function BatchScreen({activeTab,setActiveTab,batchData,batchLoading,batchError,o
                   <span style={{...mn,fontSize:10,fontWeight:700,background:tc.bg,color:tc.tx,border:`1px solid ${tc.bd}`,padding:'2px 8px',borderRadius:99,flexShrink:0}}>{step.tag}</span>
                 </div>
                 {step.full&&<div style={{...mn,fontSize:11,fontWeight:700,background:C.primary,color:C.onPrimary,padding:'3px 10px',borderRadius:99,display:'inline-block',marginBottom:8}}>COMPLETE TM6 DISH</div>}
-                {step.chips.length>0&&<div style={{display:'flex',gap:5,flexWrap:'wrap',marginBottom:8}}>{step.chips.map((c,j)=><span key={j} style={{...mn,fontSize:10,fontWeight:600,background:tc.bg,color:tc.tx,padding:'2px 8px',borderRadius:99}}>{c}</span>)}</div>}
+                {(step.chips||[]).length>0&&<div style={{display:'flex',gap:5,flexWrap:'wrap',marginBottom:8}}>{(step.chips||[]).map((c,j)=><span key={j} style={{...mn,fontSize:10,fontWeight:600,background:tc.bg,color:tc.tx,padding:'2px 8px',borderRadius:99}}>{c}</span>)}</div>}
                 {step.qty&&<div style={{...mn,fontSize:11,color:C.onSurface,marginBottom:6}}><strong>Qty:</strong> {step.qty}</div>}
                 <p style={{...mn,fontSize:12,color:C.onSurfaceVariant,lineHeight:1.6,margin:0,marginBottom:step.storage||step.warn||step.safety?8:0}}>{step.body}</p>
                 {step.storage&&<div style={{...mn,fontSize:11,fontWeight:600,background:'#f0fff4',color:'#1a7a3a',padding:'6px 10px',borderRadius:8,border:'1px solid #7fd4a0'}}>{step.storage}</div>}
@@ -1192,7 +1291,6 @@ export default function App() {
   const [planId,      setPlanId]      = useState(null)
   const [dayEntryMap, setDayEntryMap] = useState({})
   const [plan,        setPlanState]   = useState(emptyWeek)
-  const [ratings,     setRatings]     = useState({})
   const [shopping,    setShopping]    = useState([])
   const [shoppingId,  setShoppingId]  = useState(null)
   const [shoppingLoading,setShoppingLoading]=useState(false)
@@ -1238,14 +1336,6 @@ export default function App() {
         setDayEntryMap(entryMap)
         setPlanState(newPlan)
 
-        // Ratings for yesterday
-        const yestMealIds = [...newPlan[YEST].breakfast, ...newPlan[YEST].main, ...newPlan[YEST].side].map(m => m.id)
-        if (yestMealIds.length) {
-          const ratingRows = await fetchRatings(yestMealIds)
-          const rm = {}; ratingRows.forEach(r => { rm[r.planned_meal_id] = r.rating })
-          setRatings(rm)
-        }
-
         // Shopping list
         const sl = await fetchShoppingList(pid)
         if (sl) { setShoppingId(sl.id); setShopping(sl.shopping_list_items || []) }
@@ -1270,6 +1360,24 @@ export default function App() {
   const removeMeal = async (day, sec, id) => {
     setPlan({ ...plan, [day]: { ...plan[day], [sec]: plan[day][sec].filter(m => m.id !== id) } })
     await removePlannedMeal(id)
+  }
+
+  const moveMeal = async (fromDay, toDay, mealId, section) => {
+    if (fromDay === toDay) return
+    const meal = plan[fromDay][section].find(m => m.id === mealId)
+    if (!meal) return
+    const before = plan
+    setPlan({
+      ...plan,
+      [fromDay]: { ...plan[fromDay], [section]: plan[fromDay][section].filter(m => m.id !== mealId) },
+      [toDay]:   { ...plan[toDay],   [section]: [...plan[toDay][section], meal] },
+    })
+    try {
+      await movePlannedMeal(mealId, dayEntryMap[toDay])
+    } catch (e) {
+      setPlan(before)
+      console.error('moveMeal failed:', e.message)
+    }
   }
 
   const updatePortion = async (day, sec, id, val) => {
@@ -1304,9 +1412,26 @@ export default function App() {
     }
   }
 
-  const onRate = async (mealId, rating) => {
-    setRatings(r => ({ ...r, [mealId]: rating }))
-    await upsertRating(mealId, rating)
+  const duplicateMeal = async (day, sec, id) => {
+    const meal = plan[day][sec].find(m => m.id === id)
+    if (!meal) return
+    const entryId = dayEntryMap[day]
+    const pos = plan[day][sec].length
+    const r = recipes.find(x => x.id === meal.recipeId)
+    const mealToInsert = { recipeId: meal.recipeId, section: sec, name: meal.name, prep: meal.prep, active: meal.active, hasSides: r?.hasSides ?? meal.hasSides, min: r?.min ?? meal.min, portion: meal.portion, base: r?.base ?? meal.portion, position: pos }
+    // Optimistic
+    const tempMeal = { ...mealToInsert, id: uid() }
+    setPlan({ ...plan, [day]: { ...plan[day], [sec]: [...plan[day][sec], tempMeal] } })
+    // DB write — replace temp ID with real one
+    const created = await addPlannedMeals(entryId, [mealToInsert])
+    if (created?.[0]) {
+      setPlanState(prev => {
+        const updated = { ...prev, [day]: { ...prev[day], [sec]: [...prev[day][sec]] } }
+        const idx = updated[day][sec].findIndex(x => x.id === tempMeal.id)
+        if (idx >= 0) updated[day][sec][idx] = { ...updated[day][sec][idx], id: created[0].id }
+        return updated
+      })
+    }
   }
 
   const onShoppingToggle = async id => {
@@ -1423,7 +1548,6 @@ export default function App() {
   // ── Nav ─────────────────────────────────────────────────────────
   const openDayPlan   = day => { setSelDay(day); setScreen('dailyPlan') }
   const openAddSec    = (day, sec) => { setSelDay(day); setSelSec(sec); setScreen('recipeSelection') }
-  const openRecipe    = (recipeId, portion) => { setSelRecipeId(recipeId); setRecipeDetailPortion(portion || 4); setScreen('recipe') }
   const openRecipeFromSelection = recipeId => { setPrevScreen('recipeSelection'); setSelRecipeId(recipeId); setRecipeDetailPortion(4); setScreen('recipe') }
   const copyWeekPlan  = () => {
     const lines = [`5 Minutes to Dinner — ${WEEK_LBL}\n`]
@@ -1472,11 +1596,10 @@ export default function App() {
     )
     if (screen === 'settings')        return <SettingsScreen defPort={defPort} setDefPort={setDefPort}/>
     if (screen === 'nutrition')       return <NutritionScreen profile={nutriProf} setProfile={setNutriProf} nutriData={nutriData} nutriLoading={nutriLoading} nutriError={nutriError} onAnalyse={analyseNutrition}/>
-    if (screen === 'dailyPlan')       return <DailyPlanScreen day={selDay} plan={plan} updatePortion={updatePortion} removeMeal={removeMeal} onAddToSection={openAddSec} onSave={()=>setScreen(null)}/>
+    if (screen === 'dailyPlan')       return <DailyPlanScreen day={selDay} plan={plan} updatePortion={updatePortion} removeMeal={removeMeal} duplicateMeal={duplicateMeal} onAddToSection={openAddSec} onSave={()=>setScreen(null)}/>
     if (screen === 'recipeSelection') return <RecipeSelectionScreen day={selDay} section={selSec} plan={plan} recipes={recipes} onAdd={addMeals} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))} onPreview={openRecipeFromSelection}/>
     if (screen === 'recipe')          return <RecipeScreen recipeId={selRecipeId} portion={recipeDetailPortion}/>
-    if (tab === 'home')    return <HomeScreen plan={plan} ratings={ratings} onRate={onRate} onPlanToday={()=>openDayPlan(TODAY)} onOpenRecipe={openRecipe} onCopy={copyWeekPlan}/>
-    if (tab === 'planner') return <PlannerScreen plan={plan} removeMeal={removeMeal} onDayOpen={openDayPlan} onNutrition={()=>{ setScreen('nutrition'); if(!nutriData) analyseNutrition() }} onShoppingList={generateShoppingList}/>
+    if (tab === 'home' || tab === 'planner') return <PlannerScreen plan={plan} removeMeal={removeMeal} moveMeal={moveMeal} duplicateMeal={duplicateMeal} onDayOpen={openDayPlan} onNutrition={()=>{ setScreen('nutrition'); if(!nutriData) analyseNutrition() }} onShoppingList={generateShoppingList} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))} onCopy={copyWeekPlan}/>
     if (tab === 'list')    return <ShoppingListScreen shopping={shopping} onToggle={onShoppingToggle} loading={shoppingLoading} error={shoppingError} onRegenerate={generateShoppingList}/>
     if (tab === 'batch')   return <BatchScreen activeTab={batchTab} setActiveTab={setBatchTab} batchData={batchData} batchLoading={batchLoading} batchError={batchError} onGenerate={generateBatch}/>
   }
