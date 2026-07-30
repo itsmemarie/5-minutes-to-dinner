@@ -1,5 +1,7 @@
 import { C, ep, mn, CARD, TAG_C } from '../lib/theme.js'
-import { Spinner, Btn } from './ui/index.js'
+import { Spinner, Btn, Icon } from './ui/index.js'
+
+const TAG_LABEL = { TM6:'THERMOMIX', HOB:'HOB', OVEN:'OVEN', KNIFE:'PREP', NO_COOK:'NO COOK', DONE:'DONE' }
 
 const BATCH = {
   big:{label:'Monday · 2 hrs',groundRule:'Monday prep is used by Wednesday/Thursday — nothing stored beyond Day 3.',
@@ -35,8 +37,10 @@ export function BatchScreen({activeTab,setActiveTab,batchData,batchLoading,batch
   const rawSession = batchData ? batchData.sessions?.find(s=>s.id===activeTab) : null
   const session = rawSession || BATCH[activeTab]
   return(
-    <div style={{padding:'0 20px 24px'}}>
-      <div style={{display:'flex',gap:6,padding:'14px 0 12px',overflowX:'auto'}}>
+    <div style={{padding:'16px 20px 24px'}}>
+      <div style={{...ep,fontSize:24,color:C.onSurface,marginBottom:4}}>Batch cooking</div>
+      <p style={{...mn,fontSize:13,color:C.onSurfaceVariant,margin:'0 0 14px',lineHeight:1.6}}>An AI-organised prep schedule so the week's cooking happens in focused sessions.</p>
+      <div style={{display:'flex',gap:6,padding:'0 0 14px',overflowX:'auto'}}>
         {TABS.map(t=>(
           <button key={t.id} onClick={()=>setActiveTab(t.id)} style={{...mn,padding:'8px 14px',borderRadius:99,border:'none',background:activeTab===t.id?C.primary:C.secondaryContainer,color:activeTab===t.id?C.onPrimary:C.onSecondaryContainer,fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap',flexShrink:0}}>{t.label}</button>
         ))}
@@ -47,40 +51,43 @@ export function BatchScreen({activeTab,setActiveTab,batchData,batchLoading,batch
       </div>}
       {batchLoading&&<Spinner msg='Building your batch cooking schedule…'/>}
       {batchError&&<div style={{...CARD,padding:16,marginBottom:14,borderLeft:`4px solid ${C.error}`}}><p style={{...mn,fontSize:13,color:C.error,margin:0}}>⚠️ {batchError}</p></div>}
-      <div style={{background:C.secondaryContainer,borderRadius:12,padding:'10px 14px',display:'flex',gap:8,marginBottom:14}}>
-        <span style={{flexShrink:0}}>ℹ</span>
-        <span style={{...mn,fontSize:12,color:C.onSecondaryContainer,fontStyle:'italic',lineHeight:1.5}}>{session.groundRule}</span>
-      </div>
-      {session.overview&&(
-        <div style={{...CARD,padding:'14px 16px',marginBottom:16}}>
-          <div style={{...ep,fontSize:15,color:C.onSurface,marginBottom:10}}>✓ Session Overview</div>
-          {session.overview.map((o,i)=><div key={i} style={{...mn,fontSize:13,color:C.onSurfaceVariant,padding:'4px 0',display:'flex',gap:8}}><span>{o.e}</span><span>{o.t}</span></div>)}
+      <div style={{...CARD,padding:0,overflow:'hidden'}}>
+        <div style={{padding:'14px 16px',background:C.primaryFixed}}>
+          <div style={{...ep,fontSize:16,color:C.primary,marginBottom:4}}>{session.label}</div>
+          <div style={{...mn,fontSize:12,lineHeight:1.5,color:C.primary}}>{session.groundRule}</div>
         </div>
-      )}
-      <div style={{position:'relative',paddingLeft:52}}>
-        <div style={{position:'absolute',left:18,top:8,bottom:8,width:2,background:C.outlineVariant,borderRadius:2}}/>
-        {(session.steps||[]).map((step,i)=>{
-          const tc=TAG_C[step.tag]||TAG_C.KNIFE
-          return(
-            <div key={i} style={{position:'relative',marginBottom:16}}>
-              <div style={{position:'absolute',left:-39,top:14,width:14,height:14,borderRadius:99,background:tc.bg,border:`2px solid ${tc.bd}`}}/>
-              <div style={{position:'absolute',left:-52,top:11,...mn,fontSize:11,fontWeight:700,color:C.onSurfaceVariant,textAlign:'right',width:34}}>{step.time}</div>
-              <div style={{...CARD,padding:'12px 14px'}}>
-                <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8,marginBottom:6}}>
-                  <span style={{...mn,fontSize:13,fontWeight:700,color:C.onSurface,flex:1}}>{step.title}</span>
-                  <span style={{...mn,fontSize:10,fontWeight:700,background:tc.bg,color:tc.tx,border:`1px solid ${tc.bd}`,padding:'2px 8px',borderRadius:99,flexShrink:0}}>{step.tag}</span>
+        {session.overview&&(
+          <div style={{display:'flex',flexWrap:'wrap',gap:8,padding:'14px 16px 4px'}}>
+            {session.overview.map((o,i)=>(
+              <span key={i} style={{...mn,fontSize:11,fontWeight:600,background:C.white,color:C.onSurface,padding:'4px 10px',borderRadius:99,display:'flex',alignItems:'center',gap:5}}>
+                <span>{o.e}</span><span>{o.t}</span>
+              </span>
+            ))}
+          </div>
+        )}
+        <div style={{display:'flex',flexDirection:'column'}}>
+          {(session.steps||[]).map((step,i)=>{
+            const tc=TAG_C[step.tag]||TAG_C.KNIFE
+            return(
+              <div key={i} style={{padding:'12px 16px',borderTop:`1px solid ${C.outlineVariant}25`,display:'flex',gap:12}}>
+                <div style={{width:40,flexShrink:0,...mn,fontSize:11,fontWeight:700,color:C.onSurfaceVariant,opacity:0.7,paddingTop:2}}>{step.time}</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6,flexWrap:'wrap'}}>
+                    <span style={{...mn,fontSize:10,fontWeight:700,background:tc.bg,color:tc.tx,border:`1px solid ${tc.bd}`,padding:'2px 8px',borderRadius:99}}>{TAG_LABEL[step.tag]||step.tag}</span>
+                    <span style={{...mn,fontSize:13,fontWeight:700,color:C.onSurface}}>{step.title}</span>
+                  </div>
+                  {step.full&&<div style={{...mn,fontSize:11,fontWeight:700,background:C.primary,color:C.onPrimary,padding:'3px 10px',borderRadius:99,display:'inline-block',marginBottom:8}}>COMPLETE TM6 DISH</div>}
+                  {(step.chips||[]).length>0&&<div style={{display:'flex',gap:5,flexWrap:'wrap',marginBottom:8}}>{(step.chips||[]).map((c,j)=><span key={j} style={{...mn,fontSize:10,fontWeight:600,background:tc.bg,color:tc.tx,padding:'2px 8px',borderRadius:99}}>{c}</span>)}</div>}
+                  {step.qty&&<div style={{...mn,fontSize:12,color:C.onSurfaceVariant,marginBottom:6}}>{step.qty}</div>}
+                  <p style={{...mn,fontSize:13,color:C.onSurface,lineHeight:1.6,margin:0,marginBottom:step.storage||step.warn||step.safety?8:0}}>{step.body}</p>
+                  {step.storage&&<div style={{...mn,fontSize:11,fontWeight:700,color:C.primary,background:C.primaryFixed,padding:'6px 10px',borderRadius:8}}>{step.storage}</div>}
+                  {step.warn&&<div style={{...mn,fontSize:11,color:C.onSecondaryContainer,background:C.secondaryContainer,padding:'6px 10px',borderRadius:8,marginTop:4}}>⚠ {step.warn}</div>}
+                  {step.safety&&<div style={{...mn,fontSize:11,color:C.error,background:C.errorContainer,padding:'6px 10px',borderRadius:8,marginTop:4}}>🛑 {step.safety}</div>}
                 </div>
-                {step.full&&<div style={{...mn,fontSize:11,fontWeight:700,background:C.primary,color:C.onPrimary,padding:'3px 10px',borderRadius:99,display:'inline-block',marginBottom:8}}>COMPLETE TM6 DISH</div>}
-                {(step.chips||[]).length>0&&<div style={{display:'flex',gap:5,flexWrap:'wrap',marginBottom:8}}>{(step.chips||[]).map((c,j)=><span key={j} style={{...mn,fontSize:10,fontWeight:600,background:tc.bg,color:tc.tx,padding:'2px 8px',borderRadius:99}}>{c}</span>)}</div>}
-                {step.qty&&<div style={{...mn,fontSize:11,color:C.onSurface,marginBottom:6}}><strong>Qty:</strong> {step.qty}</div>}
-                <p style={{...mn,fontSize:12,color:C.onSurfaceVariant,lineHeight:1.6,margin:0,marginBottom:step.storage||step.warn||step.safety?8:0}}>{step.body}</p>
-                {step.storage&&<div style={{...mn,fontSize:11,fontWeight:600,background:'#f0fff4',color:'#1a7a3a',padding:'6px 10px',borderRadius:8,border:'1px solid #7fd4a0'}}>{step.storage}</div>}
-                {step.warn&&<div style={{...mn,fontSize:11,background:'#fffbea',color:'#8a6200',padding:'6px 10px',borderRadius:8,border:'1px solid #f5c842',marginTop:4}}>⚠ {step.warn}</div>}
-                {step.safety&&<div style={{...mn,fontSize:11,background:C.errorContainer,color:C.error,padding:'6px 10px',borderRadius:8,marginTop:4}}>🛑 {step.safety}</div>}
               </div>
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
       </div>
     </div>
   )
