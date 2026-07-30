@@ -80,7 +80,7 @@ export function RecipeSelectionScreen({day,section,plan,recipes,onAdd,onRecipeCr
           </>
         )}
       </div>
-      <div style={{position:'fixed',bottom:64,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:430,padding:'10px 20px',background:C.surface,borderTop:`1px solid ${C.outlineVariant}30`}}>
+      <div style={{position:'fixed',bottom:64,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:430,padding:'10px 20px',background:C.white,borderTop:`1px solid ${C.outlineVariant}30`}}>
         <Btn label={selected.length?`Add Selected (${selected.length})`:'Select recipes above'} full onClick={()=>{onAdd(selected);setSelected([])}} disabled={selected.length===0}/>
       </div>
     </div>

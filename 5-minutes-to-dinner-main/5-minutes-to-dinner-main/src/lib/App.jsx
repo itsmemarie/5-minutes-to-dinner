@@ -362,7 +362,7 @@ export default function App() {
             ? <button onClick={goBack} style={{border:'none',background:'none',color:C.onPrimary,cursor:'pointer',padding:'2px 8px 2px 0',display:'flex',alignItems:'center'}}><Icon name='back' color={C.onPrimary}/></button>
             : <img src='/dino-logo.png' alt='' style={{width:30,height:30,objectFit:'contain',flexShrink:0}}/>
           }
-          <span style={{...ep,fontSize:screen?17:19,color:C.onPrimary,flex:1}}>{headerTitle}</span>
+          <span style={{...ep,fontSize:screen?16:18,letterSpacing:'0.005em',color:C.onPrimary,flex:1}}>{headerTitle}</span>
           {!loading && !screen && (
             <div style={{display:'flex',alignItems:'center',gap:8}}>
               {error && <div style={{width:6,height:6,borderRadius:99,background:'#ffb4a9'}} title='DB error'/>}

@@ -41,7 +41,7 @@ export function DailyPlanScreen({day,plan,updatePortion,removeMeal,duplicateMeal
         </div>
       ))}
       <div style={{height:80}}/>
-      <div style={{position:'fixed',bottom:64,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:430,padding:'10px 20px',background:C.surface,borderTop:`1px solid ${C.outlineVariant}30`}}>
+      <div style={{position:'fixed',bottom:64,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:430,padding:'10px 20px',background:C.white,borderTop:`1px solid ${C.outlineVariant}30`}}>
         {saved
           ?<div style={{...mn,textAlign:'center',fontSize:14,fontWeight:700,color:'#1a7a3a',padding:'13px',background:'#f0fff4',borderRadius:12}}>✓ Saved!</div>
           :<Btn label='✓  Save Day' full onClick={go}/>}
