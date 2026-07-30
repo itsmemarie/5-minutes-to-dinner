@@ -78,6 +78,8 @@ export default function App() {
                 prep: pm.prep_time_snapshot || 0,
                 active: pm.cook_time_snapshot || 0,
                 hasSides: false, min: 1,
+                advancePrepHours: pm.advance_prep_hours_snapshot != null ? Number(pm.advance_prep_hours_snapshot) : null,
+                advancePrepNote:  pm.advance_prep_note_snapshot || null,
               })
             }
           })
@@ -140,8 +142,8 @@ export default function App() {
     const sec = selSec, entryId = dayEntryMap[selDay]
     const pos = plan[selDay][sec].length
     const mealsToInsert = rids.map((rid, i) => {
-      const r = recipes.find(x => x.id === rid) || { name: rid, prep: 0, active: 0, hasSides: false, min: 1, base: defPort }
-      return { recipeId: rid, section: sec, name: r.name, prep: r.prep, active: r.active, hasSides: r.hasSides, min: r.min, portion: defPort, base: r.base, position: pos + i }
+      const r = recipes.find(x => x.id === rid) || { name: rid, prep: 0, active: 0, hasSides: false, min: 1, base: defPort, advancePrepHours: null, advancePrepNote: null }
+      return { recipeId: rid, section: sec, name: r.name, prep: r.prep, active: r.active, hasSides: r.hasSides, min: r.min, portion: defPort, base: r.base, advancePrepHours: r.advancePrepHours ?? null, advancePrepNote: r.advancePrepNote ?? null, position: pos + i }
     })
     // Optimistic
     const tempMeals = mealsToInsert.map(m => ({ ...m, id: uid() }))
@@ -167,7 +169,7 @@ export default function App() {
     const entryId = dayEntryMap[day]
     const pos = plan[day][sec].length
     const r = recipes.find(x => x.id === meal.recipeId)
-    const mealToInsert = { recipeId: meal.recipeId, section: sec, name: meal.name, prep: meal.prep, active: meal.active, hasSides: r?.hasSides ?? meal.hasSides, min: r?.min ?? meal.min, portion: meal.portion, base: r?.base ?? meal.portion, position: pos }
+    const mealToInsert = { recipeId: meal.recipeId, section: sec, name: meal.name, prep: meal.prep, active: meal.active, hasSides: r?.hasSides ?? meal.hasSides, min: r?.min ?? meal.min, portion: meal.portion, base: r?.base ?? meal.portion, advancePrepHours: r?.advancePrepHours ?? meal.advancePrepHours ?? null, advancePrepNote: r?.advancePrepNote ?? meal.advancePrepNote ?? null, position: pos }
     // Optimistic
     const tempMeal = { ...mealToInsert, id: uid() }
     setPlan({ ...plan, [day]: { ...plan[day], [sec]: [...plan[day][sec], tempMeal] } })
@@ -350,7 +352,7 @@ export default function App() {
     if (screen === 'recipeSelection') return <RecipeSelectionScreen day={selDay} section={selSec} plan={plan} recipes={recipes} onAdd={addMeals} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))} onPreview={openRecipeFromSelection}/>
     if (screen === 'recipe')          return <RecipeScreen recipeId={selRecipeId} portion={recipeDetailPortion}/>
     if (tab === 'home')    return <HomeScreen plan={plan} onDayOpen={openDayPlan} onRecipeOpen={openRecipeFromHome} moveMeal={moveMeal} onCopy={copyWeekPlan} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))}/>
-    if (tab === 'planner') return <PlannerScreen plan={plan} removeMeal={removeMeal} moveMeal={moveMeal} duplicateMeal={duplicateMeal} onDayOpen={openDayPlan} onNutrition={()=>{ setScreen('nutrition'); if(!nutriData) analyseNutrition() }} onShoppingList={generateShoppingList} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))} onCopy={copyWeekPlan}/>
+    if (tab === 'planner') return <PlannerScreen plan={plan} removeMeal={removeMeal} moveMeal={moveMeal} duplicateMeal={duplicateMeal} updatePortion={updatePortion} onDayOpen={openDayPlan} onNutrition={()=>{ setScreen('nutrition'); if(!nutriData) analyseNutrition() }} onShoppingList={generateShoppingList}/>
     if (tab === 'list')    return <ShoppingListScreen shopping={shopping} onToggle={onShoppingToggle} loading={shoppingLoading} error={shoppingError} onRegenerate={generateShoppingList}/>
     if (tab === 'batch')   return <BatchScreen activeTab={batchTab} setActiveTab={setBatchTab} batchData={batchData} batchLoading={batchLoading} batchError={batchError} onGenerate={generateBatch}/>
   }

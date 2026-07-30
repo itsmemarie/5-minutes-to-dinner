@@ -1,4 +1,7 @@
-import { CORS } from '../_shared/cors.ts'
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
 
 const GROQ_KEY = Deno.env.get('GROQ_API_KEY') ?? ''
 
@@ -12,6 +15,8 @@ Required JSON schema:
   "diet": "omni | veg | vegan",
   "prep_time_minutes": <number>,
   "cook_time_minutes": <number>,
+  "advance_prep_hours": <number, hours of unattended lead time needed before cooking can start — marinating, brining, dough proofing/fermenting, thawing, overnight chilling. 0 if none needed.>,
+  "advance_prep_note": "Short human-readable description of the advance step, e.g. 'Marinate chicken 4h' or 'Cold-ferment dough overnight (8-12h)'. Empty string if advance_prep_hours is 0.",
   "portion_size": <number, default 4>,
   "min_portions": <number>,
   "should_have_side": <boolean>,

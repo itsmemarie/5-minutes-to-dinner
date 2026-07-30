@@ -25,6 +25,8 @@ export async function fetchRecipes() {
       order_out,
       fun_recipe,
       husband_approved,
+      advance_prep_hours,
+      advance_prep_note,
       recipe_dietary_tags ( dietary_tag_id )
     `)
     .in('meal_type_id', ['breakfast', 'main', 'side', 'entree', 'dessert'])
@@ -55,6 +57,8 @@ export async function fetchRecipes() {
       defaultDays: r.weekdays || [],
       fun:        !!r.fun_recipe,
       husband:    !!r.husband_approved,
+      advancePrepHours: r.advance_prep_hours != null ? Number(r.advance_prep_hours) : null,
+      advancePrepNote:  r.advance_prep_note || null,
     }
   })
 }
@@ -133,6 +137,8 @@ export async function fetchWeekPlan(planId) {
         prep_time_snapshot,
         cook_time_snapshot,
         portion,
+        advance_prep_hours_snapshot,
+        advance_prep_note_snapshot,
         position
       )
     `)
@@ -156,6 +162,8 @@ export async function addPlannedMeals(dayEntryId, meals) {
       cook_time_snapshot:    m.active,
       portion:               m.portion,
       base_portion_snapshot: m.base,
+      advance_prep_hours_snapshot: m.advancePrepHours ?? null,
+      advance_prep_note_snapshot:  m.advancePrepNote ?? null,
       position:              m.position + i,
     })))
     .select('id')

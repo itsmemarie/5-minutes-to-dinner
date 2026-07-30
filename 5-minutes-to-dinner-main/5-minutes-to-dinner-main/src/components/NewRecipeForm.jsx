@@ -30,6 +30,8 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
     diet: 'omni',
     prep_time_minutes: '',
     cook_time_minutes: '',
+    advance_prep_hours: '',
+    advance_prep_note: '',
     portion_size: 4,
     min_portions: 1,
     should_have_side: false,
@@ -61,6 +63,8 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
       diet: data.diet || p.diet,
       prep_time_minutes: data.prep_time_minutes != null ? data.prep_time_minutes : p.prep_time_minutes,
       cook_time_minutes: data.cook_time_minutes != null ? data.cook_time_minutes : p.cook_time_minutes,
+      advance_prep_hours: data.advance_prep_hours != null ? data.advance_prep_hours : p.advance_prep_hours,
+      advance_prep_note: data.advance_prep_note || p.advance_prep_note,
       portion_size: data.portion_size ?? p.portion_size,
       min_portions: data.min_portions ?? p.min_portions,
       should_have_side: data.should_have_side ?? p.should_have_side,
@@ -125,6 +129,8 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
         meal_type_id: f.meal_type_id,
         prep_time_minutes: f.prep_time_minutes === '' ? null : Number(f.prep_time_minutes),
         cook_time_minutes: f.cook_time_minutes === '' ? null : Number(f.cook_time_minutes),
+        advance_prep_hours: f.advance_prep_hours === '' ? null : Number(f.advance_prep_hours),
+        advance_prep_note: f.advance_prep_note || null,
         portion_size: f.portion_size,
         min_portions: f.min_portions,
         should_have_side: f.should_have_side,
@@ -153,6 +159,8 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
         cat: catMap[f.meal_type_id] || 'Mains',
         prep: f.prep_time_minutes === '' ? 0 : Number(f.prep_time_minutes),
         active: f.cook_time_minutes === '' ? 0 : Number(f.cook_time_minutes),
+        advancePrepHours: f.advance_prep_hours === '' ? null : Number(f.advance_prep_hours),
+        advancePrepNote: f.advance_prep_note || null,
         base: f.portion_size,
         min: f.min_portions,
         diet: f.diet,
@@ -263,6 +271,17 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
           <div style={{ flex: 1 }}>
             <div style={{ ...mn, fontSize: 11, fontWeight: 700, color: C.onSurfaceVariant, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 5 }}>Cook (mins)</div>
             <input type='number' min='0' value={f.cook_time_minutes} onChange={e => set('cook_time_minutes', e.target.value)} placeholder='0' style={inp()}/>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
+          <div style={{ flex: '0 0 110px' }}>
+            <div style={{ ...mn, fontSize: 11, fontWeight: 700, color: C.onSurfaceVariant, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 5 }}>Advance Prep (hrs)</div>
+            <input type='number' min='0' step='0.5' value={f.advance_prep_hours} onChange={e => set('advance_prep_hours', e.target.value)} placeholder='0' style={inp()}/>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ ...mn, fontSize: 11, fontWeight: 700, color: C.onSurfaceVariant, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 5 }}>Advance Prep Note</div>
+            <input value={f.advance_prep_note} onChange={e => set('advance_prep_note', e.target.value)} placeholder='e.g. Marinate chicken 4h' style={inp()}/>
           </div>
         </div>
 
