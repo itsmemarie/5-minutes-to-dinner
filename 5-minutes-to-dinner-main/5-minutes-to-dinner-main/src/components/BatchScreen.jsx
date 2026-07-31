@@ -45,9 +45,13 @@ export function BatchScreen({activeTab,setActiveTab,batchData,batchLoading,batch
           <button key={t.id} onClick={()=>setActiveTab(t.id)} style={{...mn,padding:'8px 14px',borderRadius:99,border:'none',background:activeTab===t.id?C.primary:C.secondaryContainer,color:activeTab===t.id?C.onPrimary:C.onSecondaryContainer,fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap',flexShrink:0}}>{t.label}</button>
         ))}
       </div>
-      {!batchData&&!batchLoading&&<div style={{...CARD,padding:20,marginBottom:14,textAlign:'center'}}>
-        <p style={{...mn,fontSize:13,color:C.onSurfaceVariant,marginBottom:14,lineHeight:1.6}}>Generate an AI batch cooking schedule from your meal plan.</p>
-        <Btn label='✨ Generate Batch Schedule' onClick={onGenerate}/>
+      {!batchData&&!batchLoading&&<div style={{background:C.primaryFixed,borderRadius:16,padding:'40px 24px',marginBottom:14,textAlign:'center'}}>
+        <div style={{width:56,height:56,borderRadius:'50%',background:'rgba(45,96,47,0.10)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 18px'}}>
+          <Icon name='chefHat' size={26} color={C.primary}/>
+        </div>
+        <div style={{...ep,fontSize:19,color:C.onSurface,marginBottom:8}}>Nothing prepped yet</div>
+        <p style={{...mn,fontSize:13,color:C.onSurfaceVariant,marginBottom:20,lineHeight:1.6,maxWidth:240,marginLeft:'auto',marginRight:'auto'}}>Generate an AI batch cooking schedule from your meal plan.</p>
+        <Btn label={<><Icon name='sparkles' size={16} color={C.onPrimary}/><span>Generate batch schedule</span></>} onClick={onGenerate}/>
       </div>}
       {batchLoading&&<Spinner msg='Building your batch cooking schedule…'/>}
       {batchError&&<div style={{...CARD,padding:16,marginBottom:14,borderLeft:`4px solid ${C.error}`}}><p style={{...mn,fontSize:13,color:C.error,margin:0}}>⚠️ {batchError}</p></div>}
@@ -73,11 +77,10 @@ export function BatchScreen({activeTab,setActiveTab,batchData,batchLoading,batch
                 <div style={{width:40,flexShrink:0,...mn,fontSize:11,fontWeight:700,color:C.onSurfaceVariant,opacity:0.7,paddingTop:2}}>{step.time}</div>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6,flexWrap:'wrap'}}>
-                    <span style={{...mn,fontSize:10,fontWeight:700,background:tc.bg,color:tc.tx,border:`1px solid ${tc.bd}`,padding:'2px 8px',borderRadius:99}}>{TAG_LABEL[step.tag]||step.tag}</span>
+                    <span style={{...mn,fontSize:10,fontWeight:700,color:tc.tx,letterSpacing:'0.03em'}}>{TAG_LABEL[step.tag]||step.tag}</span>
                     <span style={{...mn,fontSize:13,fontWeight:700,color:C.onSurface}}>{step.title}</span>
                   </div>
-                  {step.full&&<div style={{...mn,fontSize:11,fontWeight:700,background:C.primary,color:C.onPrimary,padding:'3px 10px',borderRadius:99,display:'inline-block',marginBottom:8}}>COMPLETE TM6 DISH</div>}
-                  {(step.chips||[]).length>0&&<div style={{display:'flex',gap:5,flexWrap:'wrap',marginBottom:8}}>{(step.chips||[]).map((c,j)=><span key={j} style={{...mn,fontSize:10,fontWeight:600,background:tc.bg,color:tc.tx,padding:'2px 8px',borderRadius:99}}>{c}</span>)}</div>}
+                  {(step.chips||[]).length>0&&<div style={{...mn,fontSize:11,fontWeight:600,color:tc.tx,marginBottom:8}}>{(step.chips||[]).join(' · ')}</div>}
                   {step.qty&&<div style={{...mn,fontSize:12,color:C.onSurfaceVariant,marginBottom:6}}>{step.qty}</div>}
                   <p style={{...mn,fontSize:13,color:C.onSurface,lineHeight:1.6,margin:0,marginBottom:step.storage||step.warn||step.safety?8:0}}>{step.body}</p>
                   {step.storage&&<div style={{...mn,fontSize:11,fontWeight:700,color:C.primary,background:C.primaryFixed,padding:'6px 10px',borderRadius:8}}>{step.storage}</div>}
