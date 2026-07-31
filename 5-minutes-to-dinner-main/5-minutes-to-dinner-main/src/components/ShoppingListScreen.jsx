@@ -11,9 +11,13 @@ export function ShoppingListScreen({shopping,onToggle,loading,error,onRegenerate
   const extra=[...new Set(shopping.map(s=>s.aisle).filter(a=>a&&!AISLES.includes(a)))]
   const orderedAisles=[...AISLES,...extra]
   const copyUnchecked=()=>{
-    const items=orderedAisles.flatMap(aisle=>shopping.filter(s=>s.aisle===aisle&&!s.checked))
-    if(!items.length)return
-    navigator.clipboard.writeText(items.map(item=>`• ${item.name}${item.amount?' — '+item.amount+(item.unit?' '+item.unit:''):''}`).join('\n'))
+    const groups=orderedAisles.map(aisle=>({aisle,items:shopping.filter(s=>s.aisle===aisle&&!s.checked)})).filter(g=>g.items.length)
+    if(!groups.length)return
+    const text=groups.map(({aisle,items})=>{
+      const heading=aisle.charAt(0)+aisle.slice(1).toLowerCase()
+      return `${heading}\n${items.map(item=>`• ${item.name}${item.amount?' — '+item.amount+(item.unit?' '+item.unit:''):''}`).join('\n')}`
+    }).join('\n\n')
+    navigator.clipboard.writeText(text)
     setCopied(true);setTimeout(()=>setCopied(false),2000)
   }
   return(
