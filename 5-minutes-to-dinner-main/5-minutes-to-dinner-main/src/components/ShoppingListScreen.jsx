@@ -25,8 +25,8 @@ export function ShoppingListScreen({shopping,onToggle,loading,error,onRegenerate
           {!loading&&shopping.length>0&&<div style={{...mn,fontSize:12,color:C.primary,marginTop:2,fontWeight:600}}>{unc} item{unc!==1?'s':''} remaining</div>}
         </div>
         {shopping.length>0&&!loading&&(
-          <button onClick={onRegenerate} title='Regenerate' style={{border:'none',background:C.secondaryContainer,color:C.onSecondaryContainer,borderRadius:99,width:36,height:36,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',flexShrink:0}}>
-            <Icon name='refreshCw' size={16}/>
+          <button onClick={onRegenerate} title='Regenerate' style={{display:'flex',alignItems:'center',gap:8,border:'none',background:C.secondaryContainer,color:'#924b1a',borderRadius:999,padding:'7px 14px',...mn,fontWeight:700,fontSize:12,whiteSpace:'nowrap',cursor:'pointer',flexShrink:0}}>
+            <Icon name='refreshCw' size={14}/>Generate
           </button>
         )}
       </div>

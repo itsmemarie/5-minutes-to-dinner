@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { C, ep, mn } from '../lib/theme.js'
 import { DAYS, DAY_LBL, TODAY } from '../lib/dateHelpers.js'
-import { Btn, Icon } from './ui/index.js'
+import { Icon } from './ui/index.js'
 import { NewRecipeForm } from './NewRecipeForm.jsx'
 
 const SEC_LBL = { breakfast:'Breakfast', main:'Main', side:'Side' }
@@ -20,7 +20,9 @@ export function HomeScreen({ plan, onDayOpen, onRecipeOpen, moveMeal, onCopy, on
       {showNewRecipe && <NewRecipeForm defaultMealType='main' onSave={r=>{onRecipeCreated(r);setShowNewRecipe(false)}} onCancel={()=>setShowNewRecipe(false)}/>}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:18 }}>
         <div style={{...ep, fontSize:28, color:C.onSurface}}>This week</div>
-        <Btn label='+ Add recipe' small secondary onClick={()=>setShowNewRecipe(true)}/>
+        <button onClick={()=>setShowNewRecipe(true)} style={{display:'flex',alignItems:'center',gap:8,border:'none',background:C.secondaryContainer,color:'#924b1a',borderRadius:999,padding:'7px 14px',...mn,fontWeight:700,fontSize:12,whiteSpace:'nowrap',cursor:'pointer',flexShrink:0}}>
+          <Icon name='plus' size={14}/>Add recipe
+        </button>
       </div>
       {DAYS.map(day => {
         const meals = [...plan[day].breakfast, ...plan[day].main, ...plan[day].side]

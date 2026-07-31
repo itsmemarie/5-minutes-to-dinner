@@ -1,5 +1,5 @@
 import { C, ep, mn, CARD } from '../lib/theme.js'
-import { Spinner, SecHead, Btn } from './ui/index.js'
+import { Spinner, SecHead, Icon } from './ui/index.js'
 
 const NUTRI = {
   adult:{scores:{gutHealth:74,vitaminMineral:61,inflammation:80,metabolic:67,antioxidant:72,overall:71},
@@ -40,7 +40,9 @@ export function NutritionScreen({profile,setProfile,nutriData,nutriLoading,nutri
       {nutriError&&<div style={{...CARD,padding:16,marginBottom:16,borderLeft:`4px solid ${C.error}`}}><p style={{...mn,fontSize:13,color:C.error,margin:0}}>⚠️ {nutriError}</p></div>}
       {!nutriData&&!nutriLoading&&<div style={{...CARD,padding:20,marginBottom:16,textAlign:'center'}}>
         <p style={{...mn,fontSize:13,color:C.onSurfaceVariant,marginBottom:14,lineHeight:1.6}}>Get AI-powered nutritional insights for your week's meal plan.</p>
-        <Btn label='✨ Analyse This Week' onClick={onAnalyse}/>
+        <button onClick={onAnalyse} style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,border:'none',background:C.secondaryContainer,color:'#924b1a',borderRadius:999,padding:'7px 14px',...mn,fontWeight:700,fontSize:12,whiteSpace:'nowrap',cursor:'pointer'}}>
+          <Icon name='sparkles' size={14}/>Analyse This Week
+        </button>
       </div>}
       <div style={{background:C.primary,borderRadius:10,padding:'24px 20px',textAlign:'center',marginBottom:16}}>
         <div style={{...mn,fontSize:11,fontWeight:700,letterSpacing:'0.07em',color:'rgba(255,255,255,0.65)',marginBottom:14,textTransform:'uppercase'}}>Overall Weekly Healthiness Score</div>

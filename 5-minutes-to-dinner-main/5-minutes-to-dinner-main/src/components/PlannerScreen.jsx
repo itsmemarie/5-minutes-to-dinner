@@ -27,7 +27,7 @@ export function PlannerScreen({plan,removeMeal,moveMeal,duplicateMeal,updatePort
         <div style={{...ep,fontSize:28,color:C.onSurface}}>Weekly planner</div>
         <span style={{...mn,fontSize:12,color:C.onSurfaceVariant,background:C.surfaceContainerHigh,padding:'5px 12px',borderRadius:99,whiteSpace:'nowrap'}}>{WEEK_LBL}</span>
       </div>
-      <button onClick={onNutrition} style={{width:'100%',background:C.secondaryContainer,color:C.onSecondaryContainer,border:'none',borderRadius:12,padding:'13px',...mn,fontSize:14,fontWeight:700,cursor:'pointer',marginBottom:20,display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+      <button onClick={onNutrition} style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,border:'none',background:C.secondaryContainer,color:'#924b1a',borderRadius:999,padding:'12px 14px',...mn,fontWeight:700,fontSize:14,whiteSpace:'nowrap',cursor:'pointer',marginBottom:20}}>
         <Icon name='barChart3' size={16}/>Calculate nutritional insights
       </button>
       {DAYS.map(day=>{
