@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "mcp__claude_ai_Supabase__deploy_edge_function"
+      "mcp__claude_ai_Supabase__deploy_edge_function",
+      "Bash(chromium-cli --help)"
     ]
   }
 }

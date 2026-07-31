@@ -26,6 +26,7 @@ export async function fetchRecipes() {
       husband_approved,
       advance_prep_hours,
       advance_prep_note,
+      side_recommendation,
       recipe_dietary_tags ( dietary_tag_id )
     `)
     .in('meal_type_id', ['breakfast', 'main', 'side', 'entree', 'dessert'])
@@ -57,6 +58,7 @@ export async function fetchRecipes() {
       husband:    !!r.husband_approved,
       advancePrepHours: r.advance_prep_hours != null ? Number(r.advance_prep_hours) : null,
       advancePrepNote:  r.advance_prep_note || null,
+      sideRecommendation: r.side_recommendation || null,
     }
   })
 }

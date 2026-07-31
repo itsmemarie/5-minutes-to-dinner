@@ -4,6 +4,7 @@ import { DAYS } from '../lib/dateHelpers.js'
 import { Btn, PillBtn } from './ui/index.js'
 import { RecipeBucket } from './RecipeBucket.jsx'
 import { NewRecipeForm } from './NewRecipeForm.jsx'
+import { parseSideNames, matchSideRecipes } from '../lib/sidePairing.js'
 
 export function RecipeSelectionScreen({day,section,plan,recipes,onAdd,onRecipeCreated,onPreview}){
   const [search,setSearch]=useState('')
@@ -33,10 +34,19 @@ export function RecipeSelectionScreen({day,section,plan,recipes,onAdd,onRecipeCr
   // Drop recipes already on this day (any section) — they shouldn't appear at all
   const available=filtered.filter(r=>!currentDayIds.includes(r.id))
 
-  // Bucket order requested: Already Planned This Week → Default → Try Out → Order Out → Other
+  // Side pairing: pin recipes matching the day's Main's recommended side(s) at the top
+  const mainMeal=plan[day].main[0]
+  const mainRecipe=section==='side'?recipes.find(r=>r.id===mainMeal?.recipeId):null
+  const suggested=section==='side'&&mainRecipe
+    ?matchSideRecipes(parseSideNames(mainRecipe.sideRecommendation),available)
+    :[]
+  const suggestedIds=suggested.map(r=>r.id)
+  const availableRest=available.filter(r=>!suggestedIds.includes(r.id))
+
+  // Bucket order requested: Suggested → Already Planned This Week → Default → Try Out → Order Out → Other
   // Default takes priority: if a recipe has this day in defaultDays it always lands here
-  const alreadyWeek=available.filter(r=>otherDaysIds.includes(r.id))
-  const rest=available.filter(r=>!otherDaysIds.includes(r.id))
+  const alreadyWeek=availableRest.filter(r=>otherDaysIds.includes(r.id))
+  const rest=availableRest.filter(r=>!otherDaysIds.includes(r.id))
   const defaults=rest.filter(r=>(r.defaultDays||[]).includes(day))
   const notDefault=rest.filter(r=>!(r.defaultDays||[]).includes(day))
   const tryOut=notDefault.filter(r=>r.tryOut&&!r.orderOut)
@@ -72,6 +82,7 @@ export function RecipeSelectionScreen({day,section,plan,recipes,onAdd,onRecipeCr
           </div>
         ):(
           <>
+            <RecipeBucket title='Suggested' items={suggested} disabled={false} selected={selected} onToggle={toggle} onPreview={onPreview} suggestionLabel={mainRecipe?.name}/>
             <RecipeBucket title='Already Planned This Week' items={alreadyWeek} disabled={false} selected={selected} onToggle={toggle} onPreview={onPreview}/>
             <RecipeBucket title='Default' items={defaults} disabled={false} selected={selected} onToggle={toggle} onPreview={onPreview}/>
             <RecipeBucket title='Try Out' items={tryOut} disabled={false} selected={selected} onToggle={toggle} onPreview={onPreview}/>

@@ -2,11 +2,17 @@ import { useState } from 'react'
 import { C, ep, mn, CARD } from '../lib/theme.js'
 import { DAY_LBL } from '../lib/dateHelpers.js'
 import { Btn, Stepper } from './ui/index.js'
+import { Icon } from './ui/Icon.jsx'
+import { parseSideNames, formatSideNames } from '../lib/sidePairing.js'
 
-export function DailyPlanScreen({day,plan,updatePortion,removeMeal,duplicateMeal,onAddToSection,onSave}){
+export function DailyPlanScreen({day,plan,recipes,updatePortion,removeMeal,duplicateMeal,onAddToSection,onSave}){
   const [saved,setSaved]=useState(false)
   const secs=[{key:'breakfast',label:'Breakfast'},{key:'main',label:'Main Meal'},{key:'side',label:'Side Dish'}]
   const go=()=>{setSaved(true);setTimeout(()=>{setSaved(false);onSave()},1000)}
+  const mainMeal=plan[day].main[0]
+  const mainRecipe=recipes?.find(r=>r.id===mainMeal?.recipeId)
+  const sideNames=parseSideNames(mainRecipe?.sideRecommendation)
+  const showSideHint=plan[day].side.length===0&&mainMeal&&sideNames.length>0
   return(
     <div style={{padding:'0 20px'}}>
       <div style={{...ep,fontSize:24,color:C.onSurface,padding:'16px 0 12px'}}>{DAY_LBL[day]}</div>
@@ -17,10 +23,20 @@ export function DailyPlanScreen({day,plan,updatePortion,removeMeal,duplicateMeal
             <button onClick={()=>onAddToSection(day,s.key)} style={{...mn,background:'none',border:'none',color:C.primary,fontWeight:700,fontSize:13,cursor:'pointer'}}>＋ Add</button>
           </div>
           {plan[day][s.key].length===0?(
-            <div onClick={()=>onAddToSection(day,s.key)} style={{border:`2px dashed ${C.outlineVariant}`,borderRadius:10,padding:20,display:'flex',flexDirection:'column',alignItems:'center',gap:6,cursor:'pointer'}}>
-              <span style={{fontSize:22,color:C.outlineVariant}}>⊕</span>
-              <span style={{...mn,fontSize:13,color:C.outlineVariant}}>Tap to add {s.label.toLowerCase()}</span>
-            </div>
+            <>
+              {s.key==='side'&&showSideHint&&(
+                <div style={{display:'flex',alignItems:'flex-start',gap:8,marginBottom:8}}>
+                  <span style={{marginTop:1,flexShrink:0}}><Icon name='sparkles' size={16} color={C.accent2_600}/></span>
+                  <span style={{...mn,fontSize:14,color:C.accent2_800,lineHeight:1.4}}>
+                    <span style={{fontWeight:700}}>{formatSideNames(sideNames)}</span> would go well with <span style={{fontWeight:700}}>{mainRecipe?.name}</span>
+                  </span>
+                </div>
+              )}
+              <div onClick={()=>onAddToSection(day,s.key)} style={{border:`2px dashed ${C.outlineVariant}`,borderRadius:10,padding:20,display:'flex',flexDirection:'column',alignItems:'center',gap:6,cursor:'pointer'}}>
+                <span style={{fontSize:22,color:C.outlineVariant}}>⊕</span>
+                <span style={{...mn,fontSize:13,color:C.outlineVariant}}>Tap to add {s.label.toLowerCase()}</span>
+              </div>
+            </>
           ):(
             <div style={{display:'flex',flexDirection:'column',gap:8}}>
               {plan[day][s.key].map(m=>(

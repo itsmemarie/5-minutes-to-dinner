@@ -7,6 +7,8 @@ export const C = {
   surface:'#f3f8f2', white:'#fff', surfaceContainerHigh:'#eaf6ea',
   onSurface:'#182417', onSurfaceVariant:'#5c6a58',
   outline:'#5c6a58', outlineVariant:'#c8d6c5',
+  accent2_100:'#fff3e8', accent2_300:'#f0c090', accent2_600:'#d9791f',
+  accent2_700:'#b85f16', accent2_800:'#8a4410',
 }
 export const ep = {fontFamily:"'Caprasimo',cursive",fontWeight:400,letterSpacing:'-0.015em'}
 export const mn = {fontFamily:"'Figtree',sans-serif"}
