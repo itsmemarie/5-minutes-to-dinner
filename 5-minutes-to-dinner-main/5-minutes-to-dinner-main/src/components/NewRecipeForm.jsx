@@ -34,7 +34,6 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
     advance_prep_note: '',
     portion_size: 4,
     min_portions: 1,
-    should_have_side: false,
     try_out: false,
     order_out: false,
     fun_recipe: false,
@@ -67,7 +66,6 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
       advance_prep_note: data.advance_prep_note || p.advance_prep_note,
       portion_size: data.portion_size ?? p.portion_size,
       min_portions: data.min_portions ?? p.min_portions,
-      should_have_side: data.should_have_side ?? p.should_have_side,
       has_thermomix_version: data.has_thermomix_version ?? p.has_thermomix_version,
       ingredients: data.ingredients || p.ingredients,
       instructions_standard: data.instructions_standard || p.instructions_standard,
@@ -133,7 +131,6 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
         advance_prep_note: f.advance_prep_note || null,
         portion_size: f.portion_size,
         min_portions: f.min_portions,
-        should_have_side: f.should_have_side,
         try_out: f.try_out,
         order_out: f.order_out,
         fun_recipe: f.fun_recipe,
@@ -164,7 +161,6 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
         base: f.portion_size,
         min: f.min_portions,
         diet: f.diet,
-        hasSides: f.should_have_side,
         tryOut: f.try_out,
         orderOut: f.order_out,
         defaultDays: f.weekdays,
@@ -305,7 +301,6 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
         )}
 
         <div style={{ ...CARD, padding: '4px 14px', marginBottom: 16 }}>
-          {toggle('should_have_side', '🍽 Should have a side')}
           {toggle('try_out', 'Try Out recipe')}
           {toggle('order_out', 'Order Out')}
           {toggle('fun_recipe', 'Fun Recipe (F)')}

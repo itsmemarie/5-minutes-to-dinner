@@ -28,7 +28,6 @@ Required JSON schema:
   "cook_time_minutes": <number>,
   "portion_size": <number, default 4>,
   "min_portions": <number>,
-  "should_have_side": <boolean>,
   "has_thermomix_version": true,
   "ingredients": "Grouped list. Format each group as:\\n[Category]\\n- 200g ingredient\\n- 3 pieces ingredient",
   "instructions_standard": "Steps with inline amounts. Format: 'Step Name: Description (200g). Cook X minutes.'",

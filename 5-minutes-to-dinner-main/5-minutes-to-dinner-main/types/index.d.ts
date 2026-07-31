@@ -11,8 +11,6 @@ export interface RecipeSummary {
   /** Prep time in minutes. */
   prep: number;
   diet: 'omni' | 'veg' | 'vegan';
-  /** Whether this main should be paired with a side dish. */
-  hasSides?: boolean;
   /** Flagged as a "fun" recipe (shows an "F" badge). */
   fun?: boolean;
   /** Flagged as husband-approved (shows an "H" badge). */

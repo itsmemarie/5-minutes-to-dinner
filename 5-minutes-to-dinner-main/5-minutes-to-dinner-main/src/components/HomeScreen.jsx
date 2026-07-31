@@ -30,7 +30,7 @@ export function HomeScreen({ plan, onDayOpen, onRecipeOpen, moveMeal, onCopy, on
         return (
           <div key={day} style={{ marginBottom:16 }}>
             <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
-              <span style={{...mn,fontSize:11,fontWeight:700,letterSpacing:'0.06em',color:C.onSurfaceVariant,textTransform:'uppercase'}}>{DAY_LBL[day]}</span>
+              <span style={{...mn,fontSize:11,fontWeight:700,letterSpacing:'0.06em',color:isToday?C.primary:C.onSurfaceVariant,textTransform:'uppercase'}}>{DAY_LBL[day]}</span>
               {isToday && <span style={{...mn,fontSize:10,fontWeight:700,background:'transparent',border:`1px solid ${C.tertiary}`,color:C.tertiary,padding:'2px 10px',borderRadius:99}}>Today</span>}
             </div>
             <div onDragOver={e=>onDragOver(e,day)} onDragLeave={onDragLeave} onDrop={e=>onDrop(e,day)} style={{outline:over===day&&drag?.fromDay!==day?`2px solid ${C.primary}`:'2px solid transparent',borderRadius:10,transition:'outline 0.12s'}}>

@@ -14,7 +14,6 @@ export function RecipeCard({r,disabled,selected,onToggle,onPreview}){
           <CapLabel text={`${Math.max(r.base,r.min)}p`}/>
           <span style={{...mn,fontSize:11,color:C.onSurfaceVariant}}>🕒 {r.prep}m prep</span>
           <span style={{fontSize:13}}>{r.diet==='veg'||r.diet==='vegan'?'🌿':'🐰'}</span>
-          {r.hasSides&&<span style={{fontSize:12}}>🍽</span>}
           {r.fun&&<span style={{...mn,fontSize:10,background:C.secondaryContainer,color:C.onSecondaryContainer,padding:'1px 6px',borderRadius:99,fontWeight:700}}>F</span>}
           {r.husband&&<span style={{...mn,fontSize:10,background:C.primaryFixed,color:C.primary,padding:'1px 6px',borderRadius:99,fontWeight:700}}>H</span>}
         </div>

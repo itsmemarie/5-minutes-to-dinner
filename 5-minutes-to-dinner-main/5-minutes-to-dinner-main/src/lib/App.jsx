@@ -77,7 +77,7 @@ export default function App() {
                 portion: pm.portion, name: pm.name_snapshot,
                 prep: pm.prep_time_snapshot || 0,
                 active: pm.cook_time_snapshot || 0,
-                hasSides: false, min: 1,
+                min: 1,
                 advancePrepHours: pm.advance_prep_hours_snapshot != null ? Number(pm.advance_prep_hours_snapshot) : null,
                 advancePrepNote:  pm.advance_prep_note_snapshot || null,
               })
@@ -142,13 +142,13 @@ export default function App() {
     const sec = selSec, entryId = dayEntryMap[selDay]
     const pos = plan[selDay][sec].length
     const mealsToInsert = rids.map((rid, i) => {
-      const r = recipes.find(x => x.id === rid) || { name: rid, prep: 0, active: 0, hasSides: false, min: 1, base: defPort, advancePrepHours: null, advancePrepNote: null }
-      return { recipeId: rid, section: sec, name: r.name, prep: r.prep, active: r.active, hasSides: r.hasSides, min: r.min, portion: defPort, base: r.base, advancePrepHours: r.advancePrepHours ?? null, advancePrepNote: r.advancePrepNote ?? null, position: pos + i }
+      const r = recipes.find(x => x.id === rid) || { name: rid, prep: 0, active: 0, min: 1, base: defPort, advancePrepHours: null, advancePrepNote: null }
+      return { recipeId: rid, section: sec, name: r.name, prep: r.prep, active: r.active, min: r.min, portion: defPort, base: r.base, advancePrepHours: r.advancePrepHours ?? null, advancePrepNote: r.advancePrepNote ?? null, position: pos + i }
     })
     // Optimistic
     const tempMeals = mealsToInsert.map(m => ({ ...m, id: uid() }))
     setPlan({ ...plan, [selDay]: { ...plan[selDay], [sec]: [...plan[selDay][sec], ...tempMeals] } })
-    if (tempMeals.find(m => m.hasSides && sec === 'main')) { setSelSec('side') } else { setScreen('dailyPlan') }
+    setScreen('dailyPlan')
     // DB write — replace temp IDs with real ones
     const created = await addPlannedMeals(entryId, mealsToInsert)
     if (created) {
@@ -169,7 +169,7 @@ export default function App() {
     const entryId = dayEntryMap[day]
     const pos = plan[day][sec].length
     const r = recipes.find(x => x.id === meal.recipeId)
-    const mealToInsert = { recipeId: meal.recipeId, section: sec, name: meal.name, prep: meal.prep, active: meal.active, hasSides: r?.hasSides ?? meal.hasSides, min: r?.min ?? meal.min, portion: meal.portion, base: r?.base ?? meal.portion, advancePrepHours: r?.advancePrepHours ?? meal.advancePrepHours ?? null, advancePrepNote: r?.advancePrepNote ?? meal.advancePrepNote ?? null, position: pos }
+    const mealToInsert = { recipeId: meal.recipeId, section: sec, name: meal.name, prep: meal.prep, active: meal.active, min: r?.min ?? meal.min, portion: meal.portion, base: r?.base ?? meal.portion, advancePrepHours: r?.advancePrepHours ?? meal.advancePrepHours ?? null, advancePrepNote: r?.advancePrepNote ?? meal.advancePrepNote ?? null, position: pos }
     // Optimistic
     const tempMeal = { ...mealToInsert, id: uid() }
     setPlan({ ...plan, [day]: { ...plan[day], [sec]: [...plan[day][sec], tempMeal] } })
@@ -376,27 +376,29 @@ export default function App() {
         <div style={{flex:1,overflowY:'auto',position:'relative',paddingBottom:screen?80:0,display:'flex',flexDirection:'column'}}>
           {renderScreen()}
         </div>
-        {tab === 'planner' && !screen && (
-          <div style={{flexShrink:0,padding:'10px 20px',position:'sticky',bottom:0,zIndex:19}}>
-            <button onClick={generateShoppingList} style={{width:'100%',background:C.primary,color:C.onPrimary,border:'none',borderRadius:99,padding:'15px',...mn,fontSize:15,fontWeight:700,cursor:'pointer',boxShadow:'0 4px 20px rgba(45,96,47,0.3)',display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
-              <Icon name='cart' size={17} color={C.onPrimary}/>Generate shopping list
-            </button>
-          </div>
-        )}
-        {screen !== 'settings' && (
-          <div style={{background:C.primaryFixed,borderTop:`1px solid ${C.outlineVariant}30`,display:'flex',padding:'8px 0 14px',flexShrink:0,position:'sticky',bottom:0,zIndex:20}}>
-            {NAV.map(t => {
-              const active = tab === t.id && !screen
-              return (
-                <button key={t.id} onClick={()=>{setTab(t.id);setScreen(null)}} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:2,border:'none',background:'none',color:active?C.primary:C.onSurfaceVariant,cursor:'pointer',padding:'4px 2px'}}>
-                  <Icon name={t.icon} size={active?22:20}/>
-                  <span style={{...mn,fontSize:10,fontWeight:active?700:500}}>{t.label}</span>
-                  {active && <div style={{width:18,height:2,background:C.primary,borderRadius:2}}/>}
-                </button>
-              )
-            })}
-          </div>
-        )}
+        <div style={{flexShrink:0,position:'sticky',bottom:0,zIndex:20,display:'flex',flexDirection:'column'}}>
+          {tab === 'planner' && !screen && (
+            <div style={{padding:'10px 20px'}}>
+              <button onClick={generateShoppingList} style={{width:'100%',background:C.primary,color:C.onPrimary,border:'none',borderRadius:99,padding:'15px',...mn,fontSize:15,fontWeight:700,cursor:'pointer',boxShadow:'0 4px 20px rgba(45,96,47,0.3)',display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+                <Icon name='cart' size={17} color={C.onPrimary}/>Generate shopping list
+              </button>
+            </div>
+          )}
+          {screen !== 'settings' && (
+            <div style={{background:C.primaryFixed,borderTop:`1px solid ${C.outlineVariant}30`,display:'flex',padding:'8px 0 14px'}}>
+              {NAV.map(t => {
+                const active = tab === t.id && !screen
+                return (
+                  <button key={t.id} onClick={()=>{setTab(t.id);setScreen(null)}} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:2,border:'none',background:'none',color:active?C.primary:C.onSurfaceVariant,cursor:'pointer',padding:'4px 2px'}}>
+                    <Icon name={t.icon} size={active?22:20}/>
+                    <span style={{...mn,fontSize:10,fontWeight:active?700:500}}>{t.label}</span>
+                    {active && <div style={{width:18,height:2,background:C.primary,borderRadius:2}}/>}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

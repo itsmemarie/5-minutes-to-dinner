@@ -20,7 +20,6 @@ export async function fetchRecipes() {
       cook_time_minutes,
       portion_size,
       min_portions,
-      should_have_side,
       try_out,
       order_out,
       fun_recipe,
@@ -51,7 +50,6 @@ export async function fetchRecipes() {
       diet:       tags.includes('vegan')       ? 'vegan'
                 : tags.includes('vegetarian')  ? 'veg'
                 : 'omni',
-      hasSides:   !!r.should_have_side,
       tryOut:     !!r.try_out,
       orderOut:   !!r.order_out,
       defaultDays: r.weekdays || [],
