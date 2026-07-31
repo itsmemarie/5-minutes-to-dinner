@@ -12,7 +12,7 @@ const formatAdvance = h => {
   return `${Number.isInteger(n) ? n : n.toFixed(1)}h`
 }
 
-export function PlannerScreen({plan,removeMeal,moveMeal,duplicateMeal,updatePortion,onDayOpen,onNutrition,onShoppingList}){
+export function PlannerScreen({plan,removeMeal,moveMeal,duplicateMeal,updatePortion,onDayOpen,onNutrition}){
   const [drag,setDrag]=useState(null)   // {mealId,fromDay,section}
   const [over,setOver]=useState(null)   // day string being hovered
   const [servingsOpenId,setServingsOpenId]=useState(null)   // meal id whose servings panel is expanded
@@ -91,11 +91,6 @@ export function PlannerScreen({plan,removeMeal,moveMeal,duplicateMeal,updatePort
           </div>
         )
       })}
-      <div style={{position:'sticky',bottom:10,padding:'8px 0'}}>
-        <button onClick={onShoppingList} style={{width:'100%',background:C.primary,color:C.onPrimary,border:'none',borderRadius:99,padding:'15px',...mn,fontSize:15,fontWeight:700,cursor:'pointer',boxShadow:'0 4px 20px rgba(45,96,47,0.3)',display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
-          <Icon name='cart' size={17} color={C.onPrimary}/>Generate shopping list
-        </button>
-      </div>
     </div>
   )
 }

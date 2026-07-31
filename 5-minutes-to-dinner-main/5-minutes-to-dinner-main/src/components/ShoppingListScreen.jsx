@@ -50,7 +50,7 @@ export function ShoppingListScreen({shopping,onToggle,loading,error,onRegenerate
           if(!items.length)return null
           return(
             <div key={aisle} style={{marginBottom:18}}>
-              <div style={{...mn,fontSize:11,fontWeight:700,letterSpacing:'0.06em',color:C.onSecondaryContainer,marginBottom:8,textTransform:'uppercase'}}>{aisle}</div>
+              <div style={{...ep,fontSize:16,letterSpacing:'0.06em',color:C.onSurface,marginBottom:8}}>{aisle.charAt(0)+aisle.slice(1).toLowerCase()}</div>
               <div style={{...CARD,padding:0,overflow:'hidden'}}>
                 {items.map((item,i)=>(
                   <div key={item.id} onClick={()=>onToggle(item.id)} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 14px',borderBottom:i<items.length-1?`1px solid ${C.outlineVariant}25`:undefined,cursor:'pointer'}}>

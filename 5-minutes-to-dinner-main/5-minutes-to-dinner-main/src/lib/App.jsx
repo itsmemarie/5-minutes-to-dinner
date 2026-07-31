@@ -376,6 +376,13 @@ export default function App() {
         <div style={{flex:1,overflowY:'auto',position:'relative',paddingBottom:screen?80:0,display:'flex',flexDirection:'column'}}>
           {renderScreen()}
         </div>
+        {tab === 'planner' && !screen && (
+          <div style={{flexShrink:0,padding:'10px 20px',position:'sticky',bottom:0,zIndex:19}}>
+            <button onClick={generateShoppingList} style={{width:'100%',background:C.primary,color:C.onPrimary,border:'none',borderRadius:99,padding:'15px',...mn,fontSize:15,fontWeight:700,cursor:'pointer',boxShadow:'0 4px 20px rgba(45,96,47,0.3)',display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+              <Icon name='cart' size={17} color={C.onPrimary}/>Generate shopping list
+            </button>
+          </div>
+        )}
         {screen !== 'settings' && (
           <div style={{background:C.primaryFixed,borderTop:`1px solid ${C.outlineVariant}30`,display:'flex',padding:'8px 0 14px',flexShrink:0,position:'sticky',bottom:0,zIndex:20}}>
             {NAV.map(t => {
