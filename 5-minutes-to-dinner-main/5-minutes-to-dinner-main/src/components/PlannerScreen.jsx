@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { C, ep, mn, CARD } from '../lib/theme.js'
+import { C, ep, mn, CARD, screenTitle } from '../lib/theme.js'
 import { DAYS, DAY_LBL, TODAY, WEEK_LBL } from '../lib/dateHelpers.js'
 import { Btn, Icon } from './ui/index.js'
 
@@ -24,7 +24,7 @@ export function PlannerScreen({plan,removeMeal,moveMeal,duplicateMeal,updatePort
   return(
     <div style={{padding:'16px 20px 20px'}}>
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:18}}>
-        <div style={{...ep,fontSize:28,color:C.onSurface}}>Weekly planner</div>
+        <div style={{...screenTitle,color:C.onSurface}}>Weekly planner</div>
         <span style={{...mn,fontSize:12,color:C.onSurfaceVariant,background:C.surfaceContainerHigh,padding:'5px 12px',borderRadius:99,whiteSpace:'nowrap'}}>{WEEK_LBL}</span>
       </div>
       <button onClick={onNutrition} style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,border:'none',background:C.secondaryContainer,color:'#924b1a',borderRadius:999,padding:'12px 14px',...mn,fontWeight:700,fontSize:14,whiteSpace:'nowrap',cursor:'pointer',marginBottom:20}}>

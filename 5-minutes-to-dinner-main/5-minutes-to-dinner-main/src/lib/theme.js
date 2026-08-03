@@ -12,6 +12,8 @@ export const C = {
 }
 export const ep = {fontFamily:"'Caprasimo',cursive",fontWeight:400,letterSpacing:'-0.015em'}
 export const mn = {fontFamily:"'Figtree',sans-serif"}
+// Top-level tab screen title (This week / Weekly planner / Shopping list / Batch cooking) — keep these matched.
+export const screenTitle = {...ep,fontSize:28}
 export const CARD = {background:'#fff',borderRadius:10,boxShadow:'0 1px 2px rgba(24,36,23,0.14)'}
 export const TAG_C = {
   TM6:{bg:'#FFF5E0',tx:'#A86000',bd:'#F5C842'}, HOB:{bg:'#EEF4FF',tx:'#0050A0',bd:'#90C0F5'},

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { C, ep, mn } from '../lib/theme.js'
+import { C, ep, mn, screenTitle } from '../lib/theme.js'
 import { DAYS, DAY_LBL, TODAY } from '../lib/dateHelpers.js'
 import { Icon } from './ui/index.js'
 import { NewRecipeForm } from './NewRecipeForm.jsx'
@@ -19,7 +19,7 @@ export function HomeScreen({ plan, onDayOpen, onRecipeOpen, moveMeal, onCopy, on
     <div style={{ padding:'16px 20px 20px' }}>
       {showNewRecipe && <NewRecipeForm defaultMealType='main' onSave={r=>{onRecipeCreated(r);setShowNewRecipe(false)}} onCancel={()=>setShowNewRecipe(false)}/>}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:18 }}>
-        <div style={{...ep, fontSize:28, color:C.onSurface}}>This week</div>
+        <div style={{...screenTitle, color:C.onSurface}}>This week</div>
         <button onClick={()=>setShowNewRecipe(true)} style={{display:'flex',alignItems:'center',gap:8,border:'none',background:C.secondaryContainer,color:'#924b1a',borderRadius:999,padding:'7px 14px',...mn,fontWeight:700,fontSize:12,whiteSpace:'nowrap',cursor:'pointer',flexShrink:0}}>
           <Icon name='plus' size={14}/>Add recipe
         </button>

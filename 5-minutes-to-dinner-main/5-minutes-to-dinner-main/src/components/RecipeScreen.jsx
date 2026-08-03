@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react'
 import { fetchRecipeDetails, fetchRecipeNotes, saveRecipeNotes } from '../lib/supabase.js'
 import { C, ep, mn, CARD } from '../lib/theme.js'
 import { parseIngredients, parseIngredientParts, parseSteps } from '../lib/recipeParsing.js'
-import { Spinner } from './ui/index.js'
+import { Spinner, Btn } from './ui/index.js'
 
-export function RecipeScreen({ recipeId, portion }) {
+export function RecipeScreen({ recipeId, portion, onAddMeal }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState(null)
@@ -222,6 +222,12 @@ export function RecipeScreen({ recipeId, portion }) {
           style={{width:'100%',minHeight:120,padding:'12px 14px',borderRadius:12,border:`1.5px solid ${notesSaved?C.outlineVariant:C.primary}`,background:C.surface,...mn,fontSize:13,color:C.onSurface,lineHeight:1.7,resize:'vertical',boxSizing:'border-box',outline:'none',transition:'border-color 0.15s'}}
         />
       </div>
+
+      {onAddMeal&&(
+        <div style={{marginTop:24}}>
+          <Btn label='+ Add Meal' full onClick={onAddMeal}/>
+        </div>
+      )}
     </div>
   )
 }

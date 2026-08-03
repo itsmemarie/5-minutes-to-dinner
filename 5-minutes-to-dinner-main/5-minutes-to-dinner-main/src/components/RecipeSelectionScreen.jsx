@@ -6,10 +6,11 @@ import { RecipeBucket } from './RecipeBucket.jsx'
 import { NewRecipeForm } from './NewRecipeForm.jsx'
 import { parseSideNames, matchSideRecipes } from '../lib/sidePairing.js'
 
-export function RecipeSelectionScreen({day,section,plan,recipes,onAdd,onRecipeCreated,onPreview}){
+export function RecipeSelectionScreen({day,section,plan,recipes,freezerItems,onAdd,onAddFreezer,onManageFreezer,onRecipeCreated,onPreview}){
   const [search,setSearch]=useState('')
   const [chip,setChip]=useState('cat')
   const [selected,setSelected]=useState([])
+  const [freezerSelected,setFreezerSelected]=useState([])
   const catName=section==='breakfast'?'Breakfast':section==='main'?'Mains':'Sides'
   const sectionLabel=section==='breakfast'?'Breakfast':section==='main'?'Main Meal':'Side Dish'
 
@@ -56,6 +57,8 @@ export function RecipeSelectionScreen({day,section,plan,recipes,onAdd,onRecipeCr
 
   const [showNewRecipe,setShowNewRecipe]=useState(false)
   const toggle=rid=>setSelected(s=>s.includes(rid)?s.filter(x=>x!==rid):[...s,rid])
+  const toggleFreezer=iid=>setFreezerSelected(s=>s.includes(iid)?s.filter(x=>x!==iid):[...s,iid])
+  const inStockFreezer=useMemo(()=>(freezerItems||[]).filter(it=>it.in_stock),[freezerItems])
 
   const handleRecipeCreated = r => {
     onRecipeCreated(r)
@@ -77,9 +80,29 @@ export function RecipeSelectionScreen({day,section,plan,recipes,onAdd,onRecipeCr
           <PillBtn icon='filter' label='Filter' active={false} onClick={()=>{}}/>
         </div>
         {chip==='freezer'?(
-          <div style={{...CARD,padding:24,textAlign:'center'}}>
-            <div style={{fontSize:32,marginBottom:8}}>❄</div>
-            <div style={{...mn,fontSize:14,color:C.onSurfaceVariant}}>No freezer items for this week.</div>
+          <div>
+            <div onClick={onManageFreezer} style={{display:'flex',alignItems:'center',justifyContent:'space-between',...CARD,padding:'10px 14px',marginBottom:12,cursor:'pointer'}}>
+              <span style={{...mn,fontSize:13,fontWeight:600,color:C.primary}}>Manage Freezer</span>
+              <span style={{...mn,fontSize:13,color:C.primary}}>→</span>
+            </div>
+            {inStockFreezer.length===0?(
+              <div style={{...CARD,padding:24,textAlign:'center'}}>
+                <div style={{fontSize:32,marginBottom:8}}>❄</div>
+                <div style={{...mn,fontSize:14,color:C.onSurfaceVariant}}>No freezer items available. Add some via Manage Freezer.</div>
+              </div>
+            ):(
+              inStockFreezer.map(item=>{
+                const sel=freezerSelected.includes(item.id)
+                return (
+                  <div key={item.id} onClick={()=>toggleFreezer(item.id)} style={{...CARD,background:C.surfaceContainerHigh,padding:'12px 14px',display:'flex',alignItems:'center',gap:12,cursor:'pointer',marginBottom:8}}>
+                    <div style={{flex:1,...mn,fontSize:14,fontWeight:600,color:C.onSurface}}>{item.name}</div>
+                    <div style={{width:30,height:30,borderRadius:99,border:`2px solid ${sel?C.primary:C.outlineVariant}`,background:sel?C.primary:'transparent',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,color:sel?C.onPrimary:C.outline,fontSize:14,fontWeight:700}}>
+                      {sel?'✓':'+'}
+                    </div>
+                  </div>
+                )
+              })
+            )}
           </div>
         ):(
           <>
@@ -93,7 +116,10 @@ export function RecipeSelectionScreen({day,section,plan,recipes,onAdd,onRecipeCr
         )}
       </div>
       <div style={{position:'fixed',bottom:64,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:430,padding:'10px 20px',background:C.white,borderTop:`1px solid ${C.outlineVariant}30`}}>
-        <Btn label={selected.length?`Add Selected (${selected.length})`:'Select recipes above'} full onClick={()=>{onAdd(selected);setSelected([])}} disabled={selected.length===0}/>
+        {chip==='freezer'
+          ?<Btn label={freezerSelected.length?`Add Selected (${freezerSelected.length})`:'Select freezer items above'} full onClick={()=>{onAddFreezer(freezerSelected);setFreezerSelected([])}} disabled={freezerSelected.length===0}/>
+          :<Btn label={selected.length?`Add Selected (${selected.length})`:'Select recipes above'} full onClick={()=>{onAdd(selected);setSelected([])}} disabled={selected.length===0}/>
+        }
       </div>
     </div>
   )

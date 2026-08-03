@@ -36,16 +36,22 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
 
   try {
-    const { url, imageBase64, mediaType } = await req.json()
+    const { url, images } = await req.json()
 
+    const VISION_MODEL = 'qwen/qwen3.6-27b'
     let model: string
     let userContent: unknown
 
-    if (imageBase64) {
-      model = 'meta-llama/llama-4-scout-17b-16e-instruct'
+    if (images && images.length) {
+      model = VISION_MODEL
       userContent = [
-        { type: 'image_url', image_url: { url: `data:${mediaType ?? 'image/jpeg'};base64,${imageBase64}` } },
-        { type: 'text', text: 'Extract the recipe from this image and return the JSON.' },
+        ...images.map((img: { base64: string; mediaType?: string }) => ({
+          type: 'image_url',
+          image_url: { url: `data:${img.mediaType ?? 'image/jpeg'};base64,${img.base64}` },
+        })),
+        { type: 'text', text: images.length > 1
+          ? 'These images are multiple pages/photos of the same recipe. Extract the full recipe from all of them together and return the JSON.'
+          : 'Extract the recipe from this image and return the JSON.' },
       ]
     } else if (url) {
       model = 'llama-3.3-70b-versatile'
@@ -71,7 +77,7 @@ Deno.serve(async (req: Request) => {
       }
       userContent = `Extract the recipe from this web page and return the JSON:\n\n${pageText}`
     } else {
-      return new Response(JSON.stringify({ error: 'Provide url or imageBase64' }), {
+      return new Response(JSON.stringify({ error: 'Provide url or images' }), {
         status: 400,
         headers: { ...CORS, 'Content-Type': 'application/json' },
       })
@@ -86,6 +92,7 @@ Deno.serve(async (req: Request) => {
       body: JSON.stringify({
         model,
         max_tokens: 4096,
+        ...(model === VISION_MODEL ? { reasoning_effort: 'none' } : {}),
         messages: [
           { role: 'system', content: SYSTEM },
           { role: 'user', content: userContent },
@@ -102,7 +109,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const groqData = await apiRes.json()
-    const text: string = groqData.choices[0].message.content
+    const text: string = groqData.choices[0].message.content.replace(/<think>[\s\S]*?<\/think>/gi, '')
     const match = text.match(/\{[\s\S]*\}/)
     if (!match) {
       return new Response(JSON.stringify({ error: 'Could not extract structured recipe from AI response' }), {

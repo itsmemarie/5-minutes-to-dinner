@@ -19,9 +19,7 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
   const [saveError, setSaveError] = useState(null)
   const [aiMode, setAiMode] = useState(false)
   const [aiUrl, setAiUrl] = useState('')
-  const [aiImageBase64, setAiImageBase64] = useState(null)
-  const [aiImageName, setAiImageName] = useState('')
-  const [aiImageMediaType, setAiImageMediaType] = useState('')
+  const [aiImages, setAiImages] = useState([])
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState(null)
   const [f, setF] = useState({
@@ -94,22 +92,25 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
   }
 
   const handleImageSelect = (e) => {
-    const file = e.target.files[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      setAiImageBase64(ev.target.result.split(',')[1])
-      setAiImageMediaType(file.type)
-      setAiImageName(file.name)
-    }
-    reader.readAsDataURL(file)
+    const files = Array.from(e.target.files || [])
+    if (!files.length) return
+    files.forEach(file => {
+      const reader = new FileReader()
+      reader.onload = (ev) => {
+        setAiImages(p => [...p, { base64: ev.target.result.split(',')[1], mediaType: file.type, name: file.name }])
+      }
+      reader.readAsDataURL(file)
+    })
+    e.target.value = ''
   }
 
+  const removeImage = (idx) => setAiImages(p => p.filter((_, i) => i !== idx))
+
   const handleAiFromImage = async () => {
-    if (!aiImageBase64) return
+    if (!aiImages.length) return
     setAiLoading(true); setAiError(null)
     try {
-      const data = await extractRecipe({ imageBase64: aiImageBase64, mediaType: aiImageMediaType })
+      const data = await extractRecipe({ images: aiImages.map(({ base64, mediaType }) => ({ base64, mediaType })) })
       applyAiResult(data)
     } catch (e) {
       setAiError(e.message)
@@ -225,14 +226,24 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
               <div style={{ flex: 1, height: 1, background: C.outline + '40' }}/>
             </div>
 
-            <div style={{ ...mn, fontSize: 11, fontWeight: 700, color: C.onSurface, opacity: 0.6, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>Upload Photo</div>
+            <div style={{ ...mn, fontSize: 11, fontWeight: 700, color: C.onSurface, opacity: 0.6, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>Upload Photo(s)</div>
             <label style={{ display: 'block', border: `2px dashed ${C.outlineVariant}`, borderRadius: 10, padding: '14px 16px', textAlign: 'center', cursor: aiLoading ? 'not-allowed' : 'pointer', background: C.white }}>
-              <input type='file' accept='image/*' onChange={handleImageSelect} style={{ display: 'none' }} disabled={aiLoading}/>
-              <div style={{ ...mn, fontSize: 13, color: aiImageName ? C.onSurface : C.onSurfaceVariant }}>{aiImageName ? `📷 ${aiImageName}` : 'Tap to choose a photo'}</div>
+              <input type='file' accept='image/*' multiple onChange={handleImageSelect} style={{ display: 'none' }} disabled={aiLoading}/>
+              <div style={{ ...mn, fontSize: 13, color: aiImages.length ? C.onSurface : C.onSurfaceVariant }}>{aiImages.length ? `Tap to add more photos (${aiImages.length} selected)` : 'Tap to choose photo(s) — multiple pages supported'}</div>
             </label>
-            {aiImageName && !aiLoading && (
+            {aiImages.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
+                {aiImages.map((img, idx) => (
+                  <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 8, background: C.white, border: `1px solid ${C.outlineVariant}40` }}>
+                    <span style={{ ...mn, fontSize: 13, color: C.onSurface, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📷 {img.name}</span>
+                    <button onClick={() => removeImage(idx)} disabled={aiLoading} style={{ border: 'none', background: 'none', color: C.error, fontSize: 16, cursor: aiLoading ? 'not-allowed' : 'pointer', padding: '0 4px', lineHeight: 1 }}>×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {aiImages.length > 0 && !aiLoading && (
               <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end' }}>
-                <Btn label='Extract from photo' small onClick={handleAiFromImage}/>
+                <Btn label={aiImages.length > 1 ? 'Extract from photos' : 'Extract from photo'} small onClick={handleAiFromImage}/>
               </div>
             )}
             {aiLoading && <div style={{ ...mn, fontSize: 13, color: C.onSurfaceVariant, textAlign: 'center', padding: '10px 0 4px' }}>Extracting recipe…</div>}

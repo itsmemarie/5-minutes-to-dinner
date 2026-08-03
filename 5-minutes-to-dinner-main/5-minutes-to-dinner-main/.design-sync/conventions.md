@@ -40,6 +40,8 @@ Color palette actually in use (hex — these are not exported constants, just th
 
 Common patterns: 10px border-radius + `0 2px 12px rgba(45,96,47,0.08)` box-shadow for cards; 99px (pill) border-radius for buttons/badges/tags; uppercase + `0.06–0.08em` letter-spacing for small caption/label text.
 
+**Screen title typography (app-level, not part of the synced component set):** the four bottom-nav tab screens (This week / Weekly planner / Shopping list / Batch cooking) share one header style — Caprasimo, 28px, `C.onSurface` — via the `screenTitle` token in `src/lib/theme.js`. Any new top-level screen header should use `screenTitle`, not a hand-rolled `fontSize`, so headers stay matched. Nested/detail-page titles (recipe detail, day detail, settings) are deliberately smaller (24–26px) and are not part of this token.
+
 ## Where the truth lives
 
 There is no separate stylesheet to read — every component's exact styling is in its own source, one file per component (readable via the bound `.d.ts`/`.prompt.md` and the compiled bundle). `RecipeCard` and `RecipeBucket` are the most representative composite examples of the color/spacing/typography idiom above; the smaller primitives (`Btn`, `PillBtn`, `CapLabel`, `SecHead`, `HDivider`, `Spinner`, `TodayTag`, `Stepper`) each demonstrate one piece of it in isolation.

@@ -132,7 +132,7 @@ export async function fetchWeekPlan(planId) {
     .select(`
       id, day_of_week,
       planned_meals (
-        id, section, recipe_id,
+        id, section, recipe_id, freezer_item_id,
         name_snapshot,
         prep_time_snapshot,
         cook_time_snapshot,
@@ -156,7 +156,8 @@ export async function addPlannedMeals(dayEntryId, meals) {
     .insert(meals.map((m, i) => ({
       day_entry_id:          dayEntryId,
       section:               m.section,
-      recipe_id:             m.recipeId,
+      recipe_id:             m.recipeId ?? null,
+      freezer_item_id:       m.freezerItemId ?? null,
       name_snapshot:         m.name,
       prep_time_snapshot:    m.prep,
       cook_time_snapshot:    m.active,
@@ -238,6 +239,50 @@ export async function saveRecipeNotes(recipeId, notes) {
     .from('recipe_notes')
     .upsert({ recipe_id: recipeId, notes, updated_at: new Date().toISOString() },
              { onConflict: 'recipe_id' })
+}
+
+// ─── Freezer ──────────────────────────────────────────────────────
+export async function fetchFreezerItems() {
+  const { data, error } = await supabase
+    .from('freezer')
+    .select('id, name, in_stock')
+    .order('name')
+  if (error) throw error
+  return data
+}
+
+// Bulk import — wipes the whole inventory and replaces it with the new list
+export async function replaceFreezerItems(names) {
+  await supabase.from('freezer').delete().gt('id', 0)
+  if (!names.length) return []
+  const { data, error } = await supabase
+    .from('freezer')
+    .insert(names.map(name => ({ name, in_stock: true })))
+    .select('id, name, in_stock')
+  if (error) throw error
+  return data
+}
+
+// Manual single-item add — restocks if the name already exists
+export async function addFreezerItem(name) {
+  const { data, error } = await supabase
+    .from('freezer')
+    .upsert({ name, in_stock: true, updated_at: new Date().toISOString() }, { onConflict: 'name' })
+    .select('id, name, in_stock')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateFreezerStock(ids, inStock) {
+  await supabase
+    .from('freezer')
+    .update({ in_stock: inStock, updated_at: new Date().toISOString() })
+    .in('id', Array.isArray(ids) ? ids : [ids])
+}
+
+export async function removeFreezerItem(id) {
+  await supabase.from('freezer').delete().eq('id', id)
 }
 
 // ─── Recipe detail ────────────────────────────────────────────────

@@ -4,6 +4,7 @@ import {
   getOrCreatePlan, fetchWeekPlan,
   addPlannedMeals, removePlannedMeal, updatePlannedMealPortion, movePlannedMeal,
   fetchShoppingList, saveShoppingList, updateShoppingItem,
+  fetchFreezerItems, replaceFreezerItems, addFreezerItem, updateFreezerStock, removeFreezerItem,
 } from './supabase.js'
 import { callEdgeFn } from './ai.js'
 import { C, ep, mn } from './theme.js'
@@ -18,6 +19,7 @@ import { NutritionScreen } from '../components/NutritionScreen.jsx'
 import { ShoppingListScreen } from '../components/ShoppingListScreen.jsx'
 import { BatchScreen } from '../components/BatchScreen.jsx'
 import { SettingsScreen } from '../components/SettingsScreen.jsx'
+import { FreezerScreen } from '../components/FreezerScreen.jsx'
 
 // ─── Root App ──────────────────────────────────────────────────────────
 export default function App() {
@@ -37,6 +39,7 @@ export default function App() {
   const [loadMsg,     setLoadMsg]     = useState('Connecting to Supabase…')
   const [error,       setError]       = useState(null)
   const [recipes,     setRecipes]     = useState([])
+  const [freezerItems,setFreezerItems]= useState([])
   const [planId,      setPlanId]      = useState(null)
   const [dayEntryMap, setDayEntryMap] = useState({})
   const [plan,        setPlanState]   = useState(emptyWeek)
@@ -57,8 +60,9 @@ export default function App() {
     ;(async () => {
       try {
         setLoadMsg('Loading recipes…')
-        const [recs, settings] = await Promise.all([fetchRecipes(), fetchSettings()])
+        const [recs, settings, freezer] = await Promise.all([fetchRecipes(), fetchSettings(), fetchFreezerItems()])
         setRecipes(recs)
+        setFreezerItems(freezer)
         if (settings?.default_portions) setDefPortSt(settings.default_portions)
 
         setLoadMsg('Loading your meal plan…')
@@ -73,7 +77,7 @@ export default function App() {
             const sec = pm.section
             if (newPlan[de.day_of_week]?.[sec] !== undefined) {
               newPlan[de.day_of_week][sec].push({
-                id: pm.id, recipeId: pm.recipe_id, section: sec,
+                id: pm.id, recipeId: pm.recipe_id, freezerItemId: pm.freezer_item_id, section: sec,
                 portion: pm.portion, name: pm.name_snapshot,
                 prep: pm.prep_time_snapshot || 0,
                 active: pm.cook_time_snapshot || 0,
@@ -109,7 +113,12 @@ export default function App() {
   }
 
   const removeMeal = async (day, sec, id) => {
+    const meal = plan[day][sec].find(m => m.id === id)
     setPlan({ ...plan, [day]: { ...plan[day], [sec]: plan[day][sec].filter(m => m.id !== id) } })
+    if (meal?.freezerItemId) {
+      setFreezerItems(items => items.map(it => it.id === meal.freezerItemId ? { ...it, in_stock: true } : it))
+      updateFreezerStock(meal.freezerItemId, true)
+    }
     await removePlannedMeal(id)
   }
 
@@ -163,13 +172,40 @@ export default function App() {
     }
   }
 
+  const addFreezerMeals = async itemIds => {
+    const sec = selSec, entryId = dayEntryMap[selDay]
+    const pos = plan[selDay][sec].length
+    const mealsToInsert = itemIds.map((iid, i) => {
+      const item = freezerItems.find(x => x.id === iid) || { name: iid }
+      return { recipeId: null, freezerItemId: iid, section: sec, name: item.name, prep: 0, active: 0, min: 1, portion: defPort, base: defPort, advancePrepHours: null, advancePrepNote: null, position: pos + i }
+    })
+    // Optimistic
+    const tempMeals = mealsToInsert.map(m => ({ ...m, id: uid() }))
+    setPlan({ ...plan, [selDay]: { ...plan[selDay], [sec]: [...plan[selDay][sec], ...tempMeals] } })
+    setFreezerItems(items => items.map(it => itemIds.includes(it.id) ? { ...it, in_stock: false } : it))
+    setScreen('dailyPlan')
+    // DB writes
+    updateFreezerStock(itemIds, false)
+    const created = await addPlannedMeals(entryId, mealsToInsert)
+    if (created) {
+      setPlanState(prev => {
+        const updated = { ...prev, [selDay]: { ...prev[selDay], [sec]: [...prev[selDay][sec]] } }
+        tempMeals.forEach((tm, i) => {
+          const idx = updated[selDay][sec].findIndex(x => x.id === tm.id)
+          if (idx >= 0 && created[i]) updated[selDay][sec][idx] = { ...updated[selDay][sec][idx], id: created[i].id }
+        })
+        return updated
+      })
+    }
+  }
+
   const duplicateMeal = async (day, sec, id) => {
     const meal = plan[day][sec].find(m => m.id === id)
     if (!meal) return
     const entryId = dayEntryMap[day]
     const pos = plan[day][sec].length
     const r = recipes.find(x => x.id === meal.recipeId)
-    const mealToInsert = { recipeId: meal.recipeId, section: sec, name: meal.name, prep: meal.prep, active: meal.active, min: r?.min ?? meal.min, portion: meal.portion, base: r?.base ?? meal.portion, advancePrepHours: r?.advancePrepHours ?? meal.advancePrepHours ?? null, advancePrepNote: r?.advancePrepNote ?? meal.advancePrepNote ?? null, position: pos }
+    const mealToInsert = { recipeId: meal.recipeId, freezerItemId: meal.freezerItemId ?? null, section: sec, name: meal.name, prep: meal.prep, active: meal.active, min: r?.min ?? meal.min, portion: meal.portion, base: r?.base ?? meal.portion, advancePrepHours: r?.advancePrepHours ?? meal.advancePrepHours ?? null, advancePrepNote: r?.advancePrepNote ?? meal.advancePrepNote ?? null, position: pos }
     // Optimistic
     const tempMeal = { ...mealToInsert, id: uid() }
     setPlan({ ...plan, [day]: { ...plan[day], [sec]: [...plan[day][sec], tempMeal] } })
@@ -299,6 +335,7 @@ export default function App() {
   // ── Nav ─────────────────────────────────────────────────────────
   const openDayPlan   = day => { setSelDay(day); setScreen('dailyPlan') }
   const openAddSec    = (day, sec) => { setSelDay(day); setSelSec(sec); setScreen('recipeSelection') }
+  const openFreezerManage = () => { setPrevScreen('recipeSelection'); setScreen('freezerManage') }
   const openRecipeFromSelection = recipeId => { setPrevScreen('recipeSelection'); setSelRecipeId(recipeId); setRecipeDetailPortion(4); setScreen('recipe') }
   const openRecipeFromHome = (recipeId, portion) => { setPrevScreen(null); setSelRecipeId(recipeId); setRecipeDetailPortion(portion ?? 4); setScreen('recipe') }
   const copyWeekPlan  = () => {
@@ -319,6 +356,9 @@ export default function App() {
     if (screen === 'recipe' && prevScreen === 'recipeSelection') {
       setPrevScreen(null)
       setScreen('recipeSelection')
+    } else if (screen === 'freezerManage' && prevScreen === 'recipeSelection') {
+      setPrevScreen(null)
+      setScreen('recipeSelection')
     } else if (screen === 'recipeSelection') {
       setScreen('dailyPlan')
     } else {
@@ -332,6 +372,7 @@ export default function App() {
     : screen === 'recipeSelection' ? `${DAY_LBL[selDay]} | ${selSec === 'breakfast' ? 'Breakfast' : selSec === 'main' ? 'Main Meal' : 'Side Dish'}`
     : screen === 'nutrition'     ? 'Nutrition Insights'
     : screen === 'recipe'        ? 'Recipe Details'
+    : screen === 'freezerManage' ? 'Freezer'
     : '5 Minutes to Dinner'
 
   const NAV = [{id:'home',icon:'home',label:'Home'},{id:'planner',icon:'calendar',label:'Planner'},{id:'list',icon:'cart',label:'Shopping'},{id:'batch',icon:'chefHat',label:'Batch'}]
@@ -347,10 +388,11 @@ export default function App() {
       </div>
     )
     if (screen === 'settings')        return <SettingsScreen defPort={defPort} setDefPort={setDefPort}/>
+    if (screen === 'freezerManage')   return <FreezerScreen items={freezerItems} onReplace={async names=>setFreezerItems(await replaceFreezerItems(names))} onAddOne={async name=>{const item=await addFreezerItem(name);setFreezerItems(items=>{const i=items.findIndex(x=>x.id===item.id);return i>=0?items.map(x=>x.id===item.id?item:x):[...items,item].sort((a,b)=>a.name.localeCompare(b.name))})}} onToggleStock={async(id,inStock)=>{setFreezerItems(items=>items.map(x=>x.id===id?{...x,in_stock:inStock}:x));await updateFreezerStock(id,inStock)}} onDelete={async id=>{setFreezerItems(items=>items.filter(x=>x.id!==id));await removeFreezerItem(id)}}/>
     if (screen === 'nutrition')       return <NutritionScreen profile={nutriProf} setProfile={setNutriProf} nutriData={nutriData} nutriLoading={nutriLoading} nutriError={nutriError} onAnalyse={analyseNutrition}/>
     if (screen === 'dailyPlan')       return <DailyPlanScreen day={selDay} plan={plan} recipes={recipes} updatePortion={updatePortion} removeMeal={removeMeal} onAddToSection={openAddSec} onSave={()=>setScreen(null)}/>
-    if (screen === 'recipeSelection') return <RecipeSelectionScreen day={selDay} section={selSec} plan={plan} recipes={recipes} onAdd={addMeals} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))} onPreview={openRecipeFromSelection}/>
-    if (screen === 'recipe')          return <RecipeScreen recipeId={selRecipeId} portion={recipeDetailPortion}/>
+    if (screen === 'recipeSelection') return <RecipeSelectionScreen day={selDay} section={selSec} plan={plan} recipes={recipes} freezerItems={freezerItems} onAdd={addMeals} onAddFreezer={addFreezerMeals} onManageFreezer={openFreezerManage} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))} onPreview={openRecipeFromSelection}/>
+    if (screen === 'recipe')          return <RecipeScreen recipeId={selRecipeId} portion={recipeDetailPortion} onAddMeal={()=>addMeals([selRecipeId])}/>
     if (tab === 'home')    return <HomeScreen plan={plan} onDayOpen={openDayPlan} onRecipeOpen={openRecipeFromHome} moveMeal={moveMeal} onCopy={copyWeekPlan} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))}/>
     if (tab === 'planner') return <PlannerScreen plan={plan} removeMeal={removeMeal} moveMeal={moveMeal} duplicateMeal={duplicateMeal} updatePortion={updatePortion} onDayOpen={openDayPlan} onNutrition={()=>{ setScreen('nutrition'); if(!nutriData) analyseNutrition() }} onShoppingList={generateShoppingList}/>
     if (tab === 'list')    return <ShoppingListScreen shopping={shopping} onToggle={onShoppingToggle} loading={shoppingLoading} error={shoppingError} onRegenerate={generateShoppingList}/>

@@ -40,14 +40,18 @@ Required JSON schema:
   "side_recommendation": "Up to 3 sides, comma-separated"
 }`
 
-export async function extractRecipe({ url, imageBase64, mediaType }) {
+const GROQ_VISION_MODEL = 'qwen/qwen3.6-27b'
+
+export async function extractRecipe({ url, images }) {
   let model, userContent
 
-  if (imageBase64) {
-    model = 'meta-llama/llama-4-scout-17b-16e-instruct'
+  if (images && images.length) {
+    model = GROQ_VISION_MODEL
     userContent = [
-      { type: 'image_url', image_url: { url: `data:${mediaType ?? 'image/jpeg'};base64,${imageBase64}` } },
-      { type: 'text', text: 'Extract the recipe from this image and return the JSON.' },
+      ...images.map(img => ({ type: 'image_url', image_url: { url: `data:${img.mediaType ?? 'image/jpeg'};base64,${img.base64}` } })),
+      { type: 'text', text: images.length > 1
+        ? 'These images are multiple pages/photos of the same recipe. Extract the full recipe from all of them together and return the JSON.'
+        : 'Extract the recipe from this image and return the JSON.' },
     ]
   } else {
     model = 'llama-3.1-8b-instant'
@@ -71,6 +75,7 @@ export async function extractRecipe({ url, imageBase64, mediaType }) {
     body: JSON.stringify({
       model,
       max_tokens: 4096,
+      ...(model === GROQ_VISION_MODEL ? { reasoning_effort: 'none' } : {}),
       messages: [
         { role: 'system', content: GROQ_SYSTEM },
         { role: 'user', content: userContent },
@@ -82,8 +87,69 @@ export async function extractRecipe({ url, imageBase64, mediaType }) {
     throw new Error(err?.error?.message ?? `Groq error ${res.status}`)
   }
   const data = await res.json()
-  const text = data.choices[0].message.content
+  const text = data.choices[0].message.content.replace(/<think>[\s\S]*?<\/think>/gi, '')
   const match = text.match(/\{[\s\S]*\}/)
   if (!match) throw new Error('Could not parse recipe from AI response')
   return JSON.parse(match[0])
+}
+
+// ─── Freezer list extraction ──────────────────────────────────────
+const FREEZER_SYSTEM = `You are extracting an inventory list from a photo. The photo may show a handwritten or printed list, or labeled freezer bags/containers.
+Extract every distinct item name visible across all provided photos and return ONLY a raw JSON array of strings — no markdown fences, no explanation, no wrapper object, just the array. Combine items from all images into one flat array. Skip quantities, dates, and non-food text unless they're part of the item's name.`
+
+export function parseFreezerText(text) {
+  const seen = new Set()
+  const items = []
+  text.split('\n').forEach(line => {
+    const name = line.replace(/^[\s•\-\*\d.)]+/, '').trim()
+    if (!name) return
+    const key = name.toLowerCase()
+    if (seen.has(key)) return
+    seen.add(key)
+    items.push(name)
+  })
+  return items
+}
+
+export async function extractFreezerItems({ text, images }) {
+  if (!images || !images.length) return parseFreezerText(text || '')
+
+  const userContent = [
+    ...images.map(img => ({ type: 'image_url', image_url: { url: `data:${img.mediaType ?? 'image/jpeg'};base64,${img.base64}` } })),
+    { type: 'text', text: images.length > 1
+      ? 'These images are multiple photos of freezer inventory (list pages or labeled containers). Extract all item names across all of them and return the JSON array.'
+      : 'Extract the freezer item names from this image and return the JSON array.' },
+  ]
+
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${GROQ_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: GROQ_VISION_MODEL,
+      max_tokens: 2048,
+      reasoning_effort: 'none',
+      messages: [
+        { role: 'system', content: FREEZER_SYSTEM },
+        { role: 'user', content: userContent },
+      ],
+    }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.error?.message ?? `Groq error ${res.status}`)
+  }
+  const data = await res.json()
+  const raw = data.choices[0].message.content.replace(/<think>[\s\S]*?<\/think>/gi, '')
+
+  const arrMatch = raw.match(/\[[\s\S]*\]/)
+  if (arrMatch) {
+    const parsed = JSON.parse(arrMatch[0])
+    return parsed.filter(x => typeof x === 'string' && x.trim()).map(x => x.trim())
+  }
+  const objMatch = raw.match(/\{[\s\S]*\}/)
+  if (objMatch) {
+    const parsed = JSON.parse(objMatch[0])
+    if (Array.isArray(parsed.items)) return parsed.items.filter(x => typeof x === 'string' && x.trim()).map(x => x.trim())
+  }
+  throw new Error('Could not parse freezer items from AI response')
 }

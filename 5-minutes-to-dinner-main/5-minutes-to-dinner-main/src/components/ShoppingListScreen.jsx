@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { C, ep, mn, CARD } from '../lib/theme.js'
+import { C, ep, mn, CARD, screenTitle } from '../lib/theme.js'
 import { WEEK_LBL } from '../lib/dateHelpers.js'
 import { Spinner, HDivider, Btn, Icon } from './ui/index.js'
 
@@ -24,7 +24,7 @@ export function ShoppingListScreen({shopping,onToggle,loading,error,onRegenerate
     <div style={{padding:'16px 20px 90px'}}>
       <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:4}}>
         <div>
-          <div style={{...ep,fontSize:22,color:C.onSurface}}>Shopping list</div>
+          <div style={{...screenTitle,color:C.onSurface}}>Shopping list</div>
           <div style={{...mn,fontSize:12,color:C.onSurfaceVariant,marginTop:2}}>{WEEK_LBL}</div>
           {!loading&&shopping.length>0&&<div style={{...mn,fontSize:12,color:C.primary,marginTop:2,fontWeight:600}}>{unc} item{unc!==1?'s':''} remaining</div>}
         </div>
