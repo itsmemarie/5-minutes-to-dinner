@@ -5,7 +5,7 @@ import { Btn, Stepper } from './ui/index.js'
 import { Icon } from './ui/Icon.jsx'
 import { parseSideNames, formatSideNames } from '../lib/sidePairing.js'
 
-export function DailyPlanScreen({day,plan,recipes,updatePortion,removeMeal,duplicateMeal,onAddToSection,onSave}){
+export function DailyPlanScreen({day,plan,recipes,updatePortion,removeMeal,onAddToSection,onSave}){
   const [saved,setSaved]=useState(false)
   const secs=[{key:'breakfast',label:'Breakfast'},{key:'main',label:'Main Meal'},{key:'side',label:'Side Dish'}]
   const go=()=>{setSaved(true);setTimeout(()=>{setSaved(false);onSave()},1000)}
@@ -20,7 +20,7 @@ export function DailyPlanScreen({day,plan,recipes,updatePortion,removeMeal,dupli
         <div key={s.key} style={{marginBottom:20}}>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
             <span style={{...ep,fontSize:15,color:C.onSurface}}>{s.label}</span>
-            <button onClick={()=>onAddToSection(day,s.key)} style={{...mn,background:'none',border:'none',color:C.primary,fontWeight:700,fontSize:13,cursor:'pointer'}}>＋ Add</button>
+            <button onClick={()=>onAddToSection(day,s.key)} style={{...mn,display:'flex',alignItems:'center',gap:4,background:'none',border:'none',color:C.primary,fontWeight:700,fontSize:13,cursor:'pointer',padding:0}}><Icon name='circlePlus' size={16} color={C.primary}/>Add</button>
           </div>
           {plan[day][s.key].length===0?(
             <>
@@ -33,21 +33,20 @@ export function DailyPlanScreen({day,plan,recipes,updatePortion,removeMeal,dupli
                 </div>
               )}
               <div onClick={()=>onAddToSection(day,s.key)} style={{border:`2px dashed ${C.outlineVariant}`,borderRadius:10,padding:20,display:'flex',flexDirection:'column',alignItems:'center',gap:6,cursor:'pointer'}}>
-                <span style={{fontSize:22,color:C.outlineVariant}}>⊕</span>
+                <Icon name='circlePlus' size={26} color={C.outlineVariant}/>
                 <span style={{...mn,fontSize:13,color:C.outlineVariant}}>Tap to add {s.label.toLowerCase()}</span>
               </div>
             </>
           ):(
             <div style={{display:'flex',flexDirection:'column',gap:8}}>
               {plan[day][s.key].map(m=>(
-                <div key={m.id} style={{...CARD,padding:'14px 14px 10px'}}>
-                  <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:6}}>
-                    <span style={{...mn,fontSize:14,fontWeight:600,color:C.onSurface,flex:1,marginRight:8}}>{m.name}</span>
-                    <button onClick={()=>duplicateMeal(day,s.key,m.id)} title='Duplicate' style={{border:'none',background:'none',color:C.onSurfaceVariant,cursor:'pointer',fontSize:16,padding:0,marginRight:12}}>⧉</button>
-                    <button onClick={()=>removeMeal(day,s.key,m.id)} style={{border:'none',background:'none',color:C.error,cursor:'pointer',fontSize:16,padding:0}}>🗑</button>
+                <div key={m.id} style={{...CARD,background:C.surfaceContainerHigh,boxShadow:'none',padding:'14px'}}>
+                  <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:8}}>
+                    <span style={{...mn,fontSize:15,fontWeight:700,color:C.onSurface,flex:1,marginRight:8}}>{m.name}</span>
+                    <button onClick={()=>removeMeal(day,s.key,m.id)} style={{width:26,height:26,flexShrink:0,border:'none',background:'none',padding:0,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}><Icon name='x' size={16} color={C.primary}/></button>
                   </div>
-                  <div style={{...mn,fontSize:12,color:C.onSurfaceVariant,marginBottom:10}}>🕒 {m.prep}m prep</div>
-                  <div style={{display:'flex',justifyContent:'flex-end'}}>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                    <span style={{...mn,fontSize:13,color:C.onSurfaceVariant}}>{m.prep}m prep</span>
                     <Stepper value={m.portion} min={m.min} onChange={v=>updatePortion(day,s.key,m.id,v)}/>
                   </div>
                 </div>

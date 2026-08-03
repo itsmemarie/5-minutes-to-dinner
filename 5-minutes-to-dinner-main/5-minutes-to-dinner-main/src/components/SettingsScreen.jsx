@@ -16,7 +16,7 @@ export function SettingsScreen({defPort,setDefPort}){
           <div style={{display:'inline-flex',alignItems:'center',gap:12,background:C.surfaceContainerHigh,borderRadius:99,padding:'12px 20px'}}>
             <button onClick={()=>defPort>1&&setDefPort(defPort-1)} style={{width:36,height:36,borderRadius:8,border:`1px solid ${C.outlineVariant}`,background:C.white,color:defPort<=1?C.outlineVariant:C.onSurface,cursor:defPort<=1?'default':'pointer',fontSize:20,display:'flex',alignItems:'center',justifyContent:'center'}}>−</button>
             <div style={{textAlign:'center',minWidth:50}}>
-              <div style={{...ep,fontSize:28,color:C.primary,lineHeight:1}}>{defPort}</div>
+              <div style={{...mn,fontWeight:700,fontSize:28,color:C.primary,lineHeight:1}}>{defPort}</div>
               <div style={{...mn,fontSize:10,fontWeight:700,letterSpacing:'0.07em',color:C.onSurfaceVariant,marginTop:2}}>SERVINGS</div>
             </div>
             <button onClick={()=>setDefPort(defPort+1)} style={{width:36,height:36,borderRadius:8,background:C.primary,color:'#fff',border:'none',cursor:'pointer',fontSize:20,display:'flex',alignItems:'center',justifyContent:'center'}}>+</button>

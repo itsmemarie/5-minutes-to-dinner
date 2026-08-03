@@ -329,7 +329,7 @@ export default function App() {
   const headerTitle =
     screen === 'settings'        ? 'Settings'
     : screen === 'dailyPlan'     ? 'Daily Plan'
-    : screen === 'recipeSelection' ? `${DAY_LBL[selDay]} | ${selSec === 'breakfast' ? 'Breakfast' : selSec === 'main' ? 'Mains' : 'Sides'}`
+    : screen === 'recipeSelection' ? `${DAY_LBL[selDay]} | ${selSec === 'breakfast' ? 'Breakfast' : selSec === 'main' ? 'Main Meal' : 'Side Dish'}`
     : screen === 'nutrition'     ? 'Nutrition Insights'
     : screen === 'recipe'        ? 'Recipe Details'
     : '5 Minutes to Dinner'
@@ -348,7 +348,7 @@ export default function App() {
     )
     if (screen === 'settings')        return <SettingsScreen defPort={defPort} setDefPort={setDefPort}/>
     if (screen === 'nutrition')       return <NutritionScreen profile={nutriProf} setProfile={setNutriProf} nutriData={nutriData} nutriLoading={nutriLoading} nutriError={nutriError} onAnalyse={analyseNutrition}/>
-    if (screen === 'dailyPlan')       return <DailyPlanScreen day={selDay} plan={plan} recipes={recipes} updatePortion={updatePortion} removeMeal={removeMeal} duplicateMeal={duplicateMeal} onAddToSection={openAddSec} onSave={()=>setScreen(null)}/>
+    if (screen === 'dailyPlan')       return <DailyPlanScreen day={selDay} plan={plan} recipes={recipes} updatePortion={updatePortion} removeMeal={removeMeal} onAddToSection={openAddSec} onSave={()=>setScreen(null)}/>
     if (screen === 'recipeSelection') return <RecipeSelectionScreen day={selDay} section={selSec} plan={plan} recipes={recipes} onAdd={addMeals} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))} onPreview={openRecipeFromSelection}/>
     if (screen === 'recipe')          return <RecipeScreen recipeId={selRecipeId} portion={recipeDetailPortion}/>
     if (tab === 'home')    return <HomeScreen plan={plan} onDayOpen={openDayPlan} onRecipeOpen={openRecipeFromHome} moveMeal={moveMeal} onCopy={copyWeekPlan} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))}/>

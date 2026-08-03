@@ -11,6 +11,7 @@ export function RecipeSelectionScreen({day,section,plan,recipes,onAdd,onRecipeCr
   const [chip,setChip]=useState('cat')
   const [selected,setSelected]=useState([])
   const catName=section==='breakfast'?'Breakfast':section==='main'?'Mains':'Sides'
+  const sectionLabel=section==='breakfast'?'Breakfast':section==='main'?'Main Meal':'Side Dish'
 
   // Recipes already on the *current* day (any section) — prevent duplicates on the same day
   const currentDayIds=useMemo(()=>[...plan[day].breakfast,...plan[day].main,...plan[day].side].map(m=>m.recipeId),[plan,day])
@@ -71,9 +72,9 @@ export function RecipeSelectionScreen({day,section,plan,recipes,onAdd,onRecipeCr
           <Btn label='+ New' small onClick={()=>setShowNewRecipe(true)}/>
         </div>
         <div style={{display:'flex',gap:8,marginBottom:16,overflowX:'auto',paddingBottom:4}}>
-          <PillBtn label={catName} active={chip==='cat'} onClick={()=>setChip('cat')}/>
+          <PillBtn label={sectionLabel} active={chip==='cat'} onClick={()=>setChip('cat')}/>
           <PillBtn label='❄ Freezer' active={chip==='freezer'} onClick={()=>setChip('freezer')}/>
-          <PillBtn label='⊟ Filter' active={false} onClick={()=>{}}/>
+          <PillBtn icon='filter' label='Filter' active={false} onClick={()=>{}}/>
         </div>
         {chip==='freezer'?(
           <div style={{...CARD,padding:24,textAlign:'center'}}>

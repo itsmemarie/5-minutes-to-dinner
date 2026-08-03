@@ -44,16 +44,15 @@ export function RecipeScreen({ recipeId, portion }) {
   const tmSteps = parseSteps(data.instructions_thermomix)
 
   return (
-    <div style={{padding:'0 20px 40px'}}>
+    <div style={{padding:'20px 20px 40px'}}>
       {data.has_thermomix_version&&(
-        <div style={{display:'inline-flex',alignItems:'center',gap:6,background:C.primary,borderRadius:99,padding:'5px 12px',marginTop:16,marginBottom:12}}>
+        <div style={{display:'inline-flex',alignItems:'center',gap:6,background:C.primary,borderRadius:99,padding:'5px 12px',marginBottom:12}}>
           <span style={{fontSize:12}}>⚡</span>
           <span style={{...mn,fontSize:10,fontWeight:700,color:C.onPrimary,letterSpacing:'0.08em'}}>THERMOMIX RECIPE: YES</span>
         </div>
       )}
-      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:20,gap:12}}>
-        <div style={{...ep,fontSize:24,color:C.onSurface,flex:1,lineHeight:1.2}}>{data.name}</div>
-        <span style={{fontSize:22,marginTop:2}}>🔖</span>
+      <div style={{marginBottom:20}}>
+        <div style={{...ep,fontSize:24,color:C.onSurface,lineHeight:1.2}}>{data.name}</div>
       </div>
 
       {/* Prep / Cook */}
@@ -61,7 +60,7 @@ export function RecipeScreen({ recipeId, portion }) {
         {[['🕒 PREP TIME',data.prep_time_raw||(data.prep_time_minutes?`${data.prep_time_minutes}m`:null)],['🍳 COOK TIME',data.cook_time_raw||(data.cook_time_minutes?`${data.cook_time_minutes}m`:null)]].map(([lbl,val])=>val?(
           <div key={lbl} style={{...CARD,padding:'12px 14px'}}>
             <div style={{...mn,fontSize:10,fontWeight:700,color:C.onSurfaceVariant,letterSpacing:'0.06em',marginBottom:4}}>{lbl}</div>
-            <div style={{...ep,fontSize:17,color:C.onSurface}}>{val}</div>
+            <div style={{...mn,fontSize:17,fontWeight:700,color:C.onSurface}}>{val}</div>
           </div>
         ):null)}
       </div>
@@ -71,13 +70,13 @@ export function RecipeScreen({ recipeId, portion }) {
         <div style={{...CARD,padding:'12px 14px'}}>
           <div style={{...mn,fontSize:10,fontWeight:700,color:C.onSurfaceVariant,letterSpacing:'0.06em',marginBottom:6}}>SAVED PORTIONS</div>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
-            <span style={{...ep,fontSize:15,color:C.onSurface}}>{scaledFor} servings</span>
+            <span style={{...mn,fontSize:15,fontWeight:700,color:C.onSurface}}>{scaledFor} servings</span>
             {scale!==1&&<span style={{...mn,fontSize:11,fontWeight:700,background:C.primaryFixed,color:C.primary,padding:'2px 7px',borderRadius:99}}>{scale.toFixed(1)}x</span>}
           </div>
         </div>
         <div style={{...CARD,padding:'12px 14px'}}>
           <div style={{...mn,fontSize:10,fontWeight:700,color:C.onSurfaceVariant,letterSpacing:'0.06em',marginBottom:6}}>MIN. PORTIONS</div>
-          <span style={{...ep,fontSize:15,color:C.onSurface}}>{data.min_portions||1} servings</span>
+          <span style={{...mn,fontSize:15,fontWeight:700,color:C.onSurface}}>{data.min_portions||1} servings</span>
         </div>
       </div>
 
