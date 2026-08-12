@@ -1,5 +1,16 @@
-import { C, ep, mn, CARD } from '../lib/theme.js'
+import { useState } from 'react'
+import { C, mn, CARD } from '../lib/theme.js'
 import { Spinner, SecHead, Icon } from './ui/index.js'
+
+const METRIC_INFO = {
+  gutHealth:'How much fibre, variety of veg, and gut-friendly foods (like yoghurt, beans, wholegrains) are in the week\'s meals.',
+  vitaminMineral:'Whether the week\'s meals cover key vitamins and minerals (iron, vitamin C, calcium, etc.) against recommended daily targets for the profile.',
+  inflammation:'The balance of "good" fats (like omega-3 from fish, nuts, olive oil) versus processed or fried foods that can cause inflammation.',
+  metabolic:'How balanced meals are across carbs, protein and fat, and how likely they are to cause big blood sugar swings.',
+  antioxidant:'How many colourful fruits and vegetables (which are rich in antioxidants) appear across the week.',
+  overall:'A combined average of the five scores above, giving one quick snapshot of how balanced the week\'s meals are.',
+}
+const METHODOLOGY_TEXT = "Each day you've planned is checked against standard UK nutrition guidelines for the selected profile (adult or toddler), and the weekly score shown is the average across all the days you've planned that week."
 
 const NUTRI = {
   adult:{scores:{gutHealth:74,vitaminMineral:61,inflammation:80,metabolic:67,antioxidant:72,overall:71},
@@ -25,6 +36,7 @@ const NUTRI = {
 }
 
 export function NutritionScreen({profile,setProfile,nutriData,nutriLoading,nutriError,onAnalyse}){
+  const [showInfo,setShowInfo] = useState(false)
   const data = nutriData?.[profile] || NUTRI[profile]
   const metrics=[{key:'gutHealth',label:'Gut Health',icon:'🦠'},{key:'vitaminMineral',label:'Vit & Mineral',icon:'💊'},{key:'inflammation',label:'Anti-Inflam.',icon:'🔥'},{key:'metabolic',label:'Metabolic',icon:'⚡'},{key:'antioxidant',label:'Antioxidant',icon:'🛡️'},{key:'overall',label:'Overall',icon:'❤️'}]
   return(
@@ -47,7 +59,7 @@ export function NutritionScreen({profile,setProfile,nutriData,nutriLoading,nutri
       <div style={{background:C.primary,borderRadius:10,padding:'24px 20px',textAlign:'center',marginBottom:16}}>
         <div style={{...mn,fontSize:11,fontWeight:700,letterSpacing:'0.07em',color:'rgba(255,255,255,0.65)',marginBottom:14,textTransform:'uppercase'}}>Overall Weekly Healthiness Score</div>
         <div style={{width:88,height:88,borderRadius:99,border:'4px solid rgba(255,255,255,0.28)',display:'inline-flex',flexDirection:'column',alignItems:'center',justifyContent:'center',marginBottom:8}}>
-          <div style={{...ep,fontSize:28,color:'#fff',lineHeight:1}}>{data.scores.overall}</div>
+          <div style={{...mn,fontWeight:700,fontSize:28,color:'#fff',lineHeight:1}}>{data.scores.overall}</div>
           <div style={{...mn,fontSize:10,color:'rgba(255,255,255,0.6)'}}>/ 100</div>
         </div>
         <div style={{...mn,fontSize:10,letterSpacing:'0.07em',color:'rgba(255,255,255,0.55)',textTransform:'uppercase'}}>Out of 100</div>
@@ -56,7 +68,7 @@ export function NutritionScreen({profile,setProfile,nutriData,nutriLoading,nutri
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:20}}>
         {metrics.map(m=>(
           <div key={m.key} style={{...CARD,padding:'14px 12px',background:m.key==='overall'?C.primary:C.white}}>
-            <div style={{...ep,fontSize:20,color:m.key==='overall'?C.onPrimary:C.onSurface}}>{data.scores[m.key]}<span style={{...mn,fontSize:12,opacity:0.55}}>/100</span></div>
+            <div style={{...mn,fontWeight:700,fontSize:20,color:m.key==='overall'?C.onPrimary:C.onSurface}}>{data.scores[m.key]}<span style={{...mn,fontSize:12,opacity:0.55}}>/100</span></div>
             <div style={{display:'flex',alignItems:'center',gap:4,marginTop:4}}>
               <span style={{fontSize:14}}>{m.icon}</span>
               <span style={{...mn,fontSize:11,fontWeight:600,color:m.key==='overall'?'rgba(255,255,255,0.8)':C.onSurfaceVariant}}>{m.label}</span>
@@ -80,7 +92,7 @@ export function NutritionScreen({profile,setProfile,nutriData,nutriLoading,nutri
         })}
       </div>
       <SecHead text='Ideas for Planned Meals'/>
-      <div style={{display:'flex',flexDirection:'column',gap:10}}>
+      <div style={{display:'flex',flexDirection:'column',gap:10,marginBottom:20}}>
         {data.meals.map((r,i)=>{
           const bc=r.type==='critical'?C.error:r.type==='positive'?'#1a7a3a':'#c07800'
           return(
@@ -91,6 +103,37 @@ export function NutritionScreen({profile,setProfile,nutriData,nutriLoading,nutri
           )
         })}
       </div>
+      <SecHead text='Understanding Your Scores'/>
+      <div style={{...CARD,padding:20,textAlign:'center'}}>
+        <p style={{...mn,fontSize:13,color:C.onSurfaceVariant,marginBottom:14,lineHeight:1.6}}>Curious what these numbers actually mean? See a simple breakdown of what each score looks at and how it's worked out.</p>
+        <button onClick={()=>setShowInfo(true)} style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,border:'none',background:C.secondaryContainer,color:'#924b1a',borderRadius:999,padding:'7px 14px',...mn,fontWeight:700,fontSize:12,whiteSpace:'nowrap',cursor:'pointer'}}>
+          <Icon name='info' size={14}/>How Are These Calculated?
+        </button>
+      </div>
+      {showInfo&&(
+        <div onClick={()=>setShowInfo(false)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:50,display:'flex',justifyContent:'center',alignItems:'flex-end'}}>
+          <div onClick={e=>e.stopPropagation()} style={{width:'100%',maxWidth:430,maxHeight:'80vh',overflowY:'auto',background:C.white,borderRadius:'20px 20px 0 0',padding:'20px 20px 28px'}}>
+            <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:14}}>
+              <span style={{...mn,fontSize:16,fontWeight:700,color:C.onSurface,flex:1}}>How Your Scores Work</span>
+              <button onClick={()=>setShowInfo(false)} style={{border:'none',background:C.surfaceContainerHigh,borderRadius:99,padding:6,display:'flex',cursor:'pointer'}}>
+                <Icon name='x' size={16} color={C.onSurfaceVariant}/>
+              </button>
+            </div>
+            <p style={{...mn,fontSize:12,color:C.onSurfaceVariant,lineHeight:1.6,marginBottom:16}}>{METHODOLOGY_TEXT}</p>
+            <div style={{display:'flex',flexDirection:'column',gap:12}}>
+              {metrics.map(m=>(
+                <div key={m.key} style={{display:'flex',gap:10}}>
+                  <span style={{fontSize:18,lineHeight:1.4}}>{m.icon}</span>
+                  <div>
+                    <div style={{...mn,fontSize:13,fontWeight:700,color:C.onSurface,marginBottom:2}}>{m.label}</div>
+                    <p style={{...mn,fontSize:12,color:C.onSurfaceVariant,lineHeight:1.6,margin:0}}>{METRIC_INFO[m.key]}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

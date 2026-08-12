@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { C, ep, mn, screenTitle } from '../lib/theme.js'
-import { DAYS, DAY_LBL, TODAY } from '../lib/dateHelpers.js'
+import { DAYS, DAY_LBL, TODAY, formatAdvance } from '../lib/dateHelpers.js'
 import { Icon } from './ui/index.js'
 import { NewRecipeForm } from './NewRecipeForm.jsx'
 
@@ -40,9 +40,14 @@ export function HomeScreen({ plan, onDayOpen, onRecipeOpen, moveMeal, onCopy, on
                 <button key={m.id} draggable onDragStart={e=>onDragStart(e,m.id,day,m.section)} onDragEnd={onDragEnd} onClick={()=>onRecipeOpen(m.recipeId, m.portion)} style={{width:'100%',background:C.primaryFixed,border:'none',borderRadius:10,padding:'14px 16px',marginBottom:8,display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,cursor:drag?'grabbing':'grab',textAlign:'left',opacity:drag?.mealId===m.id?0.45:1,transition:'opacity 0.15s'}}>
                   <div style={{minWidth:0}}>
                     <div style={{...mn,fontSize:14,fontWeight:600,color:C.onSurface,marginBottom:6,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.name}</div>
-                    <div style={{display:'flex',alignItems:'center',gap:8}}>
+                    <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',rowGap:4}}>
                       <span style={{...mn,fontSize:11,fontWeight:600,background:C.white,color:C.onSurface,padding:'3px 10px',borderRadius:99}}>{SEC_LBL[m.section]}</span>
                       <span style={{...mn,fontSize:12,color:C.onSurfaceVariant}}>{m.prep}m</span>
+                      {m.advancePrepHours>0&&(
+                        <span title={m.advancePrepNote||undefined} style={{...mn,fontSize:11,fontWeight:700,display:'inline-flex',alignItems:'center',gap:4,color:C.onSecondaryContainer}}>
+                          <Icon name='alarmClock' size={11} color={C.onSecondaryContainer}/>Start {formatAdvance(m.advancePrepHours)} ahead
+                        </span>
+                      )}
                     </div>
                   </div>
                   <Icon name='chevronRight' size={18} color={C.outline}/>

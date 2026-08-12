@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
-import { fetchRecipeDetails, fetchRecipeNotes, saveRecipeNotes } from '../lib/supabase.js'
+import { fetchRecipeDetails, fetchRecipeNotes, saveRecipeNotes, fetchRecipeToddlerTask, saveRecipeToddlerTask } from '../lib/supabase.js'
+import { callEdgeFn } from '../lib/ai.js'
 import { C, ep, mn, CARD } from '../lib/theme.js'
+import { ageBandFromDob, TODDLER_AGE_BANDS } from '../lib/dateHelpers.js'
 import { parseIngredients, parseIngredientParts, parseSteps } from '../lib/recipeParsing.js'
 import { Spinner, Btn } from './ui/index.js'
 
-export function RecipeScreen({ recipeId, portion, onAddMeal }) {
+export function RecipeScreen({ recipeId, portion, onAddMeal, toddlerDob, onOpenToddlerCooking }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState(null)
@@ -13,12 +15,44 @@ export function RecipeScreen({ recipeId, portion, onAddMeal }) {
   const [notes, setNotes] = useState('')
   const [notesSaved, setNotesSaved] = useState(true)
   const [notesSaving, setNotesSaving] = useState(false)
+  const [toddlerTask, setToddlerTask] = useState(null)
+  const [toddlerTaskLoading, setToddlerTaskLoading] = useState(false)
+  const [toddlerTaskError, setToddlerTaskError] = useState(null)
 
   useEffect(() => {
     fetchRecipeDetails(recipeId)
       .then(setData).catch(e => setErr(e.message)).finally(() => setLoading(false))
     fetchRecipeNotes(recipeId).then(n => { setNotes(n); setNotesSaved(true) })
   }, [recipeId])
+
+  useEffect(() => {
+    if (!toddlerDob) return
+    const currentBand = ageBandFromDob(toddlerDob)
+    setToddlerTask(null); setToddlerTaskError(null)
+    ;(async () => {
+      try {
+        const cached = await fetchRecipeToddlerTask(recipeId)
+        if (cached && cached.age_band_id === currentBand) { setToddlerTask(cached); return }
+        const recipe = await fetchRecipeDetails(recipeId)
+        setToddlerTaskLoading(true)
+        const bandLabel = TODDLER_AGE_BANDS.find(b => b.id === currentBand)?.label || currentBand
+        const result = await callEdgeFn('recipe-toddler-task', {
+          ageBandLabel: bandLabel,
+          recipeName: recipe.name,
+          ingredients: recipe.ingredients,
+          instructions: recipe.instructions_standard || recipe.instructions_thermomix,
+          toddlerVariations: recipe.toddler_variations,
+        })
+        const saved = { dob: toddlerDob, age_band_id: currentBand, age_band_label: bandLabel, task: result.task, needs_tool: result.needsTool ?? null }
+        setToddlerTask(saved)
+        saveRecipeToddlerTask(recipeId, { dob: toddlerDob, ageBandId: currentBand, ageBandLabel: bandLabel, task: result.task, needsTool: result.needsTool })
+      } catch (e) {
+        setToddlerTaskError(e.message)
+      } finally {
+        setToddlerTaskLoading(false)
+      }
+    })()
+  }, [recipeId, toddlerDob])
 
   function handleNotesChange(e) {
     setNotes(e.target.value)
@@ -191,6 +225,21 @@ export function RecipeScreen({ recipeId, portion, onAddMeal }) {
               <span style={{color:C.primary,fontSize:20}}>›</span>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Toddler preferences */}
+      {toddlerDob&&(toddlerTask||toddlerTaskLoading||toddlerTaskError)&&(
+        <div style={{...CARD,padding:'14px 16px',marginBottom:10,marginTop:data.chef_notes||data.husband_variations||data.toddler_variations||(data.side_recommendation&&data.side_recommendation!=='Not Recommended')?0:20,background:C.accent2_100,border:`1px solid ${C.accent2_300}`}}>
+          <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}><span style={{fontSize:14}}>🧸</span><span style={{...mn,fontSize:10,fontWeight:700,color:C.accent2_700,letterSpacing:'0.07em',textTransform:'uppercase'}}>Toddler Preferences</span></div>
+          {toddlerTaskLoading&&<p style={{...mn,fontSize:13,color:C.onSurfaceVariant,margin:0}}>Finding an age-appropriate task…</p>}
+          {toddlerTaskError&&<p style={{...mn,fontSize:13,color:C.error,margin:0}}>⚠️ {toddlerTaskError}</p>}
+          {toddlerTask&&!toddlerTaskLoading&&(<>
+            <div style={{display:'inline-block',...mn,fontSize:10,fontWeight:700,color:C.accent2_700,background:C.white,padding:'2px 8px',borderRadius:99,marginBottom:8}}>{(toddlerTask.age_band_label||'').toUpperCase()}</div>
+            <p style={{...mn,fontSize:13,color:C.onSurface,lineHeight:1.7,margin:0,marginBottom:toddlerTask.needs_tool?8:0}}>{toddlerTask.task}</p>
+            {toddlerTask.needs_tool&&<div style={{...mn,fontSize:11,fontWeight:700,color:C.primary,background:C.primaryFixed,padding:'4px 10px',borderRadius:8,display:'inline-block',marginBottom:8}}>Needs: {toddlerTask.needs_tool}</div>}
+            {onOpenToddlerCooking&&<div><button onClick={onOpenToddlerCooking} style={{...mn,fontSize:12,fontWeight:700,color:C.primary,background:'none',border:'none',padding:0,cursor:'pointer'}}>More toddler activities →</button></div>}
+          </>)}
         </div>
       )}
 

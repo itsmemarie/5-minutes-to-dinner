@@ -1,0 +1,28 @@
+{
+  "name": "5 Minutes to Dinner",
+  "short_name": "5 Min Dinner",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#dbe6d8",
+  "theme_color": "#dbe6d8",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/maskable-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

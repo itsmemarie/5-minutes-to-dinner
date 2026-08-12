@@ -2,27 +2,33 @@ import { useState } from 'react'
 import { C, ep, mn, CARD } from '../lib/theme.js'
 import { Btn } from './ui/index.js'
 import { extractFreezerItems } from '../lib/ai.js'
+import { compressImageFiles } from '../lib/imageHelpers.js'
 
 export function FreezerScreen({items,onReplace,onAddOne,onToggleStock,onDelete}){
   const [pasteText,setPasteText]=useState('')
   const [images,setImages]=useState([])
   const [manualName,setManualName]=useState('')
   const [busy,setBusy]=useState(false)
+  const [imagesLoading,setImagesLoading]=useState(false)
   const [error,setError]=useState(null)
 
   const inp=(extra)=>({...mn,width:'100%',padding:'10px 12px',borderRadius:10,border:`1px solid ${C.outlineVariant}`,fontSize:14,background:C.white,outline:'none',boxSizing:'border-box',...extra})
 
-  const handleImageSelect=(e)=>{
+  const handleImageSelect=async(e)=>{
     const files=Array.from(e.target.files||[])
     if(!files.length)return
-    files.forEach(file=>{
-      const reader=new FileReader()
-      reader.onload=(ev)=>{
-        setImages(p=>[...p,{base64:ev.target.result.split(',')[1],mediaType:file.type,name:file.name}])
-      }
-      reader.readAsDataURL(file)
-    })
     e.target.value=''
+    setImagesLoading(true)
+    try{
+      const results=await compressImageFiles(files)
+      const ok=results.filter(Boolean)
+      if(ok.length<results.length){
+        setError(`${results.length-ok.length} file(s) couldn't be processed and were skipped.`)
+      }
+      setImages(p=>[...p,...ok])
+    }finally{
+      setImagesLoading(false)
+    }
   }
   const removeImage=(idx)=>setImages(p=>p.filter((_,i)=>i!==idx))
 
@@ -81,9 +87,9 @@ export function FreezerScreen({items,onReplace,onAddOne,onToggleStock,onDelete})
 
       <div style={{...CARD,padding:'16px 16px',marginBottom:20}}>
         <div style={{...mn,fontSize:11,fontWeight:700,color:C.onSurfaceVariant,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:8}}>Upload a photo</div>
-        <label style={{display:'block',border:`2px dashed ${C.outlineVariant}`,borderRadius:10,padding:'14px 16px',textAlign:'center',cursor:busy?'not-allowed':'pointer',background:C.white}}>
-          <input type='file' accept='image/*' multiple onChange={handleImageSelect} style={{display:'none'}} disabled={busy}/>
-          <div style={{...mn,fontSize:13,color:images.length?C.onSurface:C.onSurfaceVariant}}>{images.length?`Tap to add more photos (${images.length} selected)`:'Tap to choose photo(s) of your freezer list'}</div>
+        <label style={{display:'block',border:`2px dashed ${C.outlineVariant}`,borderRadius:10,padding:'14px 16px',textAlign:'center',cursor:(busy||imagesLoading)?'not-allowed':'pointer',background:C.white}}>
+          <input type='file' accept='image/*' multiple onChange={handleImageSelect} style={{display:'none'}} disabled={busy||imagesLoading}/>
+          <div style={{...mn,fontSize:13,color:images.length?C.onSurface:C.onSurfaceVariant}}>{imagesLoading?'Compressing photo(s)…':images.length?`Tap to add more photos (${images.length} selected)`:'Tap to choose photo(s) of your freezer list'}</div>
         </label>
         {images.length>0&&(
           <div style={{display:'flex',flexDirection:'column',gap:6,marginTop:10}}>

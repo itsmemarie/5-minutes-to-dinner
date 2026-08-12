@@ -3,13 +3,21 @@ import { Spinner, Btn, Icon } from './ui/index.js'
 
 const TAG_LABEL = { TM6:'THERMOMIX', HOB:'HOB', OVEN:'OVEN', KNIFE:'PREP', NO_COOK:'NO COOK', DONE:'DONE' }
 
-export function BatchScreen({activeTab,setActiveTab,batchData,batchLoading,batchError,onGenerate}){
+export function BatchScreen({activeTab,setActiveTab,batchData,batchLoading,batchError,onGenerate,onOpenToddlerCooking}){
   const TABS=[{id:'big',label:'Monday · Big'},{id:'medium',label:'Thursday · Med'},{id:'evenings',label:'Evenings'}]
   const session = batchData?.sessions?.find(s=>s.id===activeTab) || null
   return(
     <div style={{padding:'16px 20px 24px'}}>
       <div style={{...screenTitle,color:C.onSurface,marginBottom:4}}>Batch cooking</div>
       <p style={{...mn,fontSize:13,color:C.onSurfaceVariant,margin:'0 0 14px',lineHeight:1.6}}>An AI-organised prep schedule so the week's cooking happens in focused sessions.</p>
+      <button onClick={onOpenToddlerCooking} style={{...CARD,width:'100%',padding:'14px 16px',display:'flex',alignItems:'center',gap:12,border:'none',cursor:'pointer',marginBottom:14,textAlign:'left'}}>
+        <span style={{fontSize:22}}>🧸</span>
+        <div style={{flex:1}}>
+          <div style={{...mn,fontSize:14,fontWeight:700,color:C.onSurface}}>Toddler cooking activities</div>
+          <div style={{...mn,fontSize:12,color:C.onSurfaceVariant}}>Age-appropriate kitchen tasks & tools</div>
+        </div>
+        <Icon name='chevronRight' size={18} color={C.onSurfaceVariant}/>
+      </button>
       {batchData&&<div style={{display:'flex',gap:6,padding:'0 0 14px',overflowX:'auto'}}>
         {TABS.map(t=>(
           <button key={t.id} onClick={()=>setActiveTab(t.id)} style={{...mn,padding:'8px 14px',borderRadius:99,border:'none',background:activeTab===t.id?C.primary:C.secondaryContainer,color:activeTab===t.id?C.onPrimary:C.onSecondaryContainer,fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap',flexShrink:0}}>{t.label}</button>

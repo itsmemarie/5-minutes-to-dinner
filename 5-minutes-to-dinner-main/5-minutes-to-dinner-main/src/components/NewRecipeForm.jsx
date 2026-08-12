@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { createRecipe } from '../lib/supabase.js'
 import { extractRecipe } from '../lib/ai.js'
+import { compressImageFiles } from '../lib/imageHelpers.js'
 import { C, ep, mn, CARD } from '../lib/theme.js'
 import { Btn } from './ui/index.js'
 
@@ -21,6 +22,7 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
   const [aiUrl, setAiUrl] = useState('')
   const [aiImages, setAiImages] = useState([])
   const [aiLoading, setAiLoading] = useState(false)
+  const [aiImagesLoading, setAiImagesLoading] = useState(false)
   const [aiError, setAiError] = useState(null)
   const [f, setF] = useState({
     name: '',
@@ -91,17 +93,21 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
     }
   }
 
-  const handleImageSelect = (e) => {
+  const handleImageSelect = async (e) => {
     const files = Array.from(e.target.files || [])
     if (!files.length) return
-    files.forEach(file => {
-      const reader = new FileReader()
-      reader.onload = (ev) => {
-        setAiImages(p => [...p, { base64: ev.target.result.split(',')[1], mediaType: file.type, name: file.name }])
-      }
-      reader.readAsDataURL(file)
-    })
     e.target.value = ''
+    setAiImagesLoading(true)
+    try {
+      const results = await compressImageFiles(files)
+      const ok = results.filter(Boolean)
+      if (ok.length < results.length) {
+        setAiError(`${results.length - ok.length} file(s) couldn't be processed and were skipped.`)
+      }
+      setAiImages(p => [...p, ...ok])
+    } finally {
+      setAiImagesLoading(false)
+    }
   }
 
   const removeImage = (idx) => setAiImages(p => p.filter((_, i) => i !== idx))
@@ -227,9 +233,9 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
             </div>
 
             <div style={{ ...mn, fontSize: 11, fontWeight: 700, color: C.onSurface, opacity: 0.6, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>Upload Photo(s)</div>
-            <label style={{ display: 'block', border: `2px dashed ${C.outlineVariant}`, borderRadius: 10, padding: '14px 16px', textAlign: 'center', cursor: aiLoading ? 'not-allowed' : 'pointer', background: C.white }}>
-              <input type='file' accept='image/*' multiple onChange={handleImageSelect} style={{ display: 'none' }} disabled={aiLoading}/>
-              <div style={{ ...mn, fontSize: 13, color: aiImages.length ? C.onSurface : C.onSurfaceVariant }}>{aiImages.length ? `Tap to add more photos (${aiImages.length} selected)` : 'Tap to choose photo(s) — multiple pages supported'}</div>
+            <label style={{ display: 'block', border: `2px dashed ${C.outlineVariant}`, borderRadius: 10, padding: '14px 16px', textAlign: 'center', cursor: (aiLoading || aiImagesLoading) ? 'not-allowed' : 'pointer', background: C.white }}>
+              <input type='file' accept='image/*' multiple onChange={handleImageSelect} style={{ display: 'none' }} disabled={aiLoading || aiImagesLoading}/>
+              <div style={{ ...mn, fontSize: 13, color: aiImages.length ? C.onSurface : C.onSurfaceVariant }}>{aiImagesLoading ? 'Compressing photo(s)…' : aiImages.length ? `Tap to add more photos (${aiImages.length} selected)` : 'Tap to choose photo(s) — multiple pages supported'}</div>
             </label>
             {aiImages.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>

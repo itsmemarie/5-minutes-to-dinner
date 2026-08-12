@@ -295,3 +295,38 @@ export async function fetchRecipeDetails(id) {
   if (error) throw error
   return data
 }
+
+// ─── Toddler cooking guide (cached AI content, singleton) ──────────
+export async function fetchToddlerCookingGuide() {
+  const { data } = await supabase
+    .from('toddler_cooking_guide')
+    .select('dob, content, generated_at')
+    .eq('id', 1)
+    .single()
+  return data || null
+}
+
+export async function saveToddlerCookingGuide(dob, content) {
+  await supabase
+    .from('toddler_cooking_guide')
+    .upsert({ id: 1, dob, content, generated_at: new Date().toISOString() }, { onConflict: 'id' })
+}
+
+// ─── Recipe toddler task (cached AI content, per recipe) ────────────
+export async function fetchRecipeToddlerTask(recipeId) {
+  const { data } = await supabase
+    .from('recipe_toddler_tasks')
+    .select('dob, age_band_id, age_band_label, task, needs_tool, generated_at')
+    .eq('recipe_id', recipeId)
+    .single()
+  return data || null
+}
+
+export async function saveRecipeToddlerTask(recipeId, { dob, ageBandId, ageBandLabel, task, needsTool }) {
+  await supabase
+    .from('recipe_toddler_tasks')
+    .upsert({
+      recipe_id: recipeId, dob, age_band_id: ageBandId, age_band_label: ageBandLabel,
+      task, needs_tool: needsTool ?? null, generated_at: new Date().toISOString(),
+    }, { onConflict: 'recipe_id' })
+}

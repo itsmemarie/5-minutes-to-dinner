@@ -5,13 +5,6 @@ import { Btn, Icon } from './ui/index.js'
 
 const SEC_LBL = { breakfast:'Breakfast', main:'Main', side:'Side' }
 
-// e.g. 4 -> "4h", 24 -> "1d", 1.5 -> "1.5h"
-const formatAdvance = h => {
-  const n = Number(h)
-  if (n >= 24 && n % 24 === 0) return `${n/24}d`
-  return `${Number.isInteger(n) ? n : n.toFixed(1)}h`
-}
-
 export function PlannerScreen({plan,removeMeal,moveMeal,duplicateMeal,updatePortion,onDayOpen,onNutrition}){
   const [drag,setDrag]=useState(null)   // {mealId,fromDay,section}
   const [over,setOver]=useState(null)   // day string being hovered
@@ -61,11 +54,6 @@ export function PlannerScreen({plan,removeMeal,moveMeal,duplicateMeal,updatePort
                         <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
                           <span style={{...mn,fontSize:11,color:C.onSurface,opacity:0.55}}>{SEC_LBL[m.section]}</span>
                           <span style={{...mn,fontSize:11,color:C.onSurface,opacity:0.6}}>{m.prep}m</span>
-                          {m.advancePrepHours>0&&(
-                            <span title={m.advancePrepNote||undefined} style={{...mn,fontSize:11,fontWeight:700,display:'inline-flex',alignItems:'center',gap:4,color:C.onSecondaryContainer}}>
-                              <Icon name='alarmClock' size={11} color={C.onSecondaryContainer}/>Start {formatAdvance(m.advancePrepHours)} ahead
-                            </span>
-                          )}
                           <span onClick={e=>{e.stopPropagation();setServingsOpenId(id=>id===m.id?null:m.id)}} style={{...mn,fontSize:11,fontWeight:700,display:'inline-flex',alignItems:'center',gap:3,background:C.primaryFixed,color:C.primary,padding:'2px 7px',borderRadius:99,cursor:'pointer'}}>
                             <Icon name='utensilsCrossed' size={11} color={C.primary}/>{m.portion}
                             <span style={{display:'flex',transform:servingsOpenId===m.id?'rotate(-90deg)':'rotate(90deg)',transition:'transform 0.15s'}}><Icon name='chevronRight' size={10} color={C.primary}/></span>
