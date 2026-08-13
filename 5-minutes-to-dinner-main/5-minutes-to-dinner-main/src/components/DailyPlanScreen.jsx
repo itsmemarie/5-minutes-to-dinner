@@ -5,9 +5,9 @@ import { Btn, Stepper } from './ui/index.js'
 import { Icon } from './ui/Icon.jsx'
 import { parseSideNames, formatSideNames } from '../lib/sidePairing.js'
 
-export function DailyPlanScreen({day,plan,recipes,updatePortion,removeMeal,onAddToSection,onSave}){
+export function DailyPlanScreen({day,plan,recipes,updatePortion,removeMeal,onAddToSection,onRecipeOpen,onSave}){
   const [saved,setSaved]=useState(false)
-  const secs=[{key:'breakfast',label:'Breakfast'},{key:'main',label:'Main Meal'},{key:'side',label:'Side Dish'}]
+  const secs=[{key:'breakfast',label:'Breakfast'},{key:'main',label:'Main Meal'},{key:'side',label:'Sides & Snacks'}]
   const go=()=>{setSaved(true);setTimeout(()=>{setSaved(false);onSave()},1000)}
   const mainMeal=plan[day].main[0]
   const mainRecipe=recipes?.find(r=>r.id===mainMeal?.recipeId)
@@ -42,7 +42,7 @@ export function DailyPlanScreen({day,plan,recipes,updatePortion,removeMeal,onAdd
               {plan[day][s.key].map(m=>(
                 <div key={m.id} style={{...CARD,background:C.surfaceContainerHigh,boxShadow:'none',padding:'14px'}}>
                   <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:8}}>
-                    <span style={{...mn,fontSize:15,fontWeight:700,color:C.onSurface,flex:1,marginRight:8}}>{m.name}</span>
+                    <span onClick={()=>m.recipeId&&onRecipeOpen(m.recipeId,m.portion)} style={{...mn,fontSize:15,fontWeight:700,color:C.onSurface,flex:1,marginRight:8,cursor:m.recipeId?'pointer':'default',textDecoration:m.recipeId?'underline':'none',textDecorationColor:m.recipeId?C.outlineVariant:'transparent'}}>{m.name}</span>
                     <button onClick={()=>removeMeal(day,s.key,m.id)} style={{width:26,height:26,flexShrink:0,border:'none',background:'none',padding:0,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}><Icon name='x' size={16} color={C.primary}/></button>
                   </div>
                   <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>

@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { createRecipe } from '../lib/supabase.js'
-import { extractRecipe } from '../lib/ai.js'
-import { compressImageFiles } from '../lib/imageHelpers.js'
+import { extractRecipe, generateRecipe } from '../lib/ai.js'
+import { resizeImageFiles } from '../lib/imageHelpers.js'
 import { C, ep, mn, CARD } from '../lib/theme.js'
 import { Btn } from './ui/index.js'
 
 const MEAL_TYPES = [
   { value: 'main',      label: 'Mains' },
   { value: 'breakfast', label: 'Breakfast' },
-  { value: 'side',      label: 'Sides' },
+  { value: 'side',      label: 'Sides & Snacks' },
   { value: 'entree',    label: 'Starters' },
   { value: 'dessert',   label: 'Desserts' },
 ]
@@ -21,9 +21,11 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
   const [aiMode, setAiMode] = useState(false)
   const [aiUrl, setAiUrl] = useState('')
   const [aiImages, setAiImages] = useState([])
+  const [aiDescription, setAiDescription] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
   const [aiImagesLoading, setAiImagesLoading] = useState(false)
   const [aiError, setAiError] = useState(null)
+  const [aiProgress, setAiProgress] = useState(null)
   const [f, setF] = useState({
     name: '',
     meal_type_id: defaultMealType || 'main',
@@ -99,7 +101,7 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
     e.target.value = ''
     setAiImagesLoading(true)
     try {
-      const results = await compressImageFiles(files)
+      const results = await resizeImageFiles(files)
       const ok = results.filter(Boolean)
       if (ok.length < results.length) {
         setAiError(`${results.length - ok.length} file(s) couldn't be processed and were skipped.`)
@@ -112,16 +114,32 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
 
   const removeImage = (idx) => setAiImages(p => p.filter((_, i) => i !== idx))
 
-  const handleAiFromImage = async () => {
-    if (!aiImages.length) return
+  const handleAiFromDescription = async () => {
+    if (!aiDescription.trim()) return
     setAiLoading(true); setAiError(null)
     try {
-      const data = await extractRecipe({ images: aiImages.map(({ base64, mediaType }) => ({ base64, mediaType })) })
+      const data = await generateRecipe({ description: aiDescription.trim() })
       applyAiResult(data)
     } catch (e) {
       setAiError(e.message)
     } finally {
       setAiLoading(false)
+    }
+  }
+
+  const handleAiFromImage = async () => {
+    if (!aiImages.length) return
+    setAiLoading(true); setAiError(null); setAiProgress(null)
+    try {
+      const data = await extractRecipe({
+        images: aiImages.map(({ base64, mediaType }) => ({ base64, mediaType })),
+        onProgress: (current, total) => setAiProgress({ current, total }),
+      })
+      applyAiResult(data)
+    } catch (e) {
+      setAiError(e.message)
+    } finally {
+      setAiLoading(false); setAiProgress(null)
     }
   }
 
@@ -252,7 +270,19 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
                 <Btn label={aiImages.length > 1 ? 'Extract from photos' : 'Extract from photo'} small onClick={handleAiFromImage}/>
               </div>
             )}
-            {aiLoading && <div style={{ ...mn, fontSize: 13, color: C.onSurfaceVariant, textAlign: 'center', padding: '10px 0 4px' }}>Extracting recipe…</div>}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '18px 0' }}>
+              <div style={{ flex: 1, height: 1, background: C.outline + '40' }}/>
+              <span style={{ ...mn, fontSize: 11, color: C.onSurfaceVariant }}>or</span>
+              <div style={{ flex: 1, height: 1, background: C.outline + '40' }}/>
+            </div>
+
+            <div style={{ ...mn, fontSize: 11, fontWeight: 700, color: C.onSurface, opacity: 0.6, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>Describe What You Want</div>
+            <textarea value={aiDescription} onChange={e => setAiDescription(e.target.value)} placeholder={"e.g. A quick vegetarian pasta using what's in my fridge, kid-friendly"} rows={3} disabled={aiLoading} style={inp({ resize: 'vertical', lineHeight: 1.5 })}/>
+            <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end' }}>
+              <Btn label={aiLoading ? '…' : 'Generate'} small onClick={handleAiFromDescription} disabled={aiLoading || !aiDescription.trim()}/>
+            </div>
+
+            {aiLoading && <div style={{ ...mn, fontSize: 13, color: C.onSurfaceVariant, textAlign: 'center', padding: '10px 0 4px' }}>{aiProgress ? `Extracting photo ${aiProgress.current} of ${aiProgress.total}…` : 'Extracting recipe…'}</div>}
           </div>
         )}
 

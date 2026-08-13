@@ -12,7 +12,7 @@ export function RecipeSelectionScreen({day,section,plan,recipes,freezerItems,onA
   const [selected,setSelected]=useState([])
   const [freezerSelected,setFreezerSelected]=useState([])
   const catName=section==='breakfast'?'Breakfast':section==='main'?'Mains':'Sides'
-  const sectionLabel=section==='breakfast'?'Breakfast':section==='main'?'Main Meal':'Side Dish'
+  const sectionLabel=section==='breakfast'?'Breakfast':section==='main'?'Main Meal':'Sides & Snacks'
 
   // Recipes already on the *current* day (any section) — prevent duplicates on the same day
   const currentDayIds=useMemo(()=>[...plan[day].breakfast,...plan[day].main,...plan[day].side].map(m=>m.recipeId),[plan,day])
