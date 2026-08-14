@@ -1,11 +1,40 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { C, ep, mn, CARD, screenTitle } from '../lib/theme.js'
 import { WEEK_LBL } from '../lib/dateHelpers.js'
 import { Spinner, HDivider, Btn, Icon } from './ui/index.js'
+import { BuyersEyeSheet } from './BuyersEyeSheet.jsx'
+import { matchProduceGuide } from '../lib/supabase.js'
+
+const PRODUCE_AISLES=['FRUIT','VEGETABLES']
+const NO_TIPS_KEY='buyersEyeNoTips'
 
 export function ShoppingListScreen({shopping,onToggle,loading,error,onRegenerate}){
   const [copied,setCopied]=useState(false)
+  const [guideMap,setGuideMap]=useState({}) // itemId -> uuid | null | 'checking'
+  const [noTipsNames,setNoTipsNames]=useState(()=>new Set(JSON.parse(sessionStorage.getItem(NO_TIPS_KEY)||'[]')))
+  const [sheetItem,setSheetItem]=useState(null) // {id,name,guideId} | null
   const AISLES=['VEGETABLES','FRUIT','MEAT','FISH','DAIRY','BAKERY','DRY GOODS','PANTRY','FROZEN','OTHER']
+
+  const produceSignature=shopping.filter(s=>PRODUCE_AISLES.includes(s.aisle)).map(s=>`${s.id}:${s.name}`).join('|')
+  useEffect(()=>{
+    const candidates=shopping.filter(s=>PRODUCE_AISLES.includes(s.aisle)&&guideMap[s.id]===undefined)
+    if(!candidates.length)return
+    setGuideMap(prev=>({...prev,...Object.fromEntries(candidates.map(c=>[c.id,'checking']))}))
+    candidates.forEach(async item=>{
+      const id=await matchProduceGuide(item.name).catch(()=>null)
+      setGuideMap(prev=>({...prev,[item.id]:id}))
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[produceSignature])
+
+  const markNoTips=name=>{
+    const key=name.trim().toLowerCase()
+    setNoTipsNames(prev=>{
+      const next=new Set(prev); next.add(key)
+      sessionStorage.setItem(NO_TIPS_KEY,JSON.stringify([...next]))
+      return next
+    })
+  }
   const unc=shopping.filter(s=>!s.checked).length
   // Surface any aisles returned by AI that aren't in the canonical list
   const extra=[...new Set(shopping.map(s=>s.aisle).filter(a=>a&&!AISLES.includes(a)))]
@@ -63,6 +92,21 @@ export function ShoppingListScreen({shopping,onToggle,loading,error,onRegenerate
                     </div>
                     <span style={{...mn,fontSize:14,flex:1,opacity:item.checked?0.45:1,textDecoration:item.checked?'line-through':'none',color:C.onSurface}}>{item.name}</span>
                     {(item.amount||item.unit)&&<span style={{...mn,fontSize:12,fontWeight:700,opacity:item.checked?0.45:0.6,textDecoration:item.checked?'line-through':'none',color:C.onSurface}}>{item.amount}{item.unit?' '+item.unit:''}</span>}
+                    {PRODUCE_AISLES.includes(item.aisle)&&(()=>{
+                      const g=guideMap[item.id]
+                      if(g===undefined||g==='checking')return null
+                      if(g) return(
+                        <button onClick={e=>{e.stopPropagation();setSheetItem({id:item.id,name:item.name,guideId:g})}} title="Buyer's Eye" style={{border:'none',background:'transparent',padding:4,display:'flex',cursor:'pointer',flexShrink:0}}>
+                          <Icon name='info' size={15} color={C.onSurfaceVariant}/>
+                        </button>
+                      )
+                      if(noTipsNames.has(item.name.trim().toLowerCase()))return null
+                      return(
+                        <button onClick={e=>{e.stopPropagation();setSheetItem({id:item.id,name:item.name,guideId:null})}} title="Get expert tips" style={{border:'none',background:'transparent',padding:4,display:'flex',cursor:'pointer',flexShrink:0,opacity:0.55}}>
+                          <Icon name='sparkles' size={14} color={C.tertiary}/>
+                        </button>
+                      )
+                    })()}
                   </div>
                 ))}
               </div>
@@ -76,6 +120,21 @@ export function ShoppingListScreen({shopping,onToggle,loading,error,onRegenerate
             <Icon name={copied?'check':'clipboardCheck'} size={17} color={C.onPrimary}/>{copied?'Copied':'Copy to text'}
           </button>
         </div>
+      )}
+      {sheetItem&&(
+        <BuyersEyeSheet
+          item={sheetItem}
+          guideId={sheetItem.guideId}
+          onClose={()=>setSheetItem(null)}
+          onResolved={(itemId,resolvedGuideId,opts)=>{
+            if(opts?.noTips){
+              const src=shopping.find(s=>s.id===itemId)
+              if(src)markNoTips(src.name)
+            }else if(resolvedGuideId){
+              setGuideMap(prev=>({...prev,[itemId]:resolvedGuideId}))
+            }
+          }}
+        />
       )}
     </div>
   )

@@ -330,3 +330,47 @@ export async function saveRecipeToddlerTask(recipeId, { dob, ageBandId, ageBandL
       task, needs_tool: needsTool ?? null, generated_at: new Date().toISOString(),
     }, { onConflict: 'recipe_id' })
 }
+
+// ─── Produce guides (Buyer's Eye) ────────────────────────────────
+export async function matchProduceGuide(name) {
+  const { data, error } = await supabase.rpc('match_produce_guide', { item_name: name })
+  if (error) throw error
+  return data // uuid | null
+}
+
+export async function fetchProduceGuide(id) {
+  const { data, error } = await supabase
+    .from('produce_guides')
+    .select('*')
+    .eq('id', id)
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function mergeProduceGuideAliases(id, newAliases) {
+  const existing = await fetchProduceGuide(id)
+  const merged = [...new Set(
+    [...(existing.aliases || []), ...newAliases]
+      .map(a => a.trim().toLowerCase())
+      .filter(Boolean)
+  )]
+  const { data, error } = await supabase
+    .from('produce_guides')
+    .update({ aliases: merged })
+    .eq('id', id)
+    .select('*')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function insertProduceGuide(guide) {
+  const { data, error } = await supabase
+    .from('produce_guides')
+    .insert({ ...guide, source: 'ai' })
+    .select('*')
+    .single()
+  if (error) throw error
+  return data
+}

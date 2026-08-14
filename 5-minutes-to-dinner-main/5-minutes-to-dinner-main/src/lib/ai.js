@@ -18,6 +18,7 @@ const GROQ_KEY = import.meta.env.VITE_GROQ_API_KEY
 
 const GROQ_SYSTEM = `You are a Michelin-star chef who specialises in approachable home cooking.
 Extract the recipe from the provided content and return ONLY a valid JSON object — no markdown fences, no explanation, just the raw JSON.
+Respond ONLY with a valid JSON object. No markdown, no code fences, no explanation before or after.
 
 Required JSON schema:
 {
@@ -66,7 +67,7 @@ Required JSON schema:
 
 const GROQ_VISION_MODEL = 'qwen/qwen3.6-27b'
 
-const GROQ_IMAGE_TRANSCRIBE_SYSTEM = `You are transcribing a recipe photo. Read every piece of recipe-relevant text visible in the image — title, ingredients with quantities, instructions, notes — and return it as plain text, exactly as written, preserving order. No commentary, no markdown, no JSON.`
+const GROQ_IMAGE_TRANSCRIBE_SYSTEM = `You are transcribing a recipe photo. Read every piece of recipe-relevant text visible in the image — title, ingredients with quantities, instructions, notes — and return it as plain text, exactly as written, preserving order. No commentary, no markdown, no JSON. If the photo contains no readable recipe content, respond with exactly: NO RECIPE CONTENT`
 
 async function fetchGroq(body) {
   return fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -91,6 +92,21 @@ async function groqChat(body) {
   return data.choices[0].message.content.replace(/<think>[\s\S]*?<\/think>/gi, '')
 }
 
+/** Parses a JSON object out of a raw AI response, tolerating markdown code fences and stray text around the object. */
+function parseRecipeJson(raw) {
+  let cleaned = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
+  try {
+    return JSON.parse(cleaned)
+  } catch {}
+  const match = cleaned.match(/\{[\s\S]*\}/)
+  if (match) {
+    try {
+      return JSON.parse(match[0])
+    } catch {}
+  }
+  throw new Error(`Could not parse recipe from AI response: ${raw.slice(0, 300)}`)
+}
+
 export async function extractRecipe({ url, images, onProgress }) {
   let model, userContent
 
@@ -111,7 +127,7 @@ export async function extractRecipe({ url, images, onProgress }) {
           ] },
         ],
       })
-      combinedText += (combinedText ? '\n\n' : '') + text
+      combinedText += (combinedText ? '\n\n' : '') + `Photo ${i + 1}:\n${text}`
     }
     model = 'llama-3.1-8b-instant'
     userContent = `Extract the recipe from the following text, transcribed from ${images.length > 1 ? `${images.length} photos of the same recipe` : 'a photo'}, and return the JSON:\n\n${combinedText}`
@@ -139,9 +155,7 @@ export async function extractRecipe({ url, images, onProgress }) {
       { role: 'user', content: userContent },
     ],
   })
-  const match = text.match(/\{[\s\S]*\}/)
-  if (!match) throw new Error('Could not parse recipe from AI response')
-  return JSON.parse(match[0])
+  return parseRecipeJson(text)
 }
 
 export async function generateRecipe({ description }) {
