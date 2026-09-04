@@ -26,7 +26,6 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
   const [aiLoading, setAiLoading] = useState(false)
   const [aiImagesLoading, setAiImagesLoading] = useState(false)
   const [aiError, setAiError] = useState(null)
-  const [aiProgress, setAiProgress] = useState(null)
   const [f, setF] = useState({
     name: '',
     meal_type_id: defaultMealType || 'main',
@@ -130,17 +129,16 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
 
   const handleAiFromImage = async () => {
     if (!aiImages.length) return
-    setAiLoading(true); setAiError(null); setAiProgress(null)
+    setAiLoading(true); setAiError(null)
     try {
       const data = await extractRecipe({
         images: aiImages.map(({ base64, mediaType }) => ({ base64, mediaType })),
-        onProgress: (current, total) => setAiProgress({ current, total }),
       })
       applyAiResult(data)
     } catch (e) {
       setAiError(e.message)
     } finally {
-      setAiLoading(false); setAiProgress(null)
+      setAiLoading(false)
     }
   }
 
@@ -283,7 +281,7 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
               <Btn label={aiLoading ? '…' : 'Generate'} small onClick={handleAiFromDescription} disabled={aiLoading || !aiDescription.trim()}/>
             </div>
 
-            {aiLoading && <div style={{ ...mn, fontSize: 13, color: C.onSurfaceVariant, textAlign: 'center', padding: '10px 0 4px' }}>{aiProgress ? `Extracting photo ${aiProgress.current} of ${aiProgress.total}…` : 'Extracting recipe…'}</div>}
+            {aiLoading && <div style={{ ...mn, fontSize: 13, color: C.onSurfaceVariant, textAlign: 'center', padding: '10px 0 4px' }}>Extracting recipe…</div>}
           </div>
         )}
 
