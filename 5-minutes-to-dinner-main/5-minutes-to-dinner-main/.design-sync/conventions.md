@@ -38,9 +38,18 @@ Color palette actually in use (hex — these are not exported constants, just th
 | `onSurfaceVariant` | `#5c6a58` | Secondary/muted text, uppercase captions |
 | `outline` / `outlineVariant` | `#5c6a58` / `#c8d6c5` | Borders, dividers |
 
-Common patterns: 10px border-radius + `0 2px 12px rgba(45,96,47,0.08)` box-shadow for cards; 99px (pill) border-radius for buttons/badges/tags; uppercase + `0.06–0.08em` letter-spacing for small caption/label text.
+Common patterns: 10px border-radius + `0 1px 2px rgba(24,36,23,0.14)` box-shadow for cards; 99px (pill) border-radius for buttons/badges/tags; uppercase + `0.06–0.08em` letter-spacing for small caption/label text.
 
 **Screen title typography (app-level, not part of the synced component set):** the four bottom-nav tab screens (This week / Weekly planner / Shopping list / Batch cooking) share one header style — Caprasimo, 28px, `C.onSurface` — via the `screenTitle` token in `src/lib/theme.js`. Any new top-level screen header should use `screenTitle`, not a hand-rolled `fontSize`, so headers stay matched. Nested/detail-page titles (recipe detail, day detail, settings) are deliberately smaller (24–26px) and are not part of this token.
+
+## Check/tick affordance color rule
+
+Two circle-with-checkmark affordances exist side by side in this codebase and are **intentionally** different colors — this is a rule, not an inconsistency to fix:
+
+- **`primary` green (`#2d602f`)** = **selecting** an item (choosing it for a batch action, e.g. adding to a meal plan). See `RecipeCard`'s select circle and the freezer-item select circle in `RecipeSelectionScreen`.
+- **`tertiary` accent orange (`#e07a34`)** = **marking an item done** (completed/acquired). See the shopping-list checkbox in `ShoppingListScreen`.
+
+When adding a new check/tick-style circle, pick the color based on which of these two meanings it represents, not by copying whichever one is visually closest. Toggle-switch widgets (the pill-with-sliding-thumb pattern, e.g. `NewRecipeForm`'s attribute toggles and `FreezerScreen`'s in-stock toggle) are a distinct affordance from this circle pattern and are not bound by this rule — they currently use `primary` green regardless of whether the boolean they represent reads as "selected" or "possessed/done."
 
 ## Where the truth lives
 

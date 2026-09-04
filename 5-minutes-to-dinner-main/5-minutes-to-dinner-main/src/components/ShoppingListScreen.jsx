@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { C, ep, mn, CARD, screenTitle } from '../lib/theme.js'
+import { C, ep, mn, CARD, screenTitle, R } from '../lib/theme.js'
 import { WEEK_LBL } from '../lib/dateHelpers.js'
 import { Spinner, HDivider, Btn, Icon } from './ui/index.js'
 import { BuyersEyeSheet } from './BuyersEyeSheet.jsx'
@@ -58,7 +58,7 @@ export function ShoppingListScreen({shopping,onToggle,loading,error,onRegenerate
           {!loading&&shopping.length>0&&<div style={{...mn,fontSize:12,color:C.primary,marginTop:2,fontWeight:600}}>{unc} item{unc!==1?'s':''} remaining</div>}
         </div>
         {shopping.length>0&&!loading&&(
-          <button onClick={onRegenerate} title='Regenerate' style={{display:'flex',alignItems:'center',gap:8,border:'none',background:C.secondaryContainer,color:'#924b1a',borderRadius:999,padding:'7px 14px',...mn,fontWeight:700,fontSize:12,whiteSpace:'nowrap',cursor:'pointer',flexShrink:0}}>
+          <button onClick={onRegenerate} title='Regenerate' style={{display:'flex',alignItems:'center',gap:8,border:'none',background:C.secondaryContainer,color:C.onSecondaryContainerStrong,borderRadius:R.pill,padding:'7px 14px',...mn,fontWeight:700,fontSize:12,whiteSpace:'nowrap',cursor:'pointer',flexShrink:0}}>
             <Icon name='refreshCw' size={14}/>Generate
           </button>
         )}
@@ -87,7 +87,7 @@ export function ShoppingListScreen({shopping,onToggle,loading,error,onRegenerate
               <div style={{...CARD,padding:0,overflow:'hidden'}}>
                 {items.map((item,i)=>(
                   <div key={item.id} onClick={()=>onToggle(item.id)} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 14px',borderBottom:i<items.length-1?`1px solid ${C.outlineVariant}25`:undefined,cursor:'pointer'}}>
-                    <div style={{width:22,height:22,borderRadius:99,border:`2px solid ${item.checked?C.tertiary:C.outlineVariant}`,background:item.checked?C.tertiary:'transparent',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                    <div style={{width:22,height:22,borderRadius:R.pill,border:`2px solid ${item.checked?C.tertiary:C.outlineVariant}`,background:item.checked?C.tertiary:'transparent',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
                       {item.checked&&<Icon name='check' size={13} color={C.onPrimary}/>}
                     </div>
                     <span style={{...mn,fontSize:14,flex:1,opacity:item.checked?0.45:1,textDecoration:item.checked?'line-through':'none',color:C.onSurface}}>{item.name}</span>
@@ -116,7 +116,7 @@ export function ShoppingListScreen({shopping,onToggle,loading,error,onRegenerate
       )}
       {unc>0&&!loading&&(
         <div style={{position:'sticky',bottom:10,padding:'8px 0'}}>
-          <button onClick={copyUnchecked} style={{width:'100%',background:C.primary,color:C.onPrimary,border:'none',borderRadius:99,padding:'15px',...mn,fontSize:15,fontWeight:700,cursor:'pointer',boxShadow:'0 4px 20px rgba(45,96,47,0.3)',display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+          <button onClick={copyUnchecked} style={{width:'100%',background:C.primary,color:C.onPrimary,border:'none',borderRadius:R.pill,padding:'15px',...mn,fontSize:15,fontWeight:700,cursor:'pointer',boxShadow:'0 4px 20px rgba(45,96,47,0.3)',display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
             <Icon name={copied?'check':'clipboardCheck'} size={17} color={C.onPrimary}/>{copied?'Copied':'Copy to text'}
           </button>
         </div>

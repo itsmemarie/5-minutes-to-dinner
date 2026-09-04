@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { C, ep, mn, CARD } from '../lib/theme.js'
+import { C, ep, mn, CARD, R } from '../lib/theme.js'
 import { DAY_LBL } from '../lib/dateHelpers.js'
 import { Btn, Stepper } from './ui/index.js'
 import { Icon } from './ui/Icon.jsx'
@@ -32,7 +32,7 @@ export function DailyPlanScreen({day,plan,recipes,updatePortion,removeMeal,onAdd
                   </span>
                 </div>
               )}
-              <div onClick={()=>onAddToSection(day,s.key)} style={{border:`2px dashed ${C.outlineVariant}`,borderRadius:10,padding:20,display:'flex',flexDirection:'column',alignItems:'center',gap:6,cursor:'pointer'}}>
+              <div onClick={()=>onAddToSection(day,s.key)} style={{border:`2px dashed ${C.outlineVariant}`,borderRadius:R.md,padding:20,display:'flex',flexDirection:'column',alignItems:'center',gap:6,cursor:'pointer'}}>
                 <Icon name='circlePlus' size={26} color={C.outlineVariant}/>
                 <span style={{...mn,fontSize:13,color:C.outlineVariant}}>Tap to add {s.label.toLowerCase()}</span>
               </div>

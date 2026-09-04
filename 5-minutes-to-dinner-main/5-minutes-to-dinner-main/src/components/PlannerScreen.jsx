@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { C, ep, mn, CARD, screenTitle } from '../lib/theme.js'
+import { C, ep, mn, CARD, screenTitle, R } from '../lib/theme.js'
 import { DAYS, DAY_LBL, TODAY, WEEK_LBL } from '../lib/dateHelpers.js'
 import { Btn, Icon } from './ui/index.js'
 
@@ -18,9 +18,9 @@ export function PlannerScreen({plan,removeMeal,moveMeal,duplicateMeal,updatePort
     <div style={{padding:'16px 20px 20px'}}>
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:18}}>
         <div style={{...screenTitle,color:C.onSurface}}>Weekly planner</div>
-        <span style={{...mn,fontSize:12,color:C.onSurfaceVariant,background:C.surfaceContainerHigh,padding:'5px 12px',borderRadius:99,whiteSpace:'nowrap'}}>{WEEK_LBL}</span>
+        <span style={{...mn,fontSize:12,color:C.onSurfaceVariant,background:C.surfaceContainerHigh,padding:'5px 12px',borderRadius:R.pill,whiteSpace:'nowrap'}}>{WEEK_LBL}</span>
       </div>
-      <button onClick={onNutrition} style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,border:'none',background:C.secondaryContainer,color:'#924b1a',borderRadius:999,padding:'12px 14px',...mn,fontWeight:700,fontSize:14,whiteSpace:'nowrap',cursor:'pointer',marginBottom:20}}>
+      <button onClick={onNutrition} style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,border:'none',background:C.secondaryContainer,color:'#924b1a',borderRadius:R.pill,padding:'12px 14px',...mn,fontWeight:700,fontSize:14,whiteSpace:'nowrap',cursor:'pointer',marginBottom:20}}>
         <Icon name='barChart3' size={16}/>Calculate nutritional insights
       </button>
       {DAYS.map(day=>{
@@ -32,7 +32,7 @@ export function PlannerScreen({plan,removeMeal,moveMeal,duplicateMeal,updatePort
               <span style={{...ep,fontSize:16,color:isToday?C.primary:C.onSurface}}>{DAY_LBL[day]}</span>
               {isToday&&(
                 <span style={{...mn,fontSize:11,fontWeight:700,letterSpacing:'0.05em',textTransform:'uppercase',display:'inline-flex',alignItems:'center',gap:6,color:C.tertiary}}>
-                  <span style={{width:6,height:6,borderRadius:99,background:C.tertiary,display:'inline-block'}}/>Today
+                  <span style={{width:6,height:6,borderRadius:R.pill,background:C.tertiary,display:'inline-block'}}/>Today
                 </span>
               )}
             </div>
@@ -40,7 +40,7 @@ export function PlannerScreen({plan,removeMeal,moveMeal,duplicateMeal,updatePort
               <div onDragOver={e=>onDragOver(e,day)} onDragLeave={onDragLeave} onDrop={e=>onDrop(e,day)} style={{...CARD,padding:22,display:'flex',flexDirection:'column',alignItems:'center',gap:8,outline:over===day&&drag?.fromDay!==day?`2px solid ${C.primary}`:'2px solid transparent',transition:'outline 0.12s'}}>
                 <Icon name='utensilsCrossed' size={24} color={C.outlineVariant}/>
                 <span style={{...mn,fontSize:12,color:C.outlineVariant,fontStyle:'italic'}}>"So you're going hungry."</span>
-                <button onClick={()=>onDayOpen(day)} style={{...mn,display:'flex',alignItems:'center',gap:6,background:'none',border:`1px solid ${C.primary}`,color:C.primary,borderRadius:8,padding:'6px 14px',fontSize:12,fontWeight:700,cursor:'pointer',marginTop:4}}>
+                <button onClick={()=>onDayOpen(day)} style={{...mn,display:'flex',alignItems:'center',gap:6,background:'none',border:`1px solid ${C.primary}`,color:C.primary,borderRadius:R.sm,padding:'6px 14px',fontSize:12,fontWeight:700,cursor:'pointer',marginTop:4}}>
                   <Icon name='plus' size={13}/>Plan meals
                 </button>
               </div>
@@ -54,7 +54,7 @@ export function PlannerScreen({plan,removeMeal,moveMeal,duplicateMeal,updatePort
                         <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
                           <span style={{...mn,fontSize:11,color:C.onSurface,opacity:0.55}}>{SEC_LBL[m.section]}</span>
                           <span style={{...mn,fontSize:11,color:C.onSurface,opacity:0.6}}>{m.prep}m</span>
-                          <span onClick={e=>{e.stopPropagation();setServingsOpenId(id=>id===m.id?null:m.id)}} style={{...mn,fontSize:11,fontWeight:700,display:'inline-flex',alignItems:'center',gap:3,background:C.primaryFixed,color:C.primary,padding:'2px 7px',borderRadius:99,cursor:'pointer'}}>
+                          <span onClick={e=>{e.stopPropagation();setServingsOpenId(id=>id===m.id?null:m.id)}} style={{...mn,fontSize:11,fontWeight:700,display:'inline-flex',alignItems:'center',gap:3,background:C.primaryFixed,color:C.primary,padding:'2px 7px',borderRadius:R.pill,cursor:'pointer'}}>
                             <Icon name='utensilsCrossed' size={11} color={C.primary}/>{m.portion}
                             <span style={{display:'flex',transform:servingsOpenId===m.id?'rotate(-90deg)':'rotate(90deg)',transition:'transform 0.15s'}}><Icon name='chevronRight' size={10} color={C.primary}/></span>
                           </span>
@@ -64,11 +64,11 @@ export function PlannerScreen({plan,removeMeal,moveMeal,duplicateMeal,updatePort
                       <button onClick={e=>{e.stopPropagation();removeMeal(day,m.section,m.id)}} title='Remove' style={{width:26,height:26,flexShrink:0,marginLeft:16,border:'none',background:'none',color:C.outlineVariant,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}><Icon name='x' size={14} color={C.outlineVariant}/></button>
                     </div>
                     {servingsOpenId===m.id&&(
-                      <div onClick={e=>e.stopPropagation()} style={{marginTop:8,padding:'10px 12px',background:C.primaryFixed,borderRadius:10,display:'flex',alignItems:'center',gap:10}}>
+                      <div onClick={e=>e.stopPropagation()} style={{marginTop:8,padding:'10px 12px',background:C.primaryFixed,borderRadius:R.md,display:'flex',alignItems:'center',gap:10}}>
                         <span style={{...mn,fontSize:12,color:C.primary,flex:1}}>Adjust servings for this meal</span>
-                        <button onClick={()=>updatePortion(day,m.section,m.id,m.portion-1)} style={{width:26,height:26,borderRadius:99,border:`1px solid ${C.outlineVariant}`,background:C.white,color:C.onSurface,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer'}}><Icon name='minus' size={12} color={C.onSurface}/></button>
+                        <button onClick={()=>updatePortion(day,m.section,m.id,m.portion-1)} style={{width:26,height:26,borderRadius:R.pill,border:`1px solid ${C.outlineVariant}`,background:C.white,color:C.onSurface,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer'}}><Icon name='minus' size={12} color={C.onSurface}/></button>
                         <span style={{...mn,fontWeight:700,fontSize:14,minWidth:14,textAlign:'center',color:C.primary}}>{m.portion}</span>
-                        <button onClick={()=>updatePortion(day,m.section,m.id,m.portion+1)} style={{width:26,height:26,borderRadius:99,border:'none',background:C.primary,color:C.onPrimary,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer'}}><Icon name='plus' size={12} color={C.onPrimary}/></button>
+                        <button onClick={()=>updatePortion(day,m.section,m.id,m.portion+1)} style={{width:26,height:26,borderRadius:R.pill,border:'none',background:C.primary,color:C.onPrimary,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer'}}><Icon name='plus' size={12} color={C.onPrimary}/></button>
                       </div>
                     )}
                   </div>

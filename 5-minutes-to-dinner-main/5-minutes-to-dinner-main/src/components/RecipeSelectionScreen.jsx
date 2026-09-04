@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { C, mn, CARD } from '../lib/theme.js'
+import { C, mn, CARD, R } from '../lib/theme.js'
 import { DAYS } from '../lib/dateHelpers.js'
 import { Btn, PillBtn } from './ui/index.js'
 import { RecipeBucket } from './RecipeBucket.jsx'
@@ -71,7 +71,7 @@ export function RecipeSelectionScreen({day,section,plan,recipes,freezerItems,onA
       {showNewRecipe&&<NewRecipeForm defaultMealType={section==='breakfast'?'breakfast':section==='side'?'side':'main'} onSave={handleRecipeCreated} onCancel={()=>setShowNewRecipe(false)}/>}
       <div style={{flex:1,padding:'12px 20px 120px'}}>
         <div style={{display:'flex',gap:8,marginBottom:12,alignItems:'center'}}>
-          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder='🔍 Search meals…' style={{flex:1,padding:'10px 14px',borderRadius:12,border:`1px solid ${C.outlineVariant}`,fontSize:14,...mn,background:C.white,outline:'none'}}/>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder='🔍 Search meals…' style={{flex:1,padding:'10px 14px',borderRadius:R.md,border:`1px solid ${C.outlineVariant}`,fontSize:14,...mn,background:C.white,outline:'none'}}/>
           <Btn label='+ New' small onClick={()=>setShowNewRecipe(true)}/>
         </div>
         <div style={{display:'flex',gap:8,marginBottom:16,overflowX:'auto',paddingBottom:4}}>
@@ -96,7 +96,7 @@ export function RecipeSelectionScreen({day,section,plan,recipes,freezerItems,onA
                 return (
                   <div key={item.id} onClick={()=>toggleFreezer(item.id)} style={{...CARD,background:C.surfaceContainerHigh,padding:'12px 14px',display:'flex',alignItems:'center',gap:12,cursor:'pointer',marginBottom:8}}>
                     <div style={{flex:1,...mn,fontSize:14,fontWeight:600,color:C.onSurface}}>{item.name}</div>
-                    <div style={{width:30,height:30,borderRadius:99,border:`2px solid ${sel?C.primary:C.outlineVariant}`,background:sel?C.primary:'transparent',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,color:sel?C.onPrimary:C.outline,fontSize:14,fontWeight:700}}>
+                    <div style={{width:30,height:30,borderRadius:R.pill,border:`2px solid ${sel?C.primary:C.outlineVariant}`,background:sel?C.primary:'transparent',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,color:sel?C.onPrimary:C.outline,fontSize:14,fontWeight:700}}>
                       {sel?'✓':'+'}
                     </div>
                   </div>

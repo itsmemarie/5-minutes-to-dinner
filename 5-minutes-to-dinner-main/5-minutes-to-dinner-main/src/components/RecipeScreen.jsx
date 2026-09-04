@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { fetchRecipeDetails, fetchRecipeNotes, saveRecipeNotes, fetchRecipeToddlerTask, saveRecipeToddlerTask } from '../lib/supabase.js'
 import { callEdgeFn } from '../lib/ai.js'
-import { C, ep, mn, CARD } from '../lib/theme.js'
+import { C, ep, mn, CARD, R } from '../lib/theme.js'
 import { ageBandFromDob, TODDLER_AGE_BANDS } from '../lib/dateHelpers.js'
 import { parseIngredients, parseIngredientParts, parseSteps } from '../lib/recipeParsing.js'
 import { Spinner, Btn } from './ui/index.js'
@@ -80,7 +80,7 @@ export function RecipeScreen({ recipeId, portion, onAddMeal, toddlerDob, onOpenT
   return (
     <div style={{padding:'20px 20px 40px'}}>
       {data.has_thermomix_version&&(
-        <div style={{display:'inline-flex',alignItems:'center',gap:6,background:C.primary,borderRadius:99,padding:'5px 12px',marginBottom:12}}>
+        <div style={{display:'inline-flex',alignItems:'center',gap:6,background:C.primary,borderRadius:R.pill,padding:'5px 12px',marginBottom:12}}>
           <span style={{fontSize:12}}>⚡</span>
           <span style={{...mn,fontSize:10,fontWeight:700,color:C.onPrimary,letterSpacing:'0.08em'}}>THERMOMIX RECIPE: YES</span>
         </div>
@@ -105,7 +105,7 @@ export function RecipeScreen({ recipeId, portion, onAddMeal, toddlerDob, onOpenT
           <div style={{...mn,fontSize:10,fontWeight:700,color:C.onSurfaceVariant,letterSpacing:'0.06em',marginBottom:6}}>SAVED PORTIONS</div>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
             <span style={{...mn,fontSize:15,fontWeight:700,color:C.onSurface}}>{scaledFor} servings</span>
-            {scale!==1&&<span style={{...mn,fontSize:11,fontWeight:700,background:C.primaryFixed,color:C.primary,padding:'2px 7px',borderRadius:99}}>{scale.toFixed(1)}x</span>}
+            {scale!==1&&<span style={{...mn,fontSize:11,fontWeight:700,background:C.primaryFixed,color:C.primary,padding:'2px 7px',borderRadius:R.pill}}>{scale.toFixed(1)}x</span>}
           </div>
         </div>
         <div style={{...CARD,padding:'12px 14px'}}>
@@ -127,7 +127,7 @@ export function RecipeScreen({ recipeId, portion, onAddMeal, toddlerDob, onOpenT
         <div style={{marginBottom:20}}>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
             <span style={{...ep,fontSize:18,color:C.onSurface}}>Ingredients</span>
-            <span style={{...mn,fontSize:11,fontWeight:700,background:C.primaryFixed,color:C.primary,padding:'3px 10px',borderRadius:99}}>Scaled for {scaledFor} portions</span>
+            <span style={{...mn,fontSize:11,fontWeight:700,background:C.primaryFixed,color:C.primary,padding:'3px 10px',borderRadius:R.pill}}>Scaled for {scaledFor} portions</span>
           </div>
           {ingSections.map((sec,si)=>(
             <div key={si} style={{marginBottom:12}}>
@@ -162,7 +162,7 @@ export function RecipeScreen({ recipeId, portion, onAddMeal, toddlerDob, onOpenT
                 <div style={{padding:'12px 16px',display:'flex',flexDirection:'column',gap:14}}>
                   {stdSteps.map((step,i)=>(
                     <div key={i} style={{display:'flex',gap:12}}>
-                      <div style={{width:24,height:24,borderRadius:99,background:C.secondaryContainer,color:C.onSecondaryContainer,...mn,fontSize:12,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:2}}>{step.num}</div>
+                      <div style={{width:24,height:24,borderRadius:R.pill,background:C.secondaryContainer,color:C.onSecondaryContainer,...mn,fontSize:12,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:2}}>{step.num}</div>
                       <p style={{...mn,fontSize:13,color:C.onSurface,lineHeight:1.7,margin:0,flex:1}}>{step.text}</p>
                     </div>
                   ))}
@@ -183,7 +183,7 @@ export function RecipeScreen({ recipeId, portion, onAddMeal, toddlerDob, onOpenT
                 <div style={{padding:'12px 16px',display:'flex',flexDirection:'column',gap:14}}>
                   {tmSteps.map((step,i)=>(
                     <div key={i} style={{display:'flex',gap:12}}>
-                      <div style={{width:24,height:24,borderRadius:99,background:C.primary,color:C.onPrimary,...mn,fontSize:12,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:2}}>{step.num}</div>
+                      <div style={{width:24,height:24,borderRadius:R.pill,background:C.primary,color:C.onPrimary,...mn,fontSize:12,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:2}}>{step.num}</div>
                       <p style={{...mn,fontSize:13,color:C.onSurface,lineHeight:1.7,margin:0,flex:1}}>{step.text}</p>
                     </div>
                   ))}
@@ -235,9 +235,9 @@ export function RecipeScreen({ recipeId, portion, onAddMeal, toddlerDob, onOpenT
           {toddlerTaskLoading&&<p style={{...mn,fontSize:13,color:C.onSurfaceVariant,margin:0}}>Finding an age-appropriate task…</p>}
           {toddlerTaskError&&<p style={{...mn,fontSize:13,color:C.error,margin:0}}>⚠️ {toddlerTaskError}</p>}
           {toddlerTask&&!toddlerTaskLoading&&(<>
-            <div style={{display:'inline-block',...mn,fontSize:10,fontWeight:700,color:C.accent2_700,background:C.white,padding:'2px 8px',borderRadius:99,marginBottom:8}}>{(toddlerTask.age_band_label||'').toUpperCase()}</div>
+            <div style={{display:'inline-block',...mn,fontSize:10,fontWeight:700,color:C.accent2_700,background:C.white,padding:'2px 8px',borderRadius:R.pill,marginBottom:8}}>{(toddlerTask.age_band_label||'').toUpperCase()}</div>
             <p style={{...mn,fontSize:13,color:C.onSurface,lineHeight:1.7,margin:0,marginBottom:toddlerTask.needs_tool?8:0}}>{toddlerTask.task}</p>
-            {toddlerTask.needs_tool&&<div style={{...mn,fontSize:11,fontWeight:700,color:C.primary,background:C.primaryFixed,padding:'4px 10px',borderRadius:8,display:'inline-block',marginBottom:8}}>Needs: {toddlerTask.needs_tool}</div>}
+            {toddlerTask.needs_tool&&<div style={{...mn,fontSize:11,fontWeight:700,color:C.primary,background:C.primaryFixed,padding:'4px 10px',borderRadius:R.sm,display:'inline-block',marginBottom:8}}>Needs: {toddlerTask.needs_tool}</div>}
             {onOpenToddlerCooking&&<div><button onClick={onOpenToddlerCooking} style={{...mn,fontSize:12,fontWeight:700,color:C.primary,background:'none',border:'none',padding:0,cursor:'pointer'}}>More toddler activities →</button></div>}
           </>)}
         </div>
@@ -254,7 +254,7 @@ export function RecipeScreen({ recipeId, portion, onAddMeal, toddlerDob, onOpenT
             <button
               onClick={handleNotesSave}
               disabled={notesSaving}
-              style={{...mn,fontSize:12,fontWeight:700,color:C.onPrimary,background:C.primary,border:'none',borderRadius:99,padding:'5px 14px',cursor:'pointer',opacity:notesSaving?0.6:1}}
+              style={{...mn,fontSize:12,fontWeight:700,color:C.onPrimary,background:C.primary,border:'none',borderRadius:R.pill,padding:'5px 14px',cursor:'pointer',opacity:notesSaving?0.6:1}}
             >
               {notesSaving?'Saving…':'Save'}
             </button>

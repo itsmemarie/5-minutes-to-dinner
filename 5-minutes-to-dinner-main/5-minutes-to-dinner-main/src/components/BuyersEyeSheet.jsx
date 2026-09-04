@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { C, ep, mn, CARD } from '../lib/theme.js'
+import { C, ep, mn, CARD, R } from '../lib/theme.js'
 import { Spinner, Btn, Icon } from './ui/index.js'
 import { callEdgeFn } from '../lib/ai.js'
 import { fetchProduceGuide, matchProduceGuide, mergeProduceGuideAliases, insertProduceGuide } from '../lib/supabase.js'
@@ -77,13 +77,13 @@ export function BuyersEyeSheet({item, guideId, onClose, onResolved}){
     <div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:50,display:'flex',justifyContent:'center',alignItems:'flex-end'}}>
       <div onClick={e=>e.stopPropagation()} style={{width:'100%',maxWidth:430,maxHeight:'80vh',overflowY:'auto',background:C.white,borderRadius:'20px 20px 0 0',padding:'12px 20px 28px',transform:`translateY(${dragY}px)`,transition:dragging?'none':'transform 0.2s'}}>
         <div onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} style={{cursor:'grab',paddingBottom:8}}>
-          <div style={{width:36,height:4,borderRadius:99,background:C.outlineVariant,margin:'0 auto 14px'}}/>
+          <div style={{width:36,height:4,borderRadius:R.pill,background:C.outlineVariant,margin:'0 auto 14px'}}/>
           <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:status==='ready'?4:14}}>
             <div style={{flex:1}}>
               <div style={{...mn,fontSize:11,fontWeight:700,color:C.tertiary,textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:2}}>👁 Buyer's Eye</div>
               {status==='ready'&&<div style={{...ep,fontSize:20,color:C.onSurface}}>{guide.emoji?`${guide.emoji} `:''}{guide.produce_name}</div>}
             </div>
-            <button onClick={onClose} style={{border:'none',background:C.surfaceContainerHigh,borderRadius:99,padding:6,display:'flex',cursor:'pointer',flexShrink:0}}>
+            <button onClick={onClose} style={{border:'none',background:C.surfaceContainerHigh,borderRadius:R.pill,padding:6,display:'flex',cursor:'pointer',flexShrink:0}}>
               <Icon name='x' size={16} color={C.onSurfaceVariant}/>
             </button>
           </div>
@@ -120,7 +120,7 @@ export function BuyersEyeSheet({item, guideId, onClose, onResolved}){
             </div>
             {guide.season_uk&&(
               <div style={{marginTop:14,display:'flex'}}>
-                <span style={{...mn,fontSize:11,fontWeight:700,color:C.onSurfaceVariant,background:C.surfaceContainerHigh,borderRadius:99,padding:'5px 12px'}}>📅 {guide.season_uk}</span>
+                <span style={{...mn,fontSize:11,fontWeight:700,color:C.onSurfaceVariant,background:C.surfaceContainerHigh,borderRadius:R.pill,padding:'5px 12px'}}>📅 {guide.season_uk}</span>
               </div>
             )}
           </>

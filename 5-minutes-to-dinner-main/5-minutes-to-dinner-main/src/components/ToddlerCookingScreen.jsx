@@ -1,4 +1,4 @@
-import { C, ep, mn, CARD } from '../lib/theme.js'
+import { C, ep, mn, CARD, R } from '../lib/theme.js'
 import { TODDLER_AGE_BANDS } from '../lib/dateHelpers.js'
 import { Spinner, Btn, Icon } from './ui/index.js'
 
@@ -39,7 +39,7 @@ export function ToddlerCookingScreen({ guide, loading, error, activeBand, setAct
 
         <div style={{display:'flex',gap:6,padding:'0 0 14px',overflowX:'auto'}}>
           {TODDLER_AGE_BANDS.map(b=>(
-            <button key={b.id} onClick={()=>setActiveBand(b.id)} style={{...mn,padding:'8px 14px',borderRadius:99,border:'none',background:activeBand===b.id?C.primary:C.secondaryContainer,color:activeBand===b.id?C.onPrimary:C.onSecondaryContainer,fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap',flexShrink:0}}>{b.label}</button>
+            <button key={b.id} onClick={()=>setActiveBand(b.id)} style={{...mn,padding:'8px 14px',borderRadius:R.pill,border:'none',background:activeBand===b.id?C.primary:C.secondaryContainer,color:activeBand===b.id?C.onPrimary:C.onSecondaryContainer,fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap',flexShrink:0}}>{b.label}</button>
           ))}
         </div>
 
@@ -52,7 +52,7 @@ export function ToddlerCookingScreen({ guide, loading, error, activeBand, setAct
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{...mn,fontSize:13,fontWeight:700,color:C.onSurface,marginBottom:2}}>{t.title}</div>
                     <p style={{...mn,fontSize:12,color:C.onSurfaceVariant,lineHeight:1.6,margin:0,marginBottom:t.needsTool?6:0}}>{t.description}</p>
-                    {t.needsTool&&<div style={{...mn,fontSize:11,fontWeight:700,color:C.primary,background:C.primaryFixed,padding:'4px 10px',borderRadius:8,display:'inline-block'}}>Needs: {t.needsTool}</div>}
+                    {t.needsTool&&<div style={{...mn,fontSize:11,fontWeight:700,color:C.primary,background:C.primaryFixed,padding:'4px 10px',borderRadius:R.sm,display:'inline-block'}}>Needs: {t.needsTool}</div>}
                   </div>
                 </div>
               ))}

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { C, ep, mn, CARD } from '../lib/theme.js'
+import { C, ep, mn, CARD, R } from '../lib/theme.js'
 import { Btn } from './ui/index.js'
 import { extractFreezerItems } from '../lib/ai.js'
 import { compressImageFiles } from '../lib/imageHelpers.js'
@@ -12,7 +12,7 @@ export function FreezerScreen({items,onReplace,onAddOne,onToggleStock,onDelete})
   const [imagesLoading,setImagesLoading]=useState(false)
   const [error,setError]=useState(null)
 
-  const inp=(extra)=>({...mn,width:'100%',padding:'10px 12px',borderRadius:10,border:`1px solid ${C.outlineVariant}`,fontSize:14,background:C.white,outline:'none',boxSizing:'border-box',...extra})
+  const inp=(extra)=>({...mn,width:'100%',padding:'10px 12px',borderRadius:R.md,border:`1px solid ${C.outlineVariant}`,fontSize:14,background:C.white,outline:'none',boxSizing:'border-box',...extra})
 
   const handleImageSelect=async(e)=>{
     const files=Array.from(e.target.files||[])
@@ -71,7 +71,7 @@ export function FreezerScreen({items,onReplace,onAddOne,onToggleStock,onDelete})
       <div style={{...ep,fontSize:26,color:C.onSurface,marginBottom:4}}>Freezer</div>
       <div style={{...mn,fontSize:13,color:C.onSurfaceVariant,marginBottom:20,lineHeight:1.5}}>Import a list to use when planning meals. Importing a new list replaces your entire current inventory.</div>
 
-      {error&&<div style={{...mn,fontSize:13,color:C.error,background:C.errorContainer,padding:'10px 14px',borderRadius:10,marginBottom:16}}>{error}</div>}
+      {error&&<div style={{...mn,fontSize:13,color:C.error,background:C.errorContainer,padding:'10px 14px',borderRadius:R.md,marginBottom:16}}>{error}</div>}
 
       <div style={{...CARD,padding:'16px 16px',marginBottom:16}}>
         <div style={{...mn,fontSize:11,fontWeight:700,color:C.onSurfaceVariant,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:8}}>Paste a list</div>
@@ -87,14 +87,14 @@ export function FreezerScreen({items,onReplace,onAddOne,onToggleStock,onDelete})
 
       <div style={{...CARD,padding:'16px 16px',marginBottom:20}}>
         <div style={{...mn,fontSize:11,fontWeight:700,color:C.onSurfaceVariant,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:8}}>Upload a photo</div>
-        <label style={{display:'block',border:`2px dashed ${C.outlineVariant}`,borderRadius:10,padding:'14px 16px',textAlign:'center',cursor:(busy||imagesLoading)?'not-allowed':'pointer',background:C.white}}>
+        <label style={{display:'block',border:`2px dashed ${C.outlineVariant}`,borderRadius:R.md,padding:'14px 16px',textAlign:'center',cursor:(busy||imagesLoading)?'not-allowed':'pointer',background:C.white}}>
           <input type='file' accept='image/*' multiple onChange={handleImageSelect} style={{display:'none'}} disabled={busy||imagesLoading}/>
           <div style={{...mn,fontSize:13,color:images.length?C.onSurface:C.onSurfaceVariant}}>{imagesLoading?'Compressing photo(s)…':images.length?`Tap to add more photos (${images.length} selected)`:'Tap to choose photo(s) of your freezer list'}</div>
         </label>
         {images.length>0&&(
           <div style={{display:'flex',flexDirection:'column',gap:6,marginTop:10}}>
             {images.map((img,idx)=>(
-              <div key={idx} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 10px',borderRadius:8,background:C.white,border:`1px solid ${C.outlineVariant}40`}}>
+              <div key={idx} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 10px',borderRadius:R.sm,background:C.white,border:`1px solid ${C.outlineVariant}40`}}>
                 <span style={{...mn,fontSize:13,color:C.onSurface,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>📷 {img.name}</span>
                 <button onClick={()=>removeImage(idx)} disabled={busy} style={{border:'none',background:'none',color:C.error,fontSize:16,cursor:busy?'not-allowed':'pointer',padding:'0 4px',lineHeight:1}}>×</button>
               </div>
@@ -122,8 +122,8 @@ export function FreezerScreen({items,onReplace,onAddOne,onToggleStock,onDelete})
       ):items.map(item=>(
         <div key={item.id} style={{...CARD,padding:'10px 14px',display:'flex',alignItems:'center',gap:10,marginBottom:8}}>
           <span style={{...mn,fontSize:14,color:item.in_stock?C.onSurface:C.onSurfaceVariant,flex:1,textDecorationLine:item.in_stock?'none':'line-through'}}>{item.name}</span>
-          <div onClick={()=>onToggleStock(item.id,!item.in_stock)} style={{width:40,height:22,borderRadius:99,background:item.in_stock?C.primary:C.outlineVariant,position:'relative',transition:'background 0.2s',flexShrink:0,cursor:'pointer'}}>
-            <div style={{position:'absolute',top:3,left:item.in_stock?21:3,width:16,height:16,borderRadius:99,background:'#fff',transition:'left 0.2s'}}/>
+          <div onClick={()=>onToggleStock(item.id,!item.in_stock)} style={{width:40,height:22,borderRadius:R.pill,background:item.in_stock?C.primary:C.outlineVariant,position:'relative',transition:'background 0.2s',flexShrink:0,cursor:'pointer'}}>
+            <div style={{position:'absolute',top:3,left:item.in_stock?21:3,width:16,height:16,borderRadius:R.pill,background:'#fff',transition:'left 0.2s'}}/>
           </div>
           <button onClick={()=>onDelete(item.id)} style={{border:'none',background:'none',color:C.error,fontSize:18,cursor:'pointer',padding:'0 2px',lineHeight:1}}>×</button>
         </div>

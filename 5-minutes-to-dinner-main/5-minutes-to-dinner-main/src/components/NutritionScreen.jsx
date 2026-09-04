@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { C, mn, CARD } from '../lib/theme.js'
+import { C, mn, CARD, R } from '../lib/theme.js'
 import { Spinner, SecHead, Icon } from './ui/index.js'
 
 const METRIC_INFO = {
@@ -41,9 +41,9 @@ export function NutritionScreen({profile,setProfile,nutriData,nutriLoading,nutri
   const metrics=[{key:'gutHealth',label:'Gut Health',icon:'🦠'},{key:'vitaminMineral',label:'Vit & Mineral',icon:'💊'},{key:'inflammation',label:'Anti-Inflam.',icon:'🔥'},{key:'metabolic',label:'Metabolic',icon:'⚡'},{key:'antioxidant',label:'Antioxidant',icon:'🛡️'},{key:'overall',label:'Overall',icon:'❤️'}]
   return(
     <div style={{padding:'0 20px 20px'}}>
-      <div style={{display:'flex',background:C.surfaceContainerHigh,borderRadius:99,padding:3,margin:'16px 0'}}>
+      <div style={{display:'flex',background:C.surfaceContainerHigh,borderRadius:R.pill,padding:3,margin:'16px 0'}}>
         {['adult','toddler'].map(p=>(
-          <button key={p} onClick={()=>setProfile(p)} style={{...mn,flex:1,padding:'9px',borderRadius:99,border:'none',background:profile===p?C.primary:'transparent',color:profile===p?C.onPrimary:C.onSurfaceVariant,fontWeight:700,fontSize:13,cursor:'pointer',letterSpacing:'0.04em',textTransform:'uppercase'}}>
+          <button key={p} onClick={()=>setProfile(p)} style={{...mn,flex:1,padding:'9px',borderRadius:R.pill,border:'none',background:profile===p?C.primary:'transparent',color:profile===p?C.onPrimary:C.onSurfaceVariant,fontWeight:700,fontSize:13,cursor:'pointer',letterSpacing:'0.04em',textTransform:'uppercase'}}>
             {p==='adult'?'👤 Adult':'👶 Toddler'}
           </button>
         ))}
@@ -52,13 +52,13 @@ export function NutritionScreen({profile,setProfile,nutriData,nutriLoading,nutri
       {nutriError&&<div style={{...CARD,padding:16,marginBottom:16,borderLeft:`4px solid ${C.error}`}}><p style={{...mn,fontSize:13,color:C.error,margin:0}}>⚠️ {nutriError}</p></div>}
       {!nutriData&&!nutriLoading&&<div style={{...CARD,padding:20,marginBottom:16,textAlign:'center'}}>
         <p style={{...mn,fontSize:13,color:C.onSurfaceVariant,marginBottom:14,lineHeight:1.6}}>Get AI-powered nutritional insights for your week's meal plan.</p>
-        <button onClick={onAnalyse} style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,border:'none',background:C.secondaryContainer,color:'#924b1a',borderRadius:999,padding:'7px 14px',...mn,fontWeight:700,fontSize:12,whiteSpace:'nowrap',cursor:'pointer'}}>
+        <button onClick={onAnalyse} style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,border:'none',background:C.secondaryContainer,color:'#924b1a',borderRadius:R.pill,padding:'7px 14px',...mn,fontWeight:700,fontSize:12,whiteSpace:'nowrap',cursor:'pointer'}}>
           <Icon name='sparkles' size={14}/>Analyse This Week
         </button>
       </div>}
-      <div style={{background:C.primary,borderRadius:10,padding:'24px 20px',textAlign:'center',marginBottom:16}}>
+      <div style={{background:C.primary,borderRadius:R.md,padding:'24px 20px',textAlign:'center',marginBottom:16}}>
         <div style={{...mn,fontSize:11,fontWeight:700,letterSpacing:'0.07em',color:'rgba(255,255,255,0.65)',marginBottom:14,textTransform:'uppercase'}}>Overall Weekly Healthiness Score</div>
-        <div style={{width:88,height:88,borderRadius:99,border:'4px solid rgba(255,255,255,0.28)',display:'inline-flex',flexDirection:'column',alignItems:'center',justifyContent:'center',marginBottom:8}}>
+        <div style={{width:88,height:88,borderRadius:R.pill,border:'4px solid rgba(255,255,255,0.28)',display:'inline-flex',flexDirection:'column',alignItems:'center',justifyContent:'center',marginBottom:8}}>
           <div style={{...mn,fontWeight:700,fontSize:28,color:'#fff',lineHeight:1}}>{data.scores.overall}</div>
           <div style={{...mn,fontSize:10,color:'rgba(255,255,255,0.6)'}}>/ 100</div>
         </div>
@@ -84,7 +84,7 @@ export function NutritionScreen({profile,setProfile,nutriData,nutriLoading,nutri
             <div key={i} style={{...CARD,padding:'14px 16px',borderLeft:`4px solid ${bc}`}}>
               <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
                 <span style={{...mn,fontSize:14,fontWeight:700,color:C.onSurface,flex:1}}>{r.title}</span>
-                {r.type==='critical'&&<span style={{...mn,fontSize:10,fontWeight:700,background:C.errorContainer,color:C.error,padding:'2px 7px',borderRadius:99,textTransform:'uppercase'}}>Critical</span>}
+                {r.type==='critical'&&<span style={{...mn,fontSize:10,fontWeight:700,background:C.errorContainer,color:C.error,padding:'2px 7px',borderRadius:R.pill,textTransform:'uppercase'}}>Critical</span>}
               </div>
               <p style={{...mn,fontSize:12,color:C.onSurfaceVariant,lineHeight:1.6,margin:0}}>{r.text}</p>
             </div>
@@ -106,7 +106,7 @@ export function NutritionScreen({profile,setProfile,nutriData,nutriLoading,nutri
       <SecHead text='Understanding Your Scores'/>
       <div style={{...CARD,padding:20,textAlign:'center'}}>
         <p style={{...mn,fontSize:13,color:C.onSurfaceVariant,marginBottom:14,lineHeight:1.6}}>Curious what these numbers actually mean? See a simple breakdown of what each score looks at and how it's worked out.</p>
-        <button onClick={()=>setShowInfo(true)} style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,border:'none',background:C.secondaryContainer,color:'#924b1a',borderRadius:999,padding:'7px 14px',...mn,fontWeight:700,fontSize:12,whiteSpace:'nowrap',cursor:'pointer'}}>
+        <button onClick={()=>setShowInfo(true)} style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,border:'none',background:C.secondaryContainer,color:'#924b1a',borderRadius:R.pill,padding:'7px 14px',...mn,fontWeight:700,fontSize:12,whiteSpace:'nowrap',cursor:'pointer'}}>
           <Icon name='info' size={14}/>How Are These Calculated?
         </button>
       </div>
@@ -115,7 +115,7 @@ export function NutritionScreen({profile,setProfile,nutriData,nutriLoading,nutri
           <div onClick={e=>e.stopPropagation()} style={{width:'100%',maxWidth:430,maxHeight:'80vh',overflowY:'auto',background:C.white,borderRadius:'20px 20px 0 0',padding:'20px 20px 28px'}}>
             <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:14}}>
               <span style={{...mn,fontSize:16,fontWeight:700,color:C.onSurface,flex:1}}>How Your Scores Work</span>
-              <button onClick={()=>setShowInfo(false)} style={{border:'none',background:C.surfaceContainerHigh,borderRadius:99,padding:6,display:'flex',cursor:'pointer'}}>
+              <button onClick={()=>setShowInfo(false)} style={{border:'none',background:C.surfaceContainerHigh,borderRadius:R.pill,padding:6,display:'flex',cursor:'pointer'}}>
                 <Icon name='x' size={16} color={C.onSurfaceVariant}/>
               </button>
             </div>

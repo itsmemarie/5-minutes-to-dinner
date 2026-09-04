@@ -1,4 +1,5 @@
-import { C, ep, mn, CARD } from '../lib/theme.js'
+import { C, ep, mn, CARD, R } from '../lib/theme.js'
+import { Stepper } from './ui/Stepper.jsx'
 
 export function SettingsScreen({defPort,setDefPort}){
   return(
@@ -6,21 +7,14 @@ export function SettingsScreen({defPort,setDefPort}){
       <div style={{...ep,fontSize:26,color:C.onSurface,marginBottom:4}}>Settings</div>
       <div style={{...mn,fontSize:13,color:C.onSurfaceVariant,marginBottom:20}}>Customise your culinary experience</div>
       <div style={{...CARD}}>
-        <div style={{background:C.secondaryContainer,borderRadius:'10px 10px 0 0',padding:'12px 16px',display:'flex',alignItems:'center',gap:8}}>
+        <div style={{background:C.secondaryContainer,borderRadius:`${R.md}px ${R.md}px 0 0`,padding:'12px 16px',display:'flex',alignItems:'center',gap:8}}>
           <span style={{fontSize:18}}>🍴</span>
           <span style={{...ep,fontSize:16,color:C.onSecondaryContainer}}>Meal Planning Defaults</span>
         </div>
         <div style={{padding:'28px 20px',textAlign:'center'}}>
           <div style={{...ep,fontSize:16,color:C.onSurface,marginBottom:6}}>Default Portion Size</div>
           <div style={{...mn,fontSize:13,color:C.onSurfaceVariant,marginBottom:24,lineHeight:1.5}}>Base for scaling all recipes in your planner.</div>
-          <div style={{display:'inline-flex',alignItems:'center',gap:12,background:C.surfaceContainerHigh,borderRadius:99,padding:'12px 20px'}}>
-            <button onClick={()=>defPort>1&&setDefPort(defPort-1)} style={{width:36,height:36,borderRadius:8,border:`1px solid ${C.outlineVariant}`,background:C.white,color:defPort<=1?C.outlineVariant:C.onSurface,cursor:defPort<=1?'default':'pointer',fontSize:20,display:'flex',alignItems:'center',justifyContent:'center'}}>−</button>
-            <div style={{textAlign:'center',minWidth:50}}>
-              <div style={{...mn,fontWeight:700,fontSize:28,color:C.primary,lineHeight:1}}>{defPort}</div>
-              <div style={{...mn,fontSize:10,fontWeight:700,letterSpacing:'0.07em',color:C.onSurfaceVariant,marginTop:2}}>SERVINGS</div>
-            </div>
-            <button onClick={()=>setDefPort(defPort+1)} style={{width:36,height:36,borderRadius:8,background:C.primary,color:'#fff',border:'none',cursor:'pointer',fontSize:20,display:'flex',alignItems:'center',justifyContent:'center'}}>+</button>
-          </div>
+          <Stepper size="lg" caption="SERVINGS" value={defPort} min={1} onChange={setDefPort} />
         </div>
       </div>
       <div style={{marginTop:20,...CARD,padding:16}}>

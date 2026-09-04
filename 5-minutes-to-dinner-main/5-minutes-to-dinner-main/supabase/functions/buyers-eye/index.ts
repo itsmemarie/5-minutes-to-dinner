@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 
 const GROQ_KEY = (Deno.env.get('GROQ_API_KEY') ?? '').replace(/[^\x20-\x7E]/g, '').trim()
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
-const MODEL = 'llama-3.3-70b-versatile'
+const MODEL = 'openai/gpt-oss-120b'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -75,6 +75,7 @@ Deno.serve(async (req: Request) => {
         temperature: 0.3,
         max_tokens: 700,
         response_format: { type: 'json_object' },
+        include_reasoning: false,
       })
     })
 

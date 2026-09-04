@@ -8,7 +8,7 @@ import {
   fetchToddlerCookingGuide, saveToddlerCookingGuide,
 } from './supabase.js'
 import { callEdgeFn } from './ai.js'
-import { C, ep, mn } from './theme.js'
+import { C, ep, mn, R } from './theme.js'
 import { TODAY, DAYS, DAY_LBL, WEEK_OF, WEEK_LBL, uid, emptyWeek, ageBandFromDob } from './dateHelpers.js'
 import { Spinner, Btn, Icon } from '../components/ui/index.js'
 import { RecipeScreen } from '../components/RecipeScreen.jsx'
@@ -406,12 +406,12 @@ export default function App() {
 
   const headerTitle =
     screen === 'settings'        ? 'Settings'
-    : screen === 'dailyPlan'     ? 'Daily Plan'
-    : screen === 'recipeSelection' ? `${DAY_LBL[selDay]} | ${selSec === 'breakfast' ? 'Breakfast' : selSec === 'main' ? 'Main Meal' : 'Sides & Snacks'}`
-    : screen === 'nutrition'     ? 'Nutrition Insights'
-    : screen === 'recipe'        ? 'Recipe Details'
+    : screen === 'dailyPlan'     ? 'Daily plan'
+    : screen === 'recipeSelection' ? `${DAY_LBL[selDay]} | ${selSec === 'breakfast' ? 'Breakfast' : selSec === 'main' ? 'Main meal' : 'Sides & snacks'}`
+    : screen === 'nutrition'     ? 'Nutrition insights'
+    : screen === 'recipe'        ? 'Recipe details'
     : screen === 'freezerManage' ? 'Freezer'
-    : screen === 'toddlerCooking' ? 'Toddler Cooking'
+    : screen === 'toddlerCooking' ? 'Toddler cooking'
     : '5 Minutes to Dinner'
 
   const NAV = [{id:'home',icon:'home',label:'Home'},{id:'planner',icon:'calendar',label:'Planner'},{id:'list',icon:'cart',label:'Shopping'},{id:'batch',icon:'chefHat',label:'Batch'}]
@@ -450,8 +450,8 @@ export default function App() {
           <span style={{...ep,fontSize:screen?16:18,letterSpacing:'0.005em',color:C.onPrimary,flex:1}}>{headerTitle}</span>
           {!loading && !screen && (
             <div style={{display:'flex',alignItems:'center',gap:8}}>
-              {error && <div style={{width:6,height:6,borderRadius:99,background:'#ffb4a9'}} title='DB error'/>}
-              <button onClick={()=>setScreen('settings')} style={{border:'none',background:'rgba(255,255,255,0.16)',borderRadius:99,cursor:'pointer',width:34,height:34,display:'flex',alignItems:'center',justifyContent:'center'}}><Icon name='settings' size={17} color={C.onPrimary}/></button>
+              {error && <div style={{width:6,height:6,borderRadius:R.pill,background:'#ffb4a9'}} title='DB error'/>}
+              <button onClick={()=>setScreen('settings')} style={{border:'none',background:'rgba(255,255,255,0.16)',borderRadius:R.pill,cursor:'pointer',width:34,height:34,display:'flex',alignItems:'center',justifyContent:'center'}}><Icon name='settings' size={17} color={C.onPrimary}/></button>
             </div>
           )}
         </div>
@@ -461,7 +461,7 @@ export default function App() {
         <div style={{flexShrink:0,position:'sticky',bottom:0,zIndex:20,display:'flex',flexDirection:'column'}}>
           {tab === 'planner' && !screen && (
             <div style={{padding:'10px 20px'}}>
-              <button onClick={generateShoppingList} style={{width:'100%',background:C.primary,color:C.onPrimary,border:'none',borderRadius:99,padding:'15px',...mn,fontSize:15,fontWeight:700,cursor:'pointer',boxShadow:'0 4px 20px rgba(45,96,47,0.3)',display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+              <button onClick={generateShoppingList} style={{width:'100%',background:C.primary,color:C.onPrimary,border:'none',borderRadius:R.pill,padding:'15px',...mn,fontSize:15,fontWeight:700,cursor:'pointer',boxShadow:'0 4px 20px rgba(45,96,47,0.3)',display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
                 <Icon name='cart' size={17} color={C.onPrimary}/>Generate shopping list
               </button>
             </div>

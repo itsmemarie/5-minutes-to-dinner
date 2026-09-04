@@ -2,8 +2,9 @@ import { useState } from 'react'
 import { createRecipe } from '../lib/supabase.js'
 import { extractRecipe, generateRecipe } from '../lib/ai.js'
 import { resizeImageFiles } from '../lib/imageHelpers.js'
-import { C, ep, mn, CARD } from '../lib/theme.js'
+import { C, ep, mn, CARD, R } from '../lib/theme.js'
 import { Btn } from './ui/index.js'
+import { Icon } from './ui/Icon.jsx'
 
 const MEAL_TYPES = [
   { value: 'main',      label: 'Mains' },
@@ -200,7 +201,7 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
   }
 
   const inp = (extra) => ({
-    ...mn, width: '100%', padding: '10px 12px', borderRadius: 10,
+    ...mn, width: '100%', padding: '10px 12px', borderRadius: R.md,
     border: `1px solid ${C.outlineVariant}`, fontSize: 14,
     background: C.white, outline: 'none', boxSizing: 'border-box', ...extra,
   })
@@ -213,8 +214,8 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
   const toggle = (key, label) => (
     <div onClick={() => set(key, !f[key])} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 0', borderBottom: `1px solid ${C.outlineVariant}30`, cursor: 'pointer' }}>
       <span style={{ ...mn, fontSize: 14, color: C.onSurface }}>{label}</span>
-      <div style={{ width: 40, height: 22, borderRadius: 99, background: f[key] ? C.primary : C.outlineVariant, position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
-        <div style={{ position: 'absolute', top: 3, left: f[key] ? 21 : 3, width: 16, height: 16, borderRadius: 99, background: '#fff', transition: 'left 0.2s' }}/>
+      <div style={{ width: 40, height: 22, borderRadius: R.pill, background: f[key] ? C.primary : C.outlineVariant, position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+        <div style={{ position: 'absolute', top: 3, left: f[key] ? 21 : 3, width: 16, height: 16, borderRadius: R.pill, background: '#fff', transition: 'left 0.2s' }}/>
       </div>
     </div>
   )
@@ -222,21 +223,21 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: C.white, overflowY: 'auto', maxWidth: 430, margin: '0 auto' }}>
       <div style={{ background: C.white, borderBottom: `1px solid ${C.outlineVariant}25`, padding: '11px 20px', display: 'flex', alignItems: 'center', gap: 10, position: 'sticky', top: 0, zIndex: 10 }}>
-        <button onClick={onCancel} style={{ border: 'none', background: 'none', color: C.primary, fontSize: 22, cursor: 'pointer', padding: '2px 8px 2px 0' }}>←</button>
-        <span style={{ ...ep, fontSize: 16, color: C.onSurface, flex: 1 }}>New Recipe</span>
+        <button onClick={onCancel} style={{ border: 'none', background: 'none', color: C.primary, cursor: 'pointer', padding: '2px 8px 2px 0' }}><Icon name='x' size={20} color={C.primary}/></button>
+        <span style={{ ...ep, fontSize: 16, color: C.onSurface, flex: 1 }}>New recipe</span>
         <Btn label={saving ? 'Saving…' : 'Save'} small onClick={handleSave} disabled={saving || !f.name.trim()}/>
       </div>
 
       <div style={{ padding: '20px 20px 120px' }}>
-        <div style={{ display: 'flex', background: C.outlineVariant + '30', borderRadius: 10, padding: 3, marginBottom: 20 }}>
-          <button onClick={() => setAiMode(false)} style={{ flex: 1, padding: '8px', borderRadius: 8, border: 'none', background: !aiMode ? C.white : 'transparent', color: !aiMode ? C.primary : C.onSurfaceVariant, ...mn, fontWeight: 600, fontSize: 13, cursor: 'pointer', boxShadow: !aiMode ? '0 1px 4px rgba(0,0,0,0.1)' : 'none' }}>Manual</button>
-          <button onClick={() => setAiMode(true)} style={{ flex: 1, padding: '8px', borderRadius: 8, border: 'none', background: aiMode ? C.white : 'transparent', color: aiMode ? C.primary : C.onSurfaceVariant, ...mn, fontWeight: 600, fontSize: 13, cursor: 'pointer', boxShadow: aiMode ? '0 1px 4px rgba(0,0,0,0.1)' : 'none' }}>✨ AI Assist</button>
+        <div style={{ display: 'flex', background: C.outlineVariant + '30', borderRadius: R.md, padding: 3, marginBottom: 20 }}>
+          <button onClick={() => setAiMode(false)} style={{ flex: 1, padding: '8px', borderRadius: R.sm, border: 'none', background: !aiMode ? C.white : 'transparent', color: !aiMode ? C.primary : C.onSurfaceVariant, ...mn, fontWeight: 600, fontSize: 13, cursor: 'pointer', boxShadow: !aiMode ? '0 1px 4px rgba(0,0,0,0.1)' : 'none' }}>Manual</button>
+          <button onClick={() => setAiMode(true)} style={{ flex: 1, padding: '8px', borderRadius: R.sm, border: 'none', background: aiMode ? C.white : 'transparent', color: aiMode ? C.primary : C.onSurfaceVariant, ...mn, fontWeight: 600, fontSize: 13, cursor: 'pointer', boxShadow: aiMode ? '0 1px 4px rgba(0,0,0,0.1)' : 'none' }}>✨ AI Assist</button>
         </div>
 
         {aiMode && (
-          <div style={{ background: C.primaryFixed, borderRadius: 14, padding: '18px 16px', marginBottom: 20 }}>
+          <div style={{ background: C.primaryFixed, borderRadius: R.lg, padding: '18px 16px', marginBottom: 20 }}>
             <div style={{ ...mn, fontSize: 12, color: C.onSurface, opacity: 0.7, marginBottom: 14 }}>AI will extract the recipe and fill in all fields — you can review and edit everything before saving.</div>
-            {aiError && <div style={{ ...mn, fontSize: 13, color: C.error, background: C.errorContainer, padding: '8px 12px', borderRadius: 8, marginBottom: 12 }}>{aiError}</div>}
+            {aiError && <div style={{ ...mn, fontSize: 13, color: C.error, background: C.errorContainer, padding: '8px 12px', borderRadius: R.sm, marginBottom: 12 }}>{aiError}</div>}
 
             <div style={{ ...mn, fontSize: 11, fontWeight: 700, color: C.onSurface, opacity: 0.6, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>Recipe URL</div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
@@ -251,14 +252,14 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
             </div>
 
             <div style={{ ...mn, fontSize: 11, fontWeight: 700, color: C.onSurface, opacity: 0.6, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>Upload Photo(s)</div>
-            <label style={{ display: 'block', border: `2px dashed ${C.outlineVariant}`, borderRadius: 10, padding: '14px 16px', textAlign: 'center', cursor: (aiLoading || aiImagesLoading) ? 'not-allowed' : 'pointer', background: C.white }}>
+            <label style={{ display: 'block', border: `2px dashed ${C.outlineVariant}`, borderRadius: R.md, padding: '14px 16px', textAlign: 'center', cursor: (aiLoading || aiImagesLoading) ? 'not-allowed' : 'pointer', background: C.white }}>
               <input type='file' accept='image/*' multiple onChange={handleImageSelect} style={{ display: 'none' }} disabled={aiLoading || aiImagesLoading}/>
               <div style={{ ...mn, fontSize: 13, color: aiImages.length ? C.onSurface : C.onSurfaceVariant }}>{aiImagesLoading ? 'Compressing photo(s)…' : aiImages.length ? `Tap to add more photos (${aiImages.length} selected)` : 'Tap to choose photo(s) — multiple pages supported'}</div>
             </label>
             {aiImages.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
                 {aiImages.map((img, idx) => (
-                  <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 8, background: C.white, border: `1px solid ${C.outlineVariant}40` }}>
+                  <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: R.sm, background: C.white, border: `1px solid ${C.outlineVariant}40` }}>
                     <span style={{ ...mn, fontSize: 13, color: C.onSurface, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📷 {img.name}</span>
                     <button onClick={() => removeImage(idx)} disabled={aiLoading} style={{ border: 'none', background: 'none', color: C.error, fontSize: 16, cursor: aiLoading ? 'not-allowed' : 'pointer', padding: '0 4px', lineHeight: 1 }}>×</button>
                   </div>
@@ -286,7 +287,7 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
           </div>
         )}
 
-        {saveError && <div style={{ ...mn, fontSize: 13, color: C.error, background: C.errorContainer, padding: '10px 14px', borderRadius: 10, marginBottom: 16 }}>{saveError}</div>}
+        {saveError && <div style={{ ...mn, fontSize: 13, color: C.error, background: C.errorContainer, padding: '10px 14px', borderRadius: R.md, marginBottom: 16 }}>{saveError}</div>}
 
         {row('Recipe Name *',
           <input value={f.name} onChange={e => set('name', e.target.value)} placeholder='e.g. Chicken Stir-Fry' style={inp({ border: `1.5px solid ${f.name.trim() ? C.primary : C.outlineVariant}` })}/>
@@ -301,7 +302,7 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
         {row('Diet',
           <div style={{ display: 'flex', gap: 8 }}>
             {[['omni','🐰 Omni'],['veg','🌿 Veg'],['vegan','🌿 Vegan']].map(([v,l]) => (
-              <button key={v} onClick={() => set('diet', v)} style={{ ...mn, flex: 1, padding: '8px 4px', borderRadius: 10, border: `1.5px solid ${f.diet === v ? C.primary : C.outlineVariant}`, background: f.diet === v ? C.primary : C.white, color: f.diet === v ? C.onPrimary : C.onSurface, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>{l}</button>
+              <button key={v} onClick={() => set('diet', v)} style={{ ...mn, flex: 1, padding: '8px 4px', borderRadius: R.md, border: `1.5px solid ${f.diet === v ? C.primary : C.outlineVariant}`, background: f.diet === v ? C.primary : C.white, color: f.diet === v ? C.onPrimary : C.onSurface, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>{l}</button>
             ))}
           </div>
         )}
@@ -342,7 +343,7 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel }) {
         {row('Default Days',
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {ALL_DAYS.map(d => (
-              <button key={d} onClick={() => toggleDay(d)} style={{ ...mn, padding: '6px 10px', borderRadius: 99, border: `1.5px solid ${f.weekdays.includes(d) ? C.primary : C.outlineVariant}`, background: f.weekdays.includes(d) ? C.primary : C.white, color: f.weekdays.includes(d) ? C.onPrimary : C.onSurface, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{DAY_SHORT[d]}</button>
+              <button key={d} onClick={() => toggleDay(d)} style={{ ...mn, padding: '6px 10px', borderRadius: R.pill, border: `1.5px solid ${f.weekdays.includes(d) ? C.primary : C.outlineVariant}`, background: f.weekdays.includes(d) ? C.primary : C.white, color: f.weekdays.includes(d) ? C.onPrimary : C.onSurface, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{DAY_SHORT[d]}</button>
             ))}
           </div>
         )}

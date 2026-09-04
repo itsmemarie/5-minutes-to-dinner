@@ -1,4 +1,4 @@
-import { C, ep, mn, CARD, TAG_C, screenTitle } from '../lib/theme.js'
+import { C, ep, mn, CARD, TAG_C, screenTitle, R } from '../lib/theme.js'
 import { Spinner, Btn, Icon } from './ui/index.js'
 
 const TAG_LABEL = { TM6:'THERMOMIX', HOB:'HOB', OVEN:'OVEN', KNIFE:'PREP', NO_COOK:'NO COOK', DONE:'DONE' }
@@ -20,7 +20,7 @@ export function BatchScreen({activeTab,setActiveTab,batchData,batchLoading,batch
       </button>
       {batchData&&<div style={{display:'flex',gap:6,padding:'0 0 14px',overflowX:'auto'}}>
         {TABS.map(t=>(
-          <button key={t.id} onClick={()=>setActiveTab(t.id)} style={{...mn,padding:'8px 14px',borderRadius:99,border:'none',background:activeTab===t.id?C.primary:C.secondaryContainer,color:activeTab===t.id?C.onPrimary:C.onSecondaryContainer,fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap',flexShrink:0}}>{t.label}</button>
+          <button key={t.id} onClick={()=>setActiveTab(t.id)} style={{...mn,padding:'8px 14px',borderRadius:R.pill,border:'none',background:activeTab===t.id?C.primary:C.secondaryContainer,color:activeTab===t.id?C.onPrimary:C.onSecondaryContainer,fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap',flexShrink:0}}>{t.label}</button>
         ))}
       </div>}
       {!batchData&&!batchLoading&&<div style={{background:C.primaryFixed,borderRadius:16,padding:'40px 24px',marginBottom:14,textAlign:'center'}}>
@@ -42,7 +42,7 @@ export function BatchScreen({activeTab,setActiveTab,batchData,batchLoading,batch
         {session.overview&&(
           <div style={{display:'flex',flexWrap:'wrap',gap:8,padding:'14px 16px 4px'}}>
             {session.overview.map((o,i)=>(
-              <span key={i} style={{...mn,fontSize:11,fontWeight:600,background:C.white,color:C.onSurface,padding:'4px 10px',borderRadius:99,display:'flex',alignItems:'center',gap:5}}>
+              <span key={i} style={{...mn,fontSize:11,fontWeight:600,background:C.white,color:C.onSurface,padding:'4px 10px',borderRadius:R.pill,display:'flex',alignItems:'center',gap:5}}>
                 <span>{o.e}</span><span>{o.t}</span>
               </span>
             ))}
@@ -62,9 +62,9 @@ export function BatchScreen({activeTab,setActiveTab,batchData,batchLoading,batch
                   {(step.chips||[]).length>0&&<div style={{...mn,fontSize:11,fontWeight:600,color:tc.tx,marginBottom:8}}>{(step.chips||[]).join(' · ')}</div>}
                   {step.qty&&<div style={{...mn,fontSize:12,color:C.onSurfaceVariant,marginBottom:6}}>{step.qty}</div>}
                   <p style={{...mn,fontSize:13,color:C.onSurface,lineHeight:1.6,margin:0,marginBottom:step.storage||step.warn||step.safety?8:0}}>{step.body}</p>
-                  {step.storage&&<div style={{...mn,fontSize:11,fontWeight:700,color:C.primary,background:C.primaryFixed,padding:'6px 10px',borderRadius:8,display:'flex',alignItems:'center',gap:6}}><Icon name='fridge' size={13} color={C.primary}/><span>{step.storage}</span></div>}
-                  {step.warn&&<div style={{...mn,fontSize:11,color:C.onSecondaryContainer,background:C.secondaryContainer,padding:'6px 10px',borderRadius:8,marginTop:4}}>⚠ {step.warn}</div>}
-                  {step.safety&&<div style={{...mn,fontSize:11,color:C.error,background:C.errorContainer,padding:'6px 10px',borderRadius:8,marginTop:4}}>🛑 {step.safety}</div>}
+                  {step.storage&&<div style={{...mn,fontSize:11,fontWeight:700,color:C.primary,background:C.primaryFixed,padding:'6px 10px',borderRadius:R.sm,display:'flex',alignItems:'center',gap:6}}><Icon name='fridge' size={13} color={C.primary}/><span>{step.storage}</span></div>}
+                  {step.warn&&<div style={{...mn,fontSize:11,color:C.onSecondaryContainer,background:C.secondaryContainer,padding:'6px 10px',borderRadius:R.sm,marginTop:4}}>⚠ {step.warn}</div>}
+                  {step.safety&&<div style={{...mn,fontSize:11,color:C.error,background:C.errorContainer,padding:'6px 10px',borderRadius:R.sm,marginTop:4}}>🛑 {step.safety}</div>}
                 </div>
               </div>
             )

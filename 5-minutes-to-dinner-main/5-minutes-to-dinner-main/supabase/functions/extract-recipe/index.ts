@@ -54,7 +54,7 @@ Deno.serve(async (req: Request) => {
           : 'Extract the recipe from this image and return the JSON.' },
       ]
     } else if (url) {
-      model = 'llama-3.3-70b-versatile'
+      model = 'openai/gpt-oss-120b'
       let pageText = ''
       try {
         const res = await fetch(url, {
@@ -92,7 +92,7 @@ Deno.serve(async (req: Request) => {
       body: JSON.stringify({
         model,
         max_tokens: 4096,
-        ...(model === VISION_MODEL ? { reasoning_effort: 'none' } : {}),
+        ...(model === VISION_MODEL ? { reasoning_effort: 'none' } : { include_reasoning: false }),
         messages: [
           { role: 'system', content: SYSTEM },
           { role: 'user', content: userContent },
