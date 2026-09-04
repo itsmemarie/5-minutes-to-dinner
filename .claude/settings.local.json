@@ -3,7 +3,12 @@
     "allow": [
       "Bash(npx skills *)",
       "Bash(claude mcp *)",
-      "PowerShell(claude mcp add --scope user --transport http claude-design https://api.anthropic.com/v1/design/mcp)"
+      "PowerShell(claude mcp add --scope user --transport http claude-design https://api.anthropic.com/v1/design/mcp)",
+      "mcp__claude_ai_Supabase__deploy_edge_function",
+      "Bash(chromium-cli --help)",
+      "Bash(npx supabase *)",
+      "mcp__claude_ai_Supabase__list_projects",
+      "mcp__claude_ai_Supabase__get_publishable_keys"
     ]
   }
 }

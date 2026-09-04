@@ -20,11 +20,13 @@ export async function fetchRecipes() {
       cook_time_minutes,
       portion_size,
       min_portions,
-      should_have_side,
       try_out,
       order_out,
       fun_recipe,
       husband_approved,
+      advance_prep_hours,
+      advance_prep_note,
+      side_recommendation,
       recipe_dietary_tags ( dietary_tag_id )
     `)
     .in('meal_type_id', ['breakfast', 'main', 'side', 'entree', 'dessert'])
@@ -49,14 +51,32 @@ export async function fetchRecipes() {
       diet:       tags.includes('vegan')       ? 'vegan'
                 : tags.includes('vegetarian')  ? 'veg'
                 : 'omni',
-      hasSides:   !!r.should_have_side,
       tryOut:     !!r.try_out,
       orderOut:   !!r.order_out,
       defaultDays: r.weekdays || [],
       fun:        !!r.fun_recipe,
       husband:    !!r.husband_approved,
+      advancePrepHours: r.advance_prep_hours != null ? Number(r.advance_prep_hours) : null,
+      advancePrepNote:  r.advance_prep_note || null,
+      sideRecommendation: r.side_recommendation || null,
     }
   })
+}
+
+export async function createRecipe(fields) {
+  const { diet, ...dbFields } = fields
+  const id = 'mp-' + crypto.randomUUID()
+  const { data, error } = await supabase
+    .from('recipes')
+    .insert({ id, ...dbFields })
+    .select('id')
+    .single()
+  if (error) throw error
+  if (diet === 'vegan' || diet === 'veg') {
+    const tagId = diet === 'vegan' ? 'vegan' : 'vegetarian'
+    await supabase.from('recipe_dietary_tags').insert({ recipe_id: data.id, dietary_tag_id: tagId })
+  }
+  return data.id
 }
 
 // ─── App settings ─────────────────────────────────────────────────
@@ -112,11 +132,13 @@ export async function fetchWeekPlan(planId) {
     .select(`
       id, day_of_week,
       planned_meals (
-        id, section, recipe_id,
+        id, section, recipe_id, freezer_item_id,
         name_snapshot,
         prep_time_snapshot,
         cook_time_snapshot,
         portion,
+        advance_prep_hours_snapshot,
+        advance_prep_note_snapshot,
         position
       )
     `)
@@ -134,12 +156,15 @@ export async function addPlannedMeals(dayEntryId, meals) {
     .insert(meals.map((m, i) => ({
       day_entry_id:          dayEntryId,
       section:               m.section,
-      recipe_id:             m.recipeId,
+      recipe_id:             m.recipeId ?? null,
+      freezer_item_id:       m.freezerItemId ?? null,
       name_snapshot:         m.name,
       prep_time_snapshot:    m.prep,
       cook_time_snapshot:    m.active,
       portion:               m.portion,
       base_portion_snapshot: m.base,
+      advance_prep_hours_snapshot: m.advancePrepHours ?? null,
+      advance_prep_note_snapshot:  m.advancePrepNote ?? null,
       position:              m.position + i,
     })))
     .select('id')
@@ -158,21 +183,13 @@ export async function updatePlannedMealPortion(id, portion) {
   await supabase.from('planned_meals').update({ portion }).eq('id', id)
 }
 
-// ─── Ratings ──────────────────────────────────────────────────────
-export async function fetchRatings(plannedMealIds) {
-  if (!plannedMealIds.length) return []
-  const { data } = await supabase
-    .from('meal_ratings')
-    .select('planned_meal_id, rating')
-    .in('planned_meal_id', plannedMealIds)
-  return data || []
-}
-
-export async function upsertRating(plannedMealId, rating) {
-  await supabase
-    .from('meal_ratings')
-    .upsert({ planned_meal_id: plannedMealId, rating, rated_at: new Date().toISOString() },
-             { onConflict: 'planned_meal_id' })
+// ─── Move meal to a different day ────────────────────────────────
+export async function movePlannedMeal(id, newDayEntryId) {
+  const { error } = await supabase
+    .from('planned_meals')
+    .update({ day_entry_id: newDayEntryId })
+    .eq('id', id)
+  if (error) throw error
 }
 
 // ─── Shopping list ────────────────────────────────────────────────
@@ -207,12 +224,152 @@ export async function updateShoppingItem(id, checked) {
   await supabase.from('shopping_list_items').update({ checked }).eq('id', id)
 }
 
+// ─── Recipe notes ─────────────────────────────────────────────────
+export async function fetchRecipeNotes(recipeId) {
+  const { data } = await supabase
+    .from('recipe_notes')
+    .select('notes')
+    .eq('recipe_id', recipeId)
+    .single()
+  return data?.notes ?? ''
+}
+
+export async function saveRecipeNotes(recipeId, notes) {
+  await supabase
+    .from('recipe_notes')
+    .upsert({ recipe_id: recipeId, notes, updated_at: new Date().toISOString() },
+             { onConflict: 'recipe_id' })
+}
+
+// ─── Freezer ──────────────────────────────────────────────────────
+export async function fetchFreezerItems() {
+  const { data, error } = await supabase
+    .from('freezer')
+    .select('id, name, in_stock')
+    .order('name')
+  if (error) throw error
+  return data
+}
+
+// Bulk import — wipes the whole inventory and replaces it with the new list
+export async function replaceFreezerItems(names) {
+  await supabase.from('freezer').delete().gt('id', 0)
+  if (!names.length) return []
+  const { data, error } = await supabase
+    .from('freezer')
+    .insert(names.map(name => ({ name, in_stock: true })))
+    .select('id, name, in_stock')
+  if (error) throw error
+  return data
+}
+
+// Manual single-item add — restocks if the name already exists
+export async function addFreezerItem(name) {
+  const { data, error } = await supabase
+    .from('freezer')
+    .upsert({ name, in_stock: true, updated_at: new Date().toISOString() }, { onConflict: 'name' })
+    .select('id, name, in_stock')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateFreezerStock(ids, inStock) {
+  await supabase
+    .from('freezer')
+    .update({ in_stock: inStock, updated_at: new Date().toISOString() })
+    .in('id', Array.isArray(ids) ? ids : [ids])
+}
+
+export async function removeFreezerItem(id) {
+  await supabase.from('freezer').delete().eq('id', id)
+}
+
 // ─── Recipe detail ────────────────────────────────────────────────
 export async function fetchRecipeDetails(id) {
   const { data, error } = await supabase
     .from('recipes')
     .select('id, name, prep_time_raw, cook_time_raw, prep_time_minutes, cook_time_minutes, portion_size, min_portions, fridge_storage, freezer_storage, has_thermomix_version, ingredients, instructions_standard, instructions_thermomix, chef_notes, toddler_variations, husband_variations, side_recommendation')
     .eq('id', id)
+    .single()
+  if (error) throw error
+  return data
+}
+
+// ─── Toddler cooking guide (cached AI content, singleton) ──────────
+export async function fetchToddlerCookingGuide() {
+  const { data } = await supabase
+    .from('toddler_cooking_guide')
+    .select('dob, content, generated_at')
+    .eq('id', 1)
+    .single()
+  return data || null
+}
+
+export async function saveToddlerCookingGuide(dob, content) {
+  await supabase
+    .from('toddler_cooking_guide')
+    .upsert({ id: 1, dob, content, generated_at: new Date().toISOString() }, { onConflict: 'id' })
+}
+
+// ─── Recipe toddler task (cached AI content, per recipe) ────────────
+export async function fetchRecipeToddlerTask(recipeId) {
+  const { data } = await supabase
+    .from('recipe_toddler_tasks')
+    .select('dob, age_band_id, age_band_label, task, needs_tool, generated_at')
+    .eq('recipe_id', recipeId)
+    .single()
+  return data || null
+}
+
+export async function saveRecipeToddlerTask(recipeId, { dob, ageBandId, ageBandLabel, task, needsTool }) {
+  await supabase
+    .from('recipe_toddler_tasks')
+    .upsert({
+      recipe_id: recipeId, dob, age_band_id: ageBandId, age_band_label: ageBandLabel,
+      task, needs_tool: needsTool ?? null, generated_at: new Date().toISOString(),
+    }, { onConflict: 'recipe_id' })
+}
+
+// ─── Produce guides (Buyer's Eye) ────────────────────────────────
+export async function matchProduceGuide(name) {
+  const { data, error } = await supabase.rpc('match_produce_guide', { item_name: name })
+  if (error) throw error
+  return data // uuid | null
+}
+
+export async function fetchProduceGuide(id) {
+  const { data, error } = await supabase
+    .from('produce_guides')
+    .select('*')
+    .eq('id', id)
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function mergeProduceGuideAliases(id, newAliases) {
+  const existing = await fetchProduceGuide(id)
+  const merged = [...new Set(
+    [...(existing.aliases || []), ...newAliases]
+      .map(a => a.trim().toLowerCase())
+      .filter(Boolean)
+  )]
+  const { data, error } = await supabase
+    .from('produce_guides')
+    .update({ aliases: merged })
+    .eq('id', id)
+    .select('*')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function insertProduceGuide(guide) {
+  const { data, error } = await supabase
+    .from('produce_guides')
+    .insert({ ...guide, source: 'ai' })
+    .select('*')
     .single()
   if (error) throw error
   return data
