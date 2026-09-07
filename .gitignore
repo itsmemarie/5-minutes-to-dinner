@@ -15,3 +15,6 @@ ds-bundle/
 .design-sync/learnings/
 .design-sync/node_modules
 .env*
+
+# Supabase CLI local cache
+supabase/.temp/
