@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { C, mn, CARD, R } from '../lib/theme.js'
 import { DAYS } from '../lib/dateHelpers.js'
-import { Btn, PillBtn } from './ui/index.js'
+import { Btn, PillBtn, Icon } from './ui/index.js'
 import { RecipeBucket } from './RecipeBucket.jsx'
 import { NewRecipeForm } from './NewRecipeForm.jsx'
 import { parseSideNames, matchSideRecipes } from '../lib/sidePairing.js'
@@ -91,17 +91,19 @@ export function RecipeSelectionScreen({day,section,plan,recipes,freezerItems,onA
                 <div style={{...mn,fontSize:14,color:C.onSurfaceVariant}}>No freezer items available. Add some via Manage Freezer.</div>
               </div>
             ):(
-              inStockFreezer.map(item=>{
-                const sel=freezerSelected.includes(item.id)
-                return (
-                  <div key={item.id} onClick={()=>toggleFreezer(item.id)} style={{...CARD,background:C.surfaceContainerHigh,padding:'12px 14px',display:'flex',alignItems:'center',gap:12,cursor:'pointer',marginBottom:8}}>
-                    <div style={{flex:1,...mn,fontSize:14,fontWeight:600,color:C.onSurface}}>{item.name}</div>
-                    <div style={{width:30,height:30,borderRadius:R.pill,border:`2px solid ${sel?C.primary:C.outlineVariant}`,background:sel?C.primary:'transparent',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,color:sel?C.onPrimary:C.outline,fontSize:14,fontWeight:700}}>
-                      {sel?'✓':'+'}
+              <div style={{...CARD,overflow:'hidden'}}>
+                {inStockFreezer.map((item,i)=>{
+                  const sel=freezerSelected.includes(item.id)
+                  return (
+                    <div key={item.id} onClick={()=>toggleFreezer(item.id)} style={{padding:'11px 14px',borderBottom:i<inStockFreezer.length-1?`1px solid ${C.outlineVariant}26`:undefined,display:'flex',alignItems:'center',cursor:'pointer'}}>
+                      <div style={{flex:1,minWidth:0,...mn,fontSize:13,fontWeight:600,color:C.onSurface}}>{item.name}</div>
+                      <div style={{width:26,height:26,borderRadius:R.pill,border:`2px solid ${sel?C.primary:C.outlineVariant}`,background:sel?C.primary:'transparent',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginLeft:10,color:sel?C.onPrimary:C.outline}}>
+                        {sel?<Icon name='check' size={14} color={C.onPrimary}/>:<Icon name='plus' size={14} color={C.outline}/>}
+                      </div>
                     </div>
-                  </div>
-                )
-              })
+                  )
+                })}
+              </div>
             )}
           </div>
         ):(
