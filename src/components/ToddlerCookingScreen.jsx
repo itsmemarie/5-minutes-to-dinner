@@ -2,8 +2,16 @@ import { C, ep, mn, CARD, R } from '../lib/theme.js'
 import { TODDLER_AGE_BANDS } from '../lib/dateHelpers.js'
 import { Spinner, Btn, Icon } from './ui/index.js'
 
-export function ToddlerCookingScreen({ guide, loading, error, activeBand, setActiveBand, onGenerate }) {
+export function ToddlerCookingScreen({ guide, loading, error, activeBand, setActiveBand, currentBand, onGenerate }) {
   const tasks = guide?.ageBands?.[activeBand] || []
+  // Order the band tabs so "now" comes first, then what's coming next, then earlier stages.
+  const curIdx = Math.max(0, TODDLER_AGE_BANDS.findIndex(b => b.id === currentBand))
+  const orderedBands = [
+    ...TODDLER_AGE_BANDS.slice(curIdx),
+    ...TODDLER_AGE_BANDS.slice(0, curIdx),
+  ]
+  const isNow = activeBand === currentBand
+  const isPast = TODDLER_AGE_BANDS.findIndex(b => b.id === activeBand) < curIdx
   return (
     <div style={{padding:'16px 20px 24px'}}>
       <p style={{...mn,fontSize:13,color:C.onSurfaceVariant,margin:'0 0 14px',lineHeight:1.6}}>Age-matched kitchen jobs, from first pours to first cuts, so cooking together happens daily.</p>
@@ -37,11 +45,24 @@ export function ToddlerCookingScreen({ guide, loading, error, activeBand, setAct
           ))}
         </div>
 
-        <div style={{display:'flex',gap:6,padding:'0 0 14px',overflowX:'auto'}}>
-          {TODDLER_AGE_BANDS.map(b=>(
-            <button key={b.id} onClick={()=>setActiveBand(b.id)} style={{...mn,padding:'8px 14px',borderRadius:R.pill,border:'none',background:activeBand===b.id?C.primary:C.secondaryContainer,color:activeBand===b.id?C.onPrimary:C.onSecondaryContainer,fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap',flexShrink:0}}>{b.label}</button>
-          ))}
+        <div style={{display:'flex',gap:6,padding:'0 0 12px',overflowX:'auto'}}>
+          {orderedBands.map(b=>{
+            const active = activeBand===b.id
+            const tag = b.id===currentBand ? 'NOW' : (TODDLER_AGE_BANDS.findIndex(x=>x.id===b.id) > curIdx ? 'NEXT' : null)
+            return (
+              <button key={b.id} onClick={()=>setActiveBand(b.id)} style={{...mn,padding:'8px 14px',borderRadius:R.pill,border:'none',background:active?C.primary:C.secondaryContainer,color:active?C.onPrimary:C.onSecondaryContainer,fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap',flexShrink:0,display:'flex',alignItems:'center',gap:6}}>
+                <span>{b.label}</span>
+                {tag&&<span style={{...mn,fontSize:9,fontWeight:800,letterSpacing:'0.06em',color:active?C.onPrimary:C.accent2_700,opacity:active?0.85:1}}>{tag}</span>}
+              </button>
+            )
+          })}
         </div>
+
+        <p style={{...mn,fontSize:12,color:C.onSurfaceVariant,lineHeight:1.5,margin:'0 0 12px'}}>
+          {isNow ? 'Where your toddler is now — jobs to try together this week.'
+            : isPast ? 'An earlier stage — handy if a younger sibling joins in.'
+            : 'Coming up — things to get ready for as your toddler grows into them.'}
+        </p>
 
         {tasks.length===0
           ? <div style={{...CARD,padding:16}}><p style={{...mn,fontSize:13,color:C.onSurfaceVariant,margin:0}}>No tasks for this age band yet.</p></div>

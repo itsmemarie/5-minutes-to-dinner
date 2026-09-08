@@ -1,5 +1,5 @@
 import { C, ep, mn, CARD, TAG_C, screenTitle, R } from '../lib/theme.js'
-import { Spinner, Btn, Icon } from './ui/index.js'
+import { Spinner, Btn, Icon, NeedMoreIdeasBtn } from './ui/index.js'
 
 const TAG_LABEL = { TM6:'THERMOMIX', HOB:'HOB', OVEN:'OVEN', KNIFE:'PREP', NO_COOK:'NO COOK', DONE:'DONE' }
 
@@ -10,14 +10,6 @@ export function BatchScreen({activeTab,setActiveTab,batchData,batchLoading,batch
     <div style={{padding:'16px 20px 24px'}}>
       <div style={{...screenTitle,color:C.onSurface,marginBottom:4}}>Batch cooking</div>
       <p style={{...mn,fontSize:13,color:C.onSurfaceVariant,margin:'0 0 14px',lineHeight:1.6}}>An AI-organised prep schedule so the week's cooking happens in focused sessions.</p>
-      <button onClick={onOpenToddlerCooking} style={{...CARD,width:'100%',padding:'14px 16px',display:'flex',alignItems:'center',gap:12,border:'none',cursor:'pointer',marginBottom:14,textAlign:'left'}}>
-        <span style={{fontSize:22}}>🧸</span>
-        <div style={{flex:1}}>
-          <div style={{...mn,fontSize:14,fontWeight:700,color:C.onSurface}}>Toddler cooking activities</div>
-          <div style={{...mn,fontSize:12,color:C.onSurfaceVariant}}>Age-appropriate kitchen tasks & tools</div>
-        </div>
-        <Icon name='chevronRight' size={18} color={C.onSurfaceVariant}/>
-      </button>
       {batchData&&<div style={{display:'flex',gap:6,padding:'0 0 14px',overflowX:'auto'}}>
         {TABS.map(t=>(
           <button key={t.id} onClick={()=>setActiveTab(t.id)} style={{...mn,padding:'8px 14px',borderRadius:R.pill,border:'none',background:activeTab===t.id?C.primary:C.secondaryContainer,color:activeTab===t.id?C.onPrimary:C.onSecondaryContainer,fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap',flexShrink:0}}>{t.label}</button>
@@ -71,6 +63,26 @@ export function BatchScreen({activeTab,setActiveTab,batchData,batchLoading,batch
           })}
         </div>
       </div>}
+      {batchData?.toddlerActivities?.length>0&&(
+        <div style={{...CARD,padding:0,overflow:'hidden',marginTop:14,background:C.accent2_100,border:`1px solid ${C.accent2_300}`}}>
+          <div style={{display:'flex',alignItems:'center',gap:6,padding:'14px 16px 8px'}}>
+            <span style={{fontSize:14}}>🧸</span>
+            <span style={{...mn,fontSize:10,fontWeight:700,color:C.accent2_700,letterSpacing:'0.07em',textTransform:'uppercase'}}>Little helpers</span>
+          </div>
+          <p style={{...mn,fontSize:12,color:C.onSurfaceVariant,lineHeight:1.5,margin:0,padding:'0 16px 8px'}}>Age-appropriate jobs your toddler can do across these batch sessions.</p>
+          {batchData.toddlerActivities.map((a,i)=>(
+            <div key={i} style={{padding:'12px 16px',borderTop:`1px solid ${C.accent2_300}40`,display:'flex',gap:12}}>
+              <span style={{fontSize:18,flexShrink:0,marginTop:1}}>{a.icon||'🍽️'}</span>
+              <div style={{flex:1,minWidth:0}}>
+                {a.title&&<div style={{...mn,fontSize:13,fontWeight:700,color:C.onSurface,marginBottom:2}}>{a.title}</div>}
+                <p style={{...mn,fontSize:12,color:C.onSurfaceVariant,lineHeight:1.6,margin:0,marginBottom:a.needsTool?6:0}}>{a.task}</p>
+                {a.needsTool&&<div style={{...mn,fontSize:11,fontWeight:700,color:C.primary,background:C.primaryFixed,padding:'4px 10px',borderRadius:R.sm,display:'inline-block'}}>Needs: {a.needsTool}</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {onOpenToddlerCooking&&<div style={{marginTop:14}}><NeedMoreIdeasBtn onClick={onOpenToddlerCooking}/></div>}
     </div>
   )
 }

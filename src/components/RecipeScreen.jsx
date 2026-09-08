@@ -4,7 +4,7 @@ import { callEdgeFn } from '../lib/ai.js'
 import { C, ep, mn, CARD, R } from '../lib/theme.js'
 import { ageBandFromDob, TODDLER_AGE_BANDS } from '../lib/dateHelpers.js'
 import { parseIngredients, parseIngredientParts, parseSteps } from '../lib/recipeParsing.js'
-import { Spinner, Btn, Icon } from './ui/index.js'
+import { Spinner, Btn, Icon, NeedMoreIdeasBtn } from './ui/index.js'
 import { dayNutritionTotals, rowFigure } from '../lib/goalMaths.js'
 
 export function RecipeScreen({ recipeId, portion, onAddMeal, toddlerDob, onOpenToddlerCooking, goalProfile, goalTargets, nutritionByRecipe={}, day, plan }) {
@@ -19,7 +19,8 @@ export function RecipeScreen({ recipeId, portion, onAddMeal, toddlerDob, onOpenT
   const [notes, setNotes] = useState('')
   const [notesSaved, setNotesSaved] = useState(true)
   const [notesSaving, setNotesSaving] = useState(false)
-  const [toddlerTask, setToddlerTask] = useState(null)
+  const [toddlerActivities, setToddlerActivities] = useState(null)
+  const [toddlerBand, setToddlerBand] = useState(null)
   const [toddlerTaskLoading, setToddlerTaskLoading] = useState(false)
   const [toddlerTaskError, setToddlerTaskError] = useState(null)
 
@@ -32,14 +33,19 @@ export function RecipeScreen({ recipeId, portion, onAddMeal, toddlerDob, onOpenT
   useEffect(() => {
     if (!toddlerDob) return
     const currentBand = ageBandFromDob(toddlerDob)
-    setToddlerTask(null); setToddlerTaskError(null)
+    const bandLabel = TODDLER_AGE_BANDS.find(b => b.id === currentBand)?.label || currentBand
+    setToddlerActivities(null); setToddlerTaskError(null); setToddlerBand(bandLabel)
     ;(async () => {
       try {
         const cached = await fetchRecipeToddlerTask(recipeId)
-        if (cached && cached.age_band_id === currentBand) { setToddlerTask(cached); return }
+        if (cached && cached.age_band_id === currentBand) {
+          const list = cached.activities?.length
+            ? cached.activities
+            : (cached.task ? [{ title: '', task: cached.task, needsTool: cached.needs_tool }] : [])
+          if (list.length) { setToddlerActivities(list); return }
+        }
         const recipe = await fetchRecipeDetails(recipeId)
         setToddlerTaskLoading(true)
-        const bandLabel = TODDLER_AGE_BANDS.find(b => b.id === currentBand)?.label || currentBand
         const result = await callEdgeFn('recipe-toddler-task', {
           ageBandLabel: bandLabel,
           recipeName: recipe.name,
@@ -47,9 +53,11 @@ export function RecipeScreen({ recipeId, portion, onAddMeal, toddlerDob, onOpenT
           instructions: recipe.instructions_standard || recipe.instructions_thermomix,
           toddlerVariations: recipe.toddler_variations,
         })
-        const saved = { dob: toddlerDob, age_band_id: currentBand, age_band_label: bandLabel, task: result.task, needs_tool: result.needsTool ?? null }
-        setToddlerTask(saved)
-        saveRecipeToddlerTask(recipeId, { dob: toddlerDob, ageBandId: currentBand, ageBandLabel: bandLabel, task: result.task, needsTool: result.needsTool })
+        const list = Array.isArray(result.activities) && result.activities.length
+          ? result.activities
+          : (result.task ? [{ title: '', task: result.task, needsTool: result.needsTool ?? null }] : [])
+        setToddlerActivities(list)
+        saveRecipeToddlerTask(recipeId, { dob: toddlerDob, ageBandId: currentBand, ageBandLabel: bandLabel, activities: list })
       } catch (e) {
         setToddlerTaskError(e.message)
       } finally {
@@ -244,19 +252,32 @@ export function RecipeScreen({ recipeId, portion, onAddMeal, toddlerDob, onOpenT
         </div>
       )}
 
-      {/* Toddler preferences */}
-      {toddlerDob&&(toddlerTask||toddlerTaskLoading||toddlerTaskError)&&(
+      {/* Toddler activities */}
+      {toddlerDob&&(toddlerActivities||toddlerTaskLoading||toddlerTaskError)&&(
         <div style={{...CARD,padding:'14px 16px',marginBottom:10,marginTop:data.chef_notes||data.husband_variations||data.toddler_variations||(data.side_recommendation&&data.side_recommendation!=='Not Recommended')?0:20,background:C.accent2_100,border:`1px solid ${C.accent2_300}`}}>
-          <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}><span style={{fontSize:14}}>🧸</span><span style={{...mn,fontSize:10,fontWeight:700,color:C.accent2_700,letterSpacing:'0.07em',textTransform:'uppercase'}}>Toddler Preferences</span></div>
-          {toddlerTaskLoading&&<p style={{...mn,fontSize:13,color:C.onSurfaceVariant,margin:0}}>Finding an age-appropriate task…</p>}
+          <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}><span style={{fontSize:14}}>🧸</span><span style={{...mn,fontSize:10,fontWeight:700,color:C.accent2_700,letterSpacing:'0.07em',textTransform:'uppercase'}}>Cooking with your toddler</span></div>
+          {toddlerTaskLoading&&<p style={{...mn,fontSize:13,color:C.onSurfaceVariant,margin:0}}>Finding age-appropriate activities…</p>}
           {toddlerTaskError&&<p style={{...mn,fontSize:13,color:C.error,margin:0}}>⚠️ {toddlerTaskError}</p>}
-          {toddlerTask&&!toddlerTaskLoading&&(<>
-            <div style={{display:'inline-block',...mn,fontSize:10,fontWeight:700,color:C.accent2_700,background:C.white,padding:'2px 8px',borderRadius:R.pill,marginBottom:8}}>{(toddlerTask.age_band_label||'').toUpperCase()}</div>
-            <p style={{...mn,fontSize:13,color:C.onSurface,lineHeight:1.7,margin:0,marginBottom:toddlerTask.needs_tool?8:0}}>{toddlerTask.task}</p>
-            {toddlerTask.needs_tool&&<div style={{...mn,fontSize:11,fontWeight:700,color:C.primary,background:C.primaryFixed,padding:'4px 10px',borderRadius:R.sm,display:'inline-block',marginBottom:8}}>Needs: {toddlerTask.needs_tool}</div>}
-            {onOpenToddlerCooking&&<div><button onClick={onOpenToddlerCooking} style={{...mn,fontSize:12,fontWeight:700,color:C.primary,background:'none',border:'none',padding:0,cursor:'pointer'}}>More toddler activities →</button></div>}
+          {toddlerActivities&&!toddlerTaskLoading&&(<>
+            {toddlerBand&&<div style={{display:'inline-block',...mn,fontSize:10,fontWeight:700,color:C.accent2_700,background:C.white,padding:'2px 8px',borderRadius:R.pill,marginBottom:10}}>{toddlerBand.toUpperCase()}</div>}
+            <div style={{display:'flex',flexDirection:'column',gap:12}}>
+              {toddlerActivities.map((a,i)=>(
+                <div key={i} style={{display:'flex',gap:10,paddingTop:i>0?12:0,borderTop:i>0?`1px solid ${C.accent2_300}40`:'none'}}>
+                  <span style={{fontSize:16,flexShrink:0,marginTop:1}}>{a.icon||'🍽️'}</span>
+                  <div style={{flex:1,minWidth:0}}>
+                    {a.title&&<div style={{...mn,fontSize:13,fontWeight:700,color:C.onSurface,marginBottom:2}}>{a.title}</div>}
+                    <p style={{...mn,fontSize:13,color:C.onSurface,lineHeight:1.6,margin:0,marginBottom:a.needsTool?6:0}}>{a.task}</p>
+                    {a.needsTool&&<div style={{...mn,fontSize:11,fontWeight:700,color:C.primary,background:C.primaryFixed,padding:'4px 10px',borderRadius:R.sm,display:'inline-block'}}>Needs: {a.needsTool}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
           </>)}
         </div>
+      )}
+
+      {toddlerDob&&onOpenToddlerCooking&&(
+        <div style={{marginTop:12}}><NeedMoreIdeasBtn onClick={onOpenToddlerCooking}/></div>
       )}
 
       {/* Cooking Notes */}

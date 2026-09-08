@@ -43,6 +43,12 @@ Food safety (non-negotiable):
 
 Appliance tags: TM6, HOB, OVEN, KNIFE, NO_COOK, DONE
 
+Toddler helpers (non-negotiable):
+- After the sessions, also return one top-level "toddlerActivities" array of 3-6 items: safe, concrete jobs a toddler can do DURING these batch sessions, each referencing actual prep that appears in the steps above (e.g. "wash the potatoes you diced in the Monday session", "tear the basil for the sauce", "stir the cold marinade", "spoon the cooled stew into storage tubs", "press the labels onto the containers").
+- Age-appropriate for the toddler age band given in the user message — simpler and more supervised for younger bands, more independent for older bands.
+- Never involve hot surfaces, the hob, ovens, boiling liquids, raw meat, raw fish, or adult knives.
+- "title" is a short 2-4 word label; "task" is one concrete sentence. If an activity needs a tool, set "needsTool" to ONLY one of: "Kids' safety knife (nylon, crinkle edge)", "Learning tower or sturdy step stool", "Suction-base mixing bowl", "Kid-size whisk & spatula", "Y-peeler with safety guard". Otherwise null. Pick a fitting emoji for "icon".
+
 Return ONLY a raw JSON object — no markdown, no backticks, no preamble. Must be parseable by JSON.parse().`
 
 Deno.serve(async (req: Request) => {
@@ -56,7 +62,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { meals } = await req.json()
+    const { meals, ageBandLabel } = await req.json()
 
     const mealSummary = Object.entries(meals)
       .map(([day, sections]: [string, any]) => {
@@ -70,7 +76,7 @@ Deno.serve(async (req: Request) => {
       .filter(Boolean)
       .join('\n')
 
-    const userPrompt = `Weekly meal plan:\n${mealSummary}\n\nGenerate a batch cooking schedule with this exact JSON structure:\n{\n  "sessions": [\n    {\n      "id": "big",\n      "label": "Monday · 2 hrs",\n      "groundRule": "",\n      "overview": [{"e": "emoji", "t": "description"}],\n      "steps": [\n        {\n          "time": "0:00",\n          "tag": "OVEN",\n          "title": "",\n          "full": false,\n          "chips": ["200°C Fan"],\n          "qty": null,\n          "body": "",\n          "storage": null,\n          "warn": null,\n          "safety": null\n        },\n        {\n          "time": "0:05",\n          "tag": "TM6",\n          "title": "Chop Aromatics",\n          "full": false,\n          "chips": ["3s", "Speed 10"],\n          "qty": "4 medium onions, 4 garlic cloves",\n          "body": "Cut 4 medium size onions and 4 garlic cloves into rough chunks (TM6 instructions: speed 10, time 3 sec).",\n          "storage": null,\n          "warn": null,\n          "safety": null\n        }\n      ]\n    },\n    {\n      "id": "medium",\n      "label": "Thursday · 1 hr",\n      "groundRule": "",\n      "overview": [{"e": "emoji", "t": "description"}],\n      "steps": []\n    },\n    {\n      "id": "evenings",\n      "label": "Weekday Evenings",\n      "groundRule": "",\n      "overview": null,\n      "steps": [\n        {\n          "time": "Mon",\n          "tag": "HOB",\n          "title": "",\n          "full": false,\n          "chips": ["20m active"],\n          "qty": null,\n          "body": "",\n          "storage": "20 min total",\n          "warn": null,\n          "safety": null\n        }\n      ]\n    }\n  ]\n}\n\nEvery "body" field must follow the instruction specificity rules from the system prompt: exact quantities/sizes, and inline appliance settings for TM6/HOB/OVEN steps. The "Chop Aromatics" step above is an example of the required level of detail, not literal content to reuse verbatim.`
+    const userPrompt = `Weekly meal plan:\n${mealSummary}\n\nToddler age band (for the toddlerActivities): ${ageBandLabel || '2–3 yrs'}\n\nGenerate a batch cooking schedule with this exact JSON structure:\n{\n  "sessions": [\n    {\n      "id": "big",\n      "label": "Monday · 2 hrs",\n      "groundRule": "",\n      "overview": [{"e": "emoji", "t": "description"}],\n      "steps": [\n        {\n          "time": "0:00",\n          "tag": "OVEN",\n          "title": "",\n          "full": false,\n          "chips": ["200°C Fan"],\n          "qty": null,\n          "body": "",\n          "storage": null,\n          "warn": null,\n          "safety": null\n        },\n        {\n          "time": "0:05",\n          "tag": "TM6",\n          "title": "Chop Aromatics",\n          "full": false,\n          "chips": ["3s", "Speed 10"],\n          "qty": "4 medium onions, 4 garlic cloves",\n          "body": "Cut 4 medium size onions and 4 garlic cloves into rough chunks (TM6 instructions: speed 10, time 3 sec).",\n          "storage": null,\n          "warn": null,\n          "safety": null\n        }\n      ]\n    },\n    {\n      "id": "medium",\n      "label": "Thursday · 1 hr",\n      "groundRule": "",\n      "overview": [{"e": "emoji", "t": "description"}],\n      "steps": []\n    },\n    {\n      "id": "evenings",\n      "label": "Weekday Evenings",\n      "groundRule": "",\n      "overview": null,\n      "steps": [\n        {\n          "time": "Mon",\n          "tag": "HOB",\n          "title": "",\n          "full": false,\n          "chips": ["20m active"],\n          "qty": null,\n          "body": "",\n          "storage": "20 min total",\n          "warn": null,\n          "safety": null\n        }\n      ]\n    }\n  ],\n  "toddlerActivities": [\n    { "icon": "🥔", "title": "Short label", "task": "One concrete sentence tied to a step above.", "needsTool": null }\n  ]\n}\n\nEvery "body" field must follow the instruction specificity rules from the system prompt: exact quantities/sizes, and inline appliance settings for TM6/HOB/OVEN steps. The "Chop Aromatics" step above is an example of the required level of detail, not literal content to reuse verbatim. "toddlerActivities" must follow the Toddler helpers rules: 3-6 items, each tied to real prep in the steps, age-appropriate, never near heat or blades.`
 
     const resp = await fetch(GROQ_URL, {
       method: 'POST',

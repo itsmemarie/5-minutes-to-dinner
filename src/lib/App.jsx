@@ -5,13 +5,13 @@ import {
   addPlannedMeals, removePlannedMeal, updatePlannedMealPortion, movePlannedMeal,
   fetchShoppingList, saveShoppingList, updateShoppingItem,
   fetchFreezerItems, replaceFreezerItems, addFreezerItem, updateFreezerStock, removeFreezerItem,
-  fetchToddlerCookingGuide, saveToddlerCookingGuide,
+  fetchToddlerCookingGuide, saveToddlerCookingGuide, saveToddlerDob,
   fetchUserProfile, saveUserProfile, fetchAllRecipeNutrition,
 } from './supabase.js'
 import { callEdgeFn } from './ai.js'
 import { computeTargets } from './goalMaths.js'
 import { C, ep, mn, R } from './theme.js'
-import { TODAY, DAYS, DAY_LBL, WEEK_OF, WEEK_LBL, uid, emptyWeek, ageBandFromDob } from './dateHelpers.js'
+import { TODAY, DAYS, DAY_LBL, WEEK_OF, WEEK_LBL, uid, emptyWeek, ageBandFromDob, TODDLER_AGE_BANDS } from './dateHelpers.js'
 import { Spinner, Btn, Icon } from '../components/ui/index.js'
 import { RecipeScreen } from '../components/RecipeScreen.jsx'
 import { HomeScreen } from '../components/HomeScreen.jsx'
@@ -25,8 +25,8 @@ import { SettingsScreen } from '../components/SettingsScreen.jsx'
 import { FreezerScreen } from '../components/FreezerScreen.jsx'
 import { ToddlerCookingScreen } from '../components/ToddlerCookingScreen.jsx'
 
-// Toddler DOB used for age-appropriate nutritional guidelines and toddler cooking content
-const TODDLER_DOB = '2024-09-27'
+// Fallback toddler DOB (used before app_settings.toddler_dob loads / if unset)
+const DEFAULT_TODDLER_DOB = '2024-09-27'
 
 // ─── Root App ──────────────────────────────────────────────────────────
 export default function App() {
@@ -64,7 +64,8 @@ export default function App() {
   const [toddlerGuide,       setToddlerGuide]       = useState(null)
   const [toddlerGuideLoading,setToddlerGuideLoading] = useState(false)
   const [toddlerGuideError,  setToddlerGuideError]   = useState(null)
-  const [toddlerBand,        setToddlerBand]         = useState(ageBandFromDob(TODDLER_DOB))
+  const [toddlerDob,         setToddlerDobSt]        = useState(DEFAULT_TODDLER_DOB)
+  const [toddlerBand,        setToddlerBand]         = useState(ageBandFromDob(DEFAULT_TODDLER_DOB))
   const [defPort,     setDefPortSt]   = useState(4)
   const [goalProfile,      setGoalProfileSt]  = useState(null)
   const [nutritionByRecipe,setNutritionByRecipe] = useState({})
@@ -82,6 +83,7 @@ export default function App() {
         setRecipes(recs)
         setFreezerItems(freezer)
         if (settings?.default_portions) setDefPortSt(settings.default_portions)
+        if (settings?.toddler_dob) setToddlerDobSt(settings.toddler_dob)
         setGoalProfileSt(profile)
         setNutritionByRecipe(nutritionMap)
 
@@ -131,6 +133,18 @@ export default function App() {
     setDefPortSt(val)
     await saveSettings(val)
   }
+
+  const setToddlerDob = async val => {
+    setToddlerDobSt(val)
+    await saveToddlerDob(val)
+  }
+
+  // Keep the age band in sync with the DOB (from Settings edits or the initial
+  // settings load) and drop the cached AI guide, which is keyed by DOB.
+  useEffect(() => {
+    setToddlerBand(ageBandFromDob(toddlerDob))
+    setToddlerGuide(null)
+  }, [toddlerDob])
 
   // Goal profile — updates the panel instantly, persists on a short debounce so a
   // quick run of keystrokes (age, weights) doesn't fire a write per character.
@@ -335,7 +349,7 @@ export default function App() {
       // it will be available on the response object for future expansion.
       const [adultResult, toddlerResult] = await Promise.all([
         callEdgeFn('nutrition', { ...basePayload, profile: 'female_adult', portionsPerDay: 1 }),
-        callEdgeFn('nutrition', { ...basePayload, profile: 'toddler',      portionsPerDay: 0.5, dob: TODDLER_DOB }),
+        callEdgeFn('nutrition', { ...basePayload, profile: 'toddler',      portionsPerDay: 0.5, dob: toddlerDob }),
       ])
       const normalize = r => ({
         scores: r.scores,
@@ -357,7 +371,8 @@ export default function App() {
   const generateBatch = async () => {
     setBatchLoading(true); setBatchError(null)
     try {
-      const result = await callEdgeFn('batch-cooking', { meals: plan })
+      const ageBandLabel = TODDLER_AGE_BANDS.find(b => b.id === ageBandFromDob(toddlerDob))?.label
+      const result = await callEdgeFn('batch-cooking', { meals: plan, ageBandLabel })
       setBatchData(result)
     } catch(e) {
       setBatchError(e.message)
@@ -369,9 +384,9 @@ export default function App() {
   const generateToddlerGuide = async () => {
     setToddlerGuideLoading(true); setToddlerGuideError(null)
     try {
-      const result = await callEdgeFn('toddler-cooking', { dob: TODDLER_DOB })
+      const result = await callEdgeFn('toddler-cooking', { dob: toddlerDob })
       setToddlerGuide(result)
-      saveToddlerCookingGuide(TODDLER_DOB, result)
+      saveToddlerCookingGuide(toddlerDob, result)
     } catch(e) {
       setToddlerGuideError(e.message)
     } finally {
@@ -392,7 +407,7 @@ export default function App() {
     if (!toddlerGuide && !toddlerGuideLoading) {
       setToddlerGuideLoading(true)
       fetchToddlerCookingGuide()
-        .then(cached => { if (cached && cached.dob === TODDLER_DOB) setToddlerGuide(cached.content) })
+        .then(cached => { if (cached && cached.dob === toddlerDob) setToddlerGuide(cached.content) })
         .catch(() => {})
         .finally(() => setToddlerGuideLoading(false))
     }
@@ -453,13 +468,13 @@ export default function App() {
         <Btn label='Retry' onClick={()=>window.location.reload()} secondary/>
       </div>
     )
-    if (screen === 'settings')        return <SettingsScreen defPort={defPort} setDefPort={setDefPort} goalProfile={goalProfile} goalTargets={goalTargets} setGoalProfile={setGoalProfile}/>
+    if (screen === 'settings')        return <SettingsScreen defPort={defPort} setDefPort={setDefPort} toddlerDob={toddlerDob} setToddlerDob={setToddlerDob} goalProfile={goalProfile} goalTargets={goalTargets} setGoalProfile={setGoalProfile}/>
     if (screen === 'freezerManage')   return <FreezerScreen items={freezerItems} onReplace={async names=>setFreezerItems(await replaceFreezerItems(names))} onAddOne={async name=>{const item=await addFreezerItem(name);setFreezerItems(items=>{const i=items.findIndex(x=>x.id===item.id);return i>=0?items.map(x=>x.id===item.id?item:x):[...items,item].sort((a,b)=>a.name.localeCompare(b.name))})}} onToggleStock={async(id,inStock)=>{setFreezerItems(items=>items.map(x=>x.id===id?{...x,in_stock:inStock}:x));await updateFreezerStock(id,inStock)}} onDelete={async id=>{setFreezerItems(items=>items.filter(x=>x.id!==id));await removeFreezerItem(id)}}/>
     if (screen === 'nutrition')       return <NutritionScreen profile={nutriProf} setProfile={setNutriProf} nutriData={nutriData} nutriLoading={nutriLoading} nutriError={nutriError} onAnalyse={analyseNutrition} goalProfile={goalProfile} goalTargets={goalTargets} plan={plan} nutritionByRecipe={nutritionByRecipe}/>
     if (screen === 'dailyPlan')       return <DailyPlanScreen day={selDay} plan={plan} recipes={recipes} updatePortion={updatePortion} removeMeal={removeMeal} onAddToSection={openAddSec} onRecipeOpen={openRecipeFromDailyPlan} onSave={()=>setScreen(null)} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe}/>
     if (screen === 'recipeSelection') return <RecipeSelectionScreen day={selDay} section={selSec} plan={plan} recipes={recipes} freezerItems={freezerItems} onAdd={addMeals} onAddFreezer={addFreezerMeals} onManageFreezer={openFreezerManage} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))} onPreview={openRecipeFromSelection} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe}/>
-    if (screen === 'recipe')          return <RecipeScreen recipeId={selRecipeId} portion={recipeDetailPortion} onAddMeal={()=>addMeals([selRecipeId])} toddlerDob={TODDLER_DOB} onOpenToddlerCooking={()=>openToddlerCooking(true)} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe} day={selDay} plan={plan}/>
-    if (screen === 'toddlerCooking')  return <ToddlerCookingScreen guide={toddlerGuide} loading={toddlerGuideLoading} error={toddlerGuideError} activeBand={toddlerBand} setActiveBand={setToddlerBand} onGenerate={generateToddlerGuide}/>
+    if (screen === 'recipe')          return <RecipeScreen recipeId={selRecipeId} portion={recipeDetailPortion} onAddMeal={()=>addMeals([selRecipeId])} toddlerDob={toddlerDob} onOpenToddlerCooking={()=>openToddlerCooking(true)} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe} day={selDay} plan={plan}/>
+    if (screen === 'toddlerCooking')  return <ToddlerCookingScreen guide={toddlerGuide} loading={toddlerGuideLoading} error={toddlerGuideError} activeBand={toddlerBand} setActiveBand={setToddlerBand} currentBand={ageBandFromDob(toddlerDob)} onGenerate={generateToddlerGuide}/>
     if (tab === 'home')    return <HomeScreen plan={plan} onDayOpen={openDayPlan} onRecipeOpen={openRecipeFromHome} moveMeal={moveMeal} onCopy={copyWeekPlan} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))}/>
     if (tab === 'planner') return <PlannerScreen plan={plan} removeMeal={removeMeal} moveMeal={moveMeal} duplicateMeal={duplicateMeal} updatePortion={updatePortion} onDayOpen={openDayPlan} onRecipeOpen={openRecipeFromHome} onNutrition={()=>{ setScreen('nutrition'); if(!nutriData) analyseNutrition() }} onShoppingList={generateShoppingList} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe}/>
     if (tab === 'list')    return <ShoppingListScreen shopping={shopping} onToggle={onShoppingToggle} loading={shoppingLoading} error={shoppingError} onRegenerate={generateShoppingList}/>

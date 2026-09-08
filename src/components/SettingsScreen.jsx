@@ -1,4 +1,5 @@
 import { C, ep, mn, CARD, R } from '../lib/theme.js'
+import { ageBandFromDob, TODDLER_AGE_BANDS } from '../lib/dateHelpers.js'
 import { Stepper } from './ui/Stepper.jsx'
 import {
   PACES, ACTIVITY, CALORIE_FLOOR,
@@ -35,7 +36,8 @@ function FieldBox({ label, children, emphasise }) {
 }
 const numInputStyle = { ...mn, border:'none', outline:'none', background:'none', fontWeight:700, fontSize:15, width:'100%', padding:0 }
 
-export function SettingsScreen({defPort,setDefPort,goalProfile,goalTargets,setGoalProfile}){
+export function SettingsScreen({defPort,setDefPort,toddlerDob,setToddlerDob,goalProfile,goalTargets,setGoalProfile}){
+  const toddlerBandLabel = toddlerDob ? (TODDLER_AGE_BANDS.find(b => b.id === ageBandFromDob(toddlerDob))?.label || null) : null
   const gp = goalProfile
   const goalMode = !!gp?.goalModeEnabled
   const units = gp?.units ?? 'metric'
@@ -54,6 +56,30 @@ export function SettingsScreen({defPort,setDefPort,goalProfile,goalTargets,setGo
           <div style={{...ep,fontSize:16,color:C.onSurface,marginBottom:6}}>Default Portion Size</div>
           <div style={{...mn,fontSize:13,color:C.onSurfaceVariant,marginBottom:24,lineHeight:1.5}}>Base for scaling all recipes in your planner.</div>
           <Stepper size="lg" caption="SERVINGS" value={defPort} min={1} onChange={setDefPort} />
+        </div>
+      </div>
+
+      {/* ── Toddler ──────────────────────────────────────────────── */}
+      <div style={{marginTop:22,...CARD}}>
+        <div style={{background:C.secondaryContainer,borderRadius:`${R.md}px ${R.md}px 0 0`,padding:'12px 16px',display:'flex',alignItems:'center',gap:8}}>
+          <span style={{fontSize:18}}>🧸</span>
+          <span style={{...ep,fontSize:16,color:C.onSecondaryContainer}}>Toddler</span>
+        </div>
+        <div style={{padding:'20px'}}>
+          <FieldBox label="Birthday">
+            <input
+              type="date"
+              value={toddlerDob || ''}
+              max={new Date().toISOString().split('T')[0]}
+              onChange={e=>e.target.value&&setToddlerDob(e.target.value)}
+              style={{...numInputStyle,fontSize:14}}
+            />
+          </FieldBox>
+          <div style={{...mn,fontSize:12,color:C.onSurfaceVariant,lineHeight:1.5,marginTop:10}}>
+            {toddlerBandLabel
+              ? <>Currently <strong style={{color:C.onSurface}}>{toddlerBandLabel}</strong> — toddler cooking activities across the app match this age.</>
+              : 'Set a birthday to get age-appropriate toddler cooking activities on recipes and batch cooking.'}
+          </div>
         </div>
       </div>
 

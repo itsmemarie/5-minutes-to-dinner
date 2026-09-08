@@ -83,7 +83,7 @@ export async function createRecipe(fields) {
 export async function fetchSettings() {
   const { data } = await supabase
     .from('app_settings')
-    .select('default_portions')
+    .select('default_portions, toddler_dob')
     .eq('id', 1)
     .single()
   return data
@@ -94,6 +94,13 @@ export async function saveSettings(defaultPortions) {
     .from('app_settings')
     .update({ default_portions: defaultPortions, updated_at: new Date().toISOString() })
     .eq('id', 1)
+}
+
+export async function saveToddlerDob(dob) {
+  // upsert (not update): app_settings may have no row yet
+  await supabase
+    .from('app_settings')
+    .upsert({ id: 1, toddler_dob: dob, updated_at: new Date().toISOString() }, { onConflict: 'id' })
 }
 
 // ─── Weight goal profile (singleton, same pattern as app_settings) ─
@@ -371,22 +378,24 @@ export async function saveToddlerCookingGuide(dob, content) {
     .upsert({ id: 1, dob, content, generated_at: new Date().toISOString() }, { onConflict: 'id' })
 }
 
-// ─── Recipe toddler task (cached AI content, per recipe) ────────────
+// ─── Recipe toddler activities (cached AI content, per recipe) ──────
 export async function fetchRecipeToddlerTask(recipeId) {
   const { data } = await supabase
     .from('recipe_toddler_tasks')
-    .select('dob, age_band_id, age_band_label, task, needs_tool, generated_at')
+    .select('dob, age_band_id, age_band_label, task, needs_tool, activities, generated_at')
     .eq('recipe_id', recipeId)
     .single()
   return data || null
 }
 
-export async function saveRecipeToddlerTask(recipeId, { dob, ageBandId, ageBandLabel, task, needsTool }) {
+export async function saveRecipeToddlerTask(recipeId, { dob, ageBandId, ageBandLabel, activities }) {
+  const first = activities?.[0] || {}
   await supabase
     .from('recipe_toddler_tasks')
     .upsert({
       recipe_id: recipeId, dob, age_band_id: ageBandId, age_band_label: ageBandLabel,
-      task, needs_tool: needsTool ?? null, generated_at: new Date().toISOString(),
+      activities, task: first.task ?? null, needs_tool: first.needsTool ?? null,
+      generated_at: new Date().toISOString(),
     }, { onConflict: 'recipe_id' })
 }
 
