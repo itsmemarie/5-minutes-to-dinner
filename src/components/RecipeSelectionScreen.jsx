@@ -1,12 +1,15 @@
 import { useState, useMemo } from 'react'
 import { C, mn, CARD, R } from '../lib/theme.js'
 import { DAYS } from '../lib/dateHelpers.js'
-import { Btn, PillBtn, Icon } from './ui/index.js'
+import { Btn, PillBtn, Icon, BudgetStrip } from './ui/index.js'
 import { RecipeBucket } from './RecipeBucket.jsx'
 import { NewRecipeForm } from './NewRecipeForm.jsx'
 import { parseSideNames, matchSideRecipes } from '../lib/sidePairing.js'
+import { dayNutritionTotals } from '../lib/goalMaths.js'
 
-export function RecipeSelectionScreen({day,section,plan,recipes,freezerItems,onAdd,onAddFreezer,onManageFreezer,onRecipeCreated,onPreview}){
+export function RecipeSelectionScreen({day,section,plan,recipes,freezerItems,onAdd,onAddFreezer,onManageFreezer,onRecipeCreated,onPreview,goalProfile,goalTargets,nutritionByRecipe={}}){
+  const goalMode=!!goalProfile?.goalModeEnabled&&!!goalTargets
+  const dayTotals=useMemo(()=>goalMode?dayNutritionTotals([...plan[day].breakfast,...plan[day].main,...plan[day].side],nutritionByRecipe):null,[goalMode,plan,day,nutritionByRecipe])
   const [search,setSearch]=useState('')
   const [chip,setChip]=useState('cat')
   const [selected,setSelected]=useState([])
@@ -69,6 +72,7 @@ export function RecipeSelectionScreen({day,section,plan,recipes,freezerItems,onA
   return(
     <div style={{display:'flex',flexDirection:'column',minHeight:'100%'}}>
       {showNewRecipe&&<NewRecipeForm defaultMealType={section==='breakfast'?'breakfast':section==='side'?'side':'main'} onSave={handleRecipeCreated} onCancel={()=>setShowNewRecipe(false)}/>}
+      {goalMode&&<div style={{padding:'0 20px'}}><BudgetStrip dayTotals={dayTotals} targets={goalTargets}/></div>}
       <div style={{flex:1,padding:'12px 20px 120px'}}>
         <div style={{display:'flex',gap:8,marginBottom:12,alignItems:'center'}}>
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder='🔍 Search meals…' style={{flex:1,padding:'10px 14px',borderRadius:R.md,border:`1px solid ${C.outlineVariant}`,fontSize:14,...mn,background:C.white,outline:'none'}}/>
@@ -108,12 +112,12 @@ export function RecipeSelectionScreen({day,section,plan,recipes,freezerItems,onA
           </div>
         ):(
           <>
-            <RecipeBucket title='Suggested' items={suggested} disabled={false} selected={selected} onToggle={toggle} onPreview={onPreview} suggestionLabel={mainRecipe?.name}/>
-            <RecipeBucket title='Already Planned This Week' items={alreadyWeek} disabled={false} selected={selected} onToggle={toggle} onPreview={onPreview}/>
-            <RecipeBucket title='Default' items={defaults} disabled={false} selected={selected} onToggle={toggle} onPreview={onPreview}/>
-            <RecipeBucket title='Try Out' items={tryOut} disabled={false} selected={selected} onToggle={toggle} onPreview={onPreview}/>
-            <RecipeBucket title='Order Out' items={orderOut} disabled={false} selected={selected} onToggle={toggle} onPreview={onPreview}/>
-            <RecipeBucket title='Other Meals' items={other} disabled={false} selected={selected} onToggle={toggle} onPreview={onPreview}/>
+            <RecipeBucket title='Suggested' items={suggested} disabled={false} selected={selected} onToggle={toggle} onPreview={onPreview} suggestionLabel={mainRecipe?.name} nutritionByRecipe={goalMode?nutritionByRecipe:null}/>
+            <RecipeBucket title='Already Planned This Week' items={alreadyWeek} disabled={false} selected={selected} onToggle={toggle} onPreview={onPreview} nutritionByRecipe={goalMode?nutritionByRecipe:null}/>
+            <RecipeBucket title='Default' items={defaults} disabled={false} selected={selected} onToggle={toggle} onPreview={onPreview} nutritionByRecipe={goalMode?nutritionByRecipe:null}/>
+            <RecipeBucket title='Try Out' items={tryOut} disabled={false} selected={selected} onToggle={toggle} onPreview={onPreview} nutritionByRecipe={goalMode?nutritionByRecipe:null}/>
+            <RecipeBucket title='Order Out' items={orderOut} disabled={false} selected={selected} onToggle={toggle} onPreview={onPreview} nutritionByRecipe={goalMode?nutritionByRecipe:null}/>
+            <RecipeBucket title='Other Meals' items={other} disabled={false} selected={selected} onToggle={toggle} onPreview={onPreview} nutritionByRecipe={goalMode?nutritionByRecipe:null}/>
           </>
         )}
       </div>

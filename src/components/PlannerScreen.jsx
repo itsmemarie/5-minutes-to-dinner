@@ -2,10 +2,12 @@ import { useState } from 'react'
 import { C, ep, mn, CARD, screenTitle, R } from '../lib/theme.js'
 import { DAYS, DAY_LBL, TODAY, WEEK_LBL } from '../lib/dateHelpers.js'
 import { Btn, Icon } from './ui/index.js'
+import { dayNutritionTotals, dayRemainingLine, rowFigure, mealNutrition } from '../lib/goalMaths.js'
 
 const SEC_LBL = { breakfast:'Breakfast', main:'Main', side:'Side' }
 
-export function PlannerScreen({plan,removeMeal,moveMeal,duplicateMeal,updatePortion,onDayOpen,onRecipeOpen,onNutrition}){
+export function PlannerScreen({plan,removeMeal,moveMeal,duplicateMeal,updatePortion,onDayOpen,onRecipeOpen,onNutrition,goalProfile,goalTargets,nutritionByRecipe={}}){
+  const goalMode = !!goalProfile?.goalModeEnabled && !!goalTargets
   const [drag,setDrag]=useState(null)   // {mealId,fromDay,section}
   const [over,setOver]=useState(null)   // day string being hovered
   const [servingsOpenId,setServingsOpenId]=useState(null)   // meal id whose servings panel is expanded
@@ -20,12 +22,16 @@ export function PlannerScreen({plan,removeMeal,moveMeal,duplicateMeal,updatePort
         <div style={{...screenTitle,color:C.onSurface}}>Weekly planner</div>
         <span style={{...mn,fontSize:12,color:C.onSurfaceVariant,background:C.surfaceContainerHigh,padding:'5px 12px',borderRadius:R.pill,whiteSpace:'nowrap'}}>{WEEK_LBL}</span>
       </div>
+      {goalMode&&(
+        <div style={{...mn,fontSize:12,color:C.onSurfaceVariant,lineHeight:1.5,margin:'-10px 0 16px'}}>Nutritional figures assume one portion per person, per planned meal.</div>
+      )}
       <button onClick={onNutrition} style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,border:'none',background:C.secondaryContainer,color:'#924b1a',borderRadius:R.pill,padding:'12px 14px',...mn,fontWeight:700,fontSize:14,whiteSpace:'nowrap',cursor:'pointer',marginBottom:20}}>
-        <Icon name='barChart3' size={16}/>Calculate nutritional insights
+        <Icon name='barChart3' size={16}/>{goalMode?'Goal & Nutritional Insights':'Calculate nutritional insights'}
       </button>
       {DAYS.map(day=>{
         const meals=[...plan[day].breakfast,...plan[day].main,...plan[day].side]
         const isToday=day===TODAY
+        const dayTotals=goalMode?dayNutritionTotals(meals,nutritionByRecipe):null
         return(
           <div key={day} style={{marginBottom:16}}>
             <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
@@ -36,6 +42,9 @@ export function PlannerScreen({plan,removeMeal,moveMeal,duplicateMeal,updatePort
                 </span>
               )}
             </div>
+            {goalMode&&(
+              <div style={{...mn,fontSize:11,color:dayTotals.hasData&&goalTargets.calories-dayTotals.calories<0?C.tertiary:C.onSurfaceVariant,margin:'-4px 0 8px',lineHeight:1.5,fontVariantNumeric:'tabular-nums'}}>{dayRemainingLine(dayTotals,goalTargets)}</div>
+            )}
             {meals.length===0?(
               <div onDragOver={e=>onDragOver(e,day)} onDragLeave={onDragLeave} onDrop={e=>onDrop(e,day)} style={{...CARD,padding:22,display:'flex',flexDirection:'column',alignItems:'center',gap:8,outline:over===day&&drag?.fromDay!==day?`2px solid ${C.primary}`:'2px solid transparent',transition:'outline 0.12s'}}>
                 <Icon name='utensilsCrossed' size={24} color={C.outlineVariant}/>
@@ -58,6 +67,9 @@ export function PlannerScreen({plan,removeMeal,moveMeal,duplicateMeal,updatePort
                             <Icon name='utensilsCrossed' size={11} color={C.primary}/>{m.portion}
                             <span style={{display:'flex',transform:servingsOpenId===m.id?'rotate(-90deg)':'rotate(90deg)',transition:'transform 0.15s'}}><Icon name='chevronRight' size={10} color={C.primary}/></span>
                           </span>
+                          {goalMode&&mealNutrition(m.recipeId,nutritionByRecipe)&&(
+                            <span style={{...mn,fontSize:11,color:C.onSurfaceVariant,fontVariantNumeric:'tabular-nums',borderLeft:`1px solid ${C.outlineVariant}`,paddingLeft:10}}>{rowFigure(mealNutrition(m.recipeId,nutritionByRecipe))}</span>
+                          )}
                         </div>
                       </div>
                       <button onClick={e=>{e.stopPropagation();duplicateMeal(day,m.section,m.id)}} title='Duplicate' style={{width:26,height:26,flexShrink:0,marginLeft:10,border:'none',background:'none',color:C.outlineVariant,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}><Icon name='copy' size={14} color={C.outlineVariant}/></button>
@@ -79,6 +91,9 @@ export function PlannerScreen({plan,removeMeal,moveMeal,duplicateMeal,updatePort
           </div>
         )
       })}
+      {goalMode&&(
+        <div style={{...mn,fontSize:11,color:C.onSurfaceVariant,lineHeight:1.6}}>A ~ marks a recipe where some ingredients are not matched to reference data yet.</div>
+      )}
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { C, mn, CARD, R } from '../lib/theme.js'
 import { Spinner, SecHead, Icon } from './ui/index.js'
+import { GoalInsightsTab } from './GoalInsightsTab.jsx'
 
 const METRIC_INFO = {
   gutHealth:'How much fibre, variety of veg, and gut-friendly foods (like yoghurt, beans, wholegrains) are in the week\'s meals.',
@@ -35,19 +36,28 @@ const NUTRI = {
     ]},
 }
 
-export function NutritionScreen({profile,setProfile,nutriData,nutriLoading,nutriError,onAnalyse}){
+export function NutritionScreen({profile,setProfile,nutriData,nutriLoading,nutriError,onAnalyse,goalProfile,goalTargets,plan,nutritionByRecipe={}}){
   const [showInfo,setShowInfo] = useState(false)
+  const goalMode = !!goalProfile?.goalModeEnabled && !!goalTargets
+  const [seg,setSeg] = useState(goalMode?'goal':'profile')
+  const showGoalTab = goalMode && seg==='goal'
   const data = nutriData?.[profile] || NUTRI[profile]
   const metrics=[{key:'gutHealth',label:'Gut Health',icon:'🦠'},{key:'vitaminMineral',label:'Vit & Mineral',icon:'💊'},{key:'inflammation',label:'Anti-Inflam.',icon:'🔥'},{key:'metabolic',label:'Metabolic',icon:'⚡'},{key:'antioxidant',label:'Antioxidant',icon:'🛡️'},{key:'overall',label:'Overall',icon:'❤️'}]
   return(
     <div style={{padding:'0 20px 20px'}}>
       <div style={{display:'flex',background:C.surfaceContainerHigh,borderRadius:R.pill,padding:3,margin:'16px 0'}}>
+        {goalMode&&(
+          <button onClick={()=>setSeg('goal')} style={{...mn,flex:1,padding:'9px 4px',borderRadius:R.pill,border:'none',background:seg==='goal'?C.primary:'transparent',color:seg==='goal'?C.onPrimary:C.onSurfaceVariant,fontWeight:700,fontSize:12,cursor:'pointer',letterSpacing:'0.04em',textTransform:'uppercase'}}>Your goal</button>
+        )}
         {['adult','toddler'].map(p=>(
-          <button key={p} onClick={()=>setProfile(p)} style={{...mn,flex:1,padding:'9px',borderRadius:R.pill,border:'none',background:profile===p?C.primary:'transparent',color:profile===p?C.onPrimary:C.onSurfaceVariant,fontWeight:700,fontSize:13,cursor:'pointer',letterSpacing:'0.04em',textTransform:'uppercase'}}>
+          <button key={p} onClick={()=>{setSeg('profile');setProfile(p)}} style={{...mn,flex:1,padding:'9px',borderRadius:R.pill,border:'none',background:!showGoalTab&&profile===p?C.primary:'transparent',color:!showGoalTab&&profile===p?C.onPrimary:C.onSurfaceVariant,fontWeight:700,fontSize:goalMode?12:13,cursor:'pointer',letterSpacing:'0.04em',textTransform:'uppercase'}}>
             {p==='adult'?'👤 Adult':'👶 Toddler'}
           </button>
         ))}
       </div>
+      {showGoalTab ? (
+        <GoalInsightsTab plan={plan} targets={goalTargets} nutritionByRecipe={nutritionByRecipe}/>
+      ) : (<>
       {nutriLoading&&<Spinner msg='Analysing your meal plan with AI…'/>}
       {nutriError&&<div style={{...CARD,padding:16,marginBottom:16,borderLeft:`4px solid ${C.error}`}}><p style={{...mn,fontSize:13,color:C.error,margin:0}}>⚠️ {nutriError}</p></div>}
       {!nutriData&&!nutriLoading&&<div style={{...CARD,padding:20,marginBottom:16,textAlign:'center'}}>
@@ -134,6 +144,7 @@ export function NutritionScreen({profile,setProfile,nutriData,nutriLoading,nutri
           </div>
         </div>
       )}
+      </>)}
     </div>
   )
 }

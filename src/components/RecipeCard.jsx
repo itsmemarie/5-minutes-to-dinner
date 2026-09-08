@@ -1,7 +1,8 @@
 import { C, mn, R } from '../lib/theme.js'
 import { Icon } from './ui/Icon.jsx'
+import { rowFigure } from '../lib/goalMaths.js'
 
-export function RecipeCard({r,disabled,selected,onToggle,onPreview,suggestionLabel,isLast}){
+export function RecipeCard({r,disabled,selected,onToggle,onPreview,suggestionLabel,isLast,nutrition}){
   const sel=selected.includes(r.id)
   const portions=Math.max(r.base,r.min)
   return(
@@ -26,6 +27,9 @@ export function RecipeCard({r,disabled,selected,onToggle,onPreview,suggestionLab
             <Icon name='utensilsCrossed' size={11} color={C.primary}/>{portions}
             <span style={{display:'flex',transform:'rotate(90deg)'}}><Icon name='chevronRight' size={10} color={C.primary}/></span>
           </span>
+          {nutrition?.kcal!=null&&(
+            <span style={{...mn,fontSize:11,color:C.onSurfaceVariant,fontVariantNumeric:'tabular-nums',borderLeft:`1px solid ${C.outlineVariant}`,paddingLeft:10}}>{rowFigure(nutrition)}</span>
+          )}
         </div>
       </div>
       <div style={{width:26,height:26,borderRadius:R.pill,border:`2px solid ${disabled?C.outlineVariant:sel?C.primary:C.outlineVariant}`,background:disabled?C.surfaceContainerHigh:sel?C.primary:'transparent',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginLeft:10,color:disabled?C.outline:C.onPrimary}}>

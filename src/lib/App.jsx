@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import {
   fetchRecipes, fetchSettings, saveSettings,
   getOrCreatePlan, fetchWeekPlan,
@@ -6,8 +6,10 @@ import {
   fetchShoppingList, saveShoppingList, updateShoppingItem,
   fetchFreezerItems, replaceFreezerItems, addFreezerItem, updateFreezerStock, removeFreezerItem,
   fetchToddlerCookingGuide, saveToddlerCookingGuide,
+  fetchUserProfile, saveUserProfile, fetchAllRecipeNutrition,
 } from './supabase.js'
 import { callEdgeFn } from './ai.js'
+import { computeTargets } from './goalMaths.js'
 import { C, ep, mn, R } from './theme.js'
 import { TODAY, DAYS, DAY_LBL, WEEK_OF, WEEK_LBL, uid, emptyWeek, ageBandFromDob } from './dateHelpers.js'
 import { Spinner, Btn, Icon } from '../components/ui/index.js'
@@ -64,16 +66,24 @@ export default function App() {
   const [toddlerGuideError,  setToddlerGuideError]   = useState(null)
   const [toddlerBand,        setToddlerBand]         = useState(ageBandFromDob(TODDLER_DOB))
   const [defPort,     setDefPortSt]   = useState(4)
+  const [goalProfile,      setGoalProfileSt]  = useState(null)
+  const [nutritionByRecipe,setNutritionByRecipe] = useState({})
+  const goalSaveTimer = useRef(null)
+  const goalPendingPatch = useRef({})
 
   // ── Bootstrap ────────────────────────────────────────────────────
   useEffect(() => {
     ;(async () => {
       try {
         setLoadMsg('Loading recipes…')
-        const [recs, settings, freezer] = await Promise.all([fetchRecipes(), fetchSettings(), fetchFreezerItems()])
+        const [recs, settings, freezer, profile, nutritionMap] = await Promise.all([
+          fetchRecipes(), fetchSettings(), fetchFreezerItems(), fetchUserProfile(), fetchAllRecipeNutrition(),
+        ])
         setRecipes(recs)
         setFreezerItems(freezer)
         if (settings?.default_portions) setDefPortSt(settings.default_portions)
+        setGoalProfileSt(profile)
+        setNutritionByRecipe(nutritionMap)
 
         setLoadMsg('Loading your meal plan…')
         const pid = await getOrCreatePlan(WEEK_OF)
@@ -121,6 +131,23 @@ export default function App() {
     setDefPortSt(val)
     await saveSettings(val)
   }
+
+  // Goal profile — updates the panel instantly, persists on a short debounce so a
+  // quick run of keystrokes (age, weights) doesn't fire a write per character.
+  const setGoalProfile = patch => {
+    setGoalProfileSt(prev => ({ ...prev, ...patch }))
+    goalPendingPatch.current = { ...goalPendingPatch.current, ...patch }
+    clearTimeout(goalSaveTimer.current)
+    goalSaveTimer.current = setTimeout(() => {
+      const toSave = goalPendingPatch.current
+      goalPendingPatch.current = {}
+      saveUserProfile(toSave)
+    }, 500)
+  }
+  const goalTargets = useMemo(
+    () => (goalProfile ? computeTargets(goalProfile) : null),
+    [goalProfile]
+  )
 
   const removeMeal = async (day, sec, id) => {
     const meal = plan[day][sec].find(m => m.id === id)
@@ -426,15 +453,15 @@ export default function App() {
         <Btn label='Retry' onClick={()=>window.location.reload()} secondary/>
       </div>
     )
-    if (screen === 'settings')        return <SettingsScreen defPort={defPort} setDefPort={setDefPort}/>
+    if (screen === 'settings')        return <SettingsScreen defPort={defPort} setDefPort={setDefPort} goalProfile={goalProfile} goalTargets={goalTargets} setGoalProfile={setGoalProfile}/>
     if (screen === 'freezerManage')   return <FreezerScreen items={freezerItems} onReplace={async names=>setFreezerItems(await replaceFreezerItems(names))} onAddOne={async name=>{const item=await addFreezerItem(name);setFreezerItems(items=>{const i=items.findIndex(x=>x.id===item.id);return i>=0?items.map(x=>x.id===item.id?item:x):[...items,item].sort((a,b)=>a.name.localeCompare(b.name))})}} onToggleStock={async(id,inStock)=>{setFreezerItems(items=>items.map(x=>x.id===id?{...x,in_stock:inStock}:x));await updateFreezerStock(id,inStock)}} onDelete={async id=>{setFreezerItems(items=>items.filter(x=>x.id!==id));await removeFreezerItem(id)}}/>
-    if (screen === 'nutrition')       return <NutritionScreen profile={nutriProf} setProfile={setNutriProf} nutriData={nutriData} nutriLoading={nutriLoading} nutriError={nutriError} onAnalyse={analyseNutrition}/>
-    if (screen === 'dailyPlan')       return <DailyPlanScreen day={selDay} plan={plan} recipes={recipes} updatePortion={updatePortion} removeMeal={removeMeal} onAddToSection={openAddSec} onRecipeOpen={openRecipeFromDailyPlan} onSave={()=>setScreen(null)}/>
-    if (screen === 'recipeSelection') return <RecipeSelectionScreen day={selDay} section={selSec} plan={plan} recipes={recipes} freezerItems={freezerItems} onAdd={addMeals} onAddFreezer={addFreezerMeals} onManageFreezer={openFreezerManage} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))} onPreview={openRecipeFromSelection}/>
-    if (screen === 'recipe')          return <RecipeScreen recipeId={selRecipeId} portion={recipeDetailPortion} onAddMeal={()=>addMeals([selRecipeId])} toddlerDob={TODDLER_DOB} onOpenToddlerCooking={()=>openToddlerCooking(true)}/>
+    if (screen === 'nutrition')       return <NutritionScreen profile={nutriProf} setProfile={setNutriProf} nutriData={nutriData} nutriLoading={nutriLoading} nutriError={nutriError} onAnalyse={analyseNutrition} goalProfile={goalProfile} goalTargets={goalTargets} plan={plan} nutritionByRecipe={nutritionByRecipe}/>
+    if (screen === 'dailyPlan')       return <DailyPlanScreen day={selDay} plan={plan} recipes={recipes} updatePortion={updatePortion} removeMeal={removeMeal} onAddToSection={openAddSec} onRecipeOpen={openRecipeFromDailyPlan} onSave={()=>setScreen(null)} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe}/>
+    if (screen === 'recipeSelection') return <RecipeSelectionScreen day={selDay} section={selSec} plan={plan} recipes={recipes} freezerItems={freezerItems} onAdd={addMeals} onAddFreezer={addFreezerMeals} onManageFreezer={openFreezerManage} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))} onPreview={openRecipeFromSelection} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe}/>
+    if (screen === 'recipe')          return <RecipeScreen recipeId={selRecipeId} portion={recipeDetailPortion} onAddMeal={()=>addMeals([selRecipeId])} toddlerDob={TODDLER_DOB} onOpenToddlerCooking={()=>openToddlerCooking(true)} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe} day={selDay} plan={plan}/>
     if (screen === 'toddlerCooking')  return <ToddlerCookingScreen guide={toddlerGuide} loading={toddlerGuideLoading} error={toddlerGuideError} activeBand={toddlerBand} setActiveBand={setToddlerBand} onGenerate={generateToddlerGuide}/>
     if (tab === 'home')    return <HomeScreen plan={plan} onDayOpen={openDayPlan} onRecipeOpen={openRecipeFromHome} moveMeal={moveMeal} onCopy={copyWeekPlan} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))}/>
-    if (tab === 'planner') return <PlannerScreen plan={plan} removeMeal={removeMeal} moveMeal={moveMeal} duplicateMeal={duplicateMeal} updatePortion={updatePortion} onDayOpen={openDayPlan} onRecipeOpen={openRecipeFromHome} onNutrition={()=>{ setScreen('nutrition'); if(!nutriData) analyseNutrition() }} onShoppingList={generateShoppingList}/>
+    if (tab === 'planner') return <PlannerScreen plan={plan} removeMeal={removeMeal} moveMeal={moveMeal} duplicateMeal={duplicateMeal} updatePortion={updatePortion} onDayOpen={openDayPlan} onRecipeOpen={openRecipeFromHome} onNutrition={()=>{ setScreen('nutrition'); if(!nutriData) analyseNutrition() }} onShoppingList={generateShoppingList} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe}/>
     if (tab === 'list')    return <ShoppingListScreen shopping={shopping} onToggle={onShoppingToggle} loading={shoppingLoading} error={shoppingError} onRegenerate={generateShoppingList}/>
     if (tab === 'batch')   return <BatchScreen activeTab={batchTab} setActiveTab={setBatchTab} batchData={batchData} batchLoading={batchLoading} batchError={batchError} onGenerate={generateBatch} onOpenToddlerCooking={()=>openToddlerCooking(false)}/>
   }
