@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { C, ep, mn, CARD, R } from '../lib/theme.js'
 import { DAY_LBL } from '../lib/dateHelpers.js'
-import { Btn, Stepper } from './ui/index.js'
+import { Btn, Stepper, BudgetStrip } from './ui/index.js'
 import { Icon } from './ui/Icon.jsx'
 import { parseSideNames, formatSideNames } from '../lib/sidePairing.js'
+import { dayNutritionTotals, dayRemainingLine } from '../lib/goalMaths.js'
 
-export function DailyPlanScreen({day,plan,recipes,updatePortion,removeMeal,onAddToSection,onRecipeOpen,onSave}){
+export function DailyPlanScreen({day,plan,recipes,updatePortion,removeMeal,onAddToSection,onRecipeOpen,onSave,goalProfile,goalTargets,nutritionByRecipe={}}){
   const [saved,setSaved]=useState(false)
   const secs=[{key:'breakfast',label:'Breakfast'},{key:'main',label:'Main Meal'},{key:'side',label:'Sides & Snacks'}]
   const go=()=>{setSaved(true);setTimeout(()=>{setSaved(false);onSave()},1000)}
@@ -13,9 +14,17 @@ export function DailyPlanScreen({day,plan,recipes,updatePortion,removeMeal,onAdd
   const mainRecipe=recipes?.find(r=>r.id===mainMeal?.recipeId)
   const sideNames=parseSideNames(mainRecipe?.sideRecommendation)
   const showSideHint=plan[day].side.length===0&&mainMeal&&sideNames.length>0
+  const goalMode=!!goalProfile?.goalModeEnabled&&!!goalTargets
+  const dayMeals=[...plan[day].breakfast,...plan[day].main,...plan[day].side]
+  const dayTotals=goalMode?dayNutritionTotals(dayMeals,nutritionByRecipe):null
   return(
     <div style={{padding:'0 20px'}}>
-      <div style={{...ep,fontSize:24,color:C.onSurface,padding:'16px 0 12px'}}>{DAY_LBL[day]}</div>
+      {goalMode&&<BudgetStrip dayTotals={dayTotals} targets={goalTargets}/>}
+      <div style={{...ep,fontSize:24,color:C.onSurface,padding:'16px 0 2px'}}>{DAY_LBL[day]}</div>
+      {goalMode&&(
+        <div style={{...mn,fontSize:12,color:C.onSurfaceVariant,lineHeight:1.5,paddingBottom:4}}>{dayMeals.length===0?'Nothing planned yet':dayRemainingLine(dayTotals,goalTargets)}</div>
+      )}
+      <div style={{height:12}}/>
       {secs.map(s=>(
         <div key={s.key} style={{marginBottom:20}}>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>

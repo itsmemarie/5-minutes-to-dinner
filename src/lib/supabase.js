@@ -96,6 +96,65 @@ export async function saveSettings(defaultPortions) {
     .eq('id', 1)
 }
 
+// ─── Weight goal profile (singleton, same pattern as app_settings) ─
+const PROFILE_FIELD_MAP = {
+  goalModeEnabled: 'goal_mode_enabled', direction: 'direction', sex: 'sex', age: 'age',
+  heightCm: 'height_cm', weightKg: 'weight_kg', goalWeightKg: 'goal_weight_kg',
+  activityLevel: 'activity_level', pace: 'pace', units: 'units',
+}
+
+export async function fetchUserProfile() {
+  const { data, error } = await supabase
+    .from('user_profile')
+    .select('*')
+    .eq('id', 1)
+    .single()
+  if (error) throw error
+  return {
+    goalModeEnabled: data.goal_mode_enabled, direction: data.direction, sex: data.sex,
+    age: data.age, heightCm: Number(data.height_cm), weightKg: Number(data.weight_kg),
+    goalWeightKg: Number(data.goal_weight_kg), activityLevel: data.activity_level,
+    pace: data.pace, units: data.units,
+  }
+}
+
+// patch: any subset of the camelCase fields above
+export async function saveUserProfile(patch) {
+  const dbPatch = {}
+  for (const [k, v] of Object.entries(patch)) {
+    if (PROFILE_FIELD_MAP[k]) dbPatch[PROFILE_FIELD_MAP[k]] = v
+  }
+  await supabase
+    .from('user_profile')
+    .update({ ...dbPatch, updated_at: new Date().toISOString() })
+    .eq('id', 1)
+}
+
+// ─── Per-portion nutrition + whole-food share for every recipe ─────
+// Backs goal-mode figures (planner/daily-plan/recipe-selection row figures, the recipe
+// details "Supports your goal" sheet, and the nutrition insights "Your goal" tab).
+export async function fetchAllRecipeNutrition() {
+  const [{ data: nutri, error: nErr }, { data: whole, error: wErr }] = await Promise.all([
+    supabase.from('recipe_nutrition_per_portion').select('recipe_id, kcal, protein_g, fibre_g, coverage_pct, is_estimated'),
+    supabase.from('recipe_whole_food_share').select('recipe_id, whole_food_pct'),
+  ])
+  if (nErr) throw nErr
+  if (wErr) throw wErr
+  const wholeMap = Object.fromEntries((whole || []).map(w => [w.recipe_id, w.whole_food_pct]))
+  const map = {}
+  ;(nutri || []).forEach(n => {
+    map[n.recipe_id] = {
+      kcal: n.kcal != null ? Number(n.kcal) : null,
+      protein_g: n.protein_g != null ? Number(n.protein_g) : null,
+      fibre_g: n.fibre_g != null ? Number(n.fibre_g) : null,
+      coverage_pct: n.coverage_pct != null ? Number(n.coverage_pct) : null,
+      is_estimated: !!n.is_estimated,
+      whole_food_pct: wholeMap[n.recipe_id] != null ? Number(wholeMap[n.recipe_id]) : null,
+    }
+  })
+  return map
+}
+
 // ─── Meal plan (get or create for a given week) ───────────────────
 export async function getOrCreatePlan(weekOf) {
   // Upsert plan

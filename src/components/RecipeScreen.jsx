@@ -4,9 +4,13 @@ import { callEdgeFn } from '../lib/ai.js'
 import { C, ep, mn, CARD, R } from '../lib/theme.js'
 import { ageBandFromDob, TODDLER_AGE_BANDS } from '../lib/dateHelpers.js'
 import { parseIngredients, parseIngredientParts, parseSteps } from '../lib/recipeParsing.js'
-import { Spinner, Btn } from './ui/index.js'
+import { Spinner, Btn, Icon } from './ui/index.js'
+import { dayNutritionTotals, rowFigure } from '../lib/goalMaths.js'
 
-export function RecipeScreen({ recipeId, portion, onAddMeal, toddlerDob, onOpenToddlerCooking }) {
+export function RecipeScreen({ recipeId, portion, onAddMeal, toddlerDob, onOpenToddlerCooking, goalProfile, goalTargets, nutritionByRecipe={}, day, plan }) {
+  const goalMode = !!goalProfile?.goalModeEnabled && !!goalTargets
+  const recipeNutrition = nutritionByRecipe[recipeId]
+  const [showGoalSheet, setShowGoalSheet] = useState(false)
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState(null)
@@ -78,6 +82,7 @@ export function RecipeScreen({ recipeId, portion, onAddMeal, toddlerDob, onOpenT
   const tmSteps = parseSteps(data.instructions_thermomix)
 
   return (
+    <>
     <div style={{padding:'20px 20px 40px'}}>
       {data.has_thermomix_version&&(
         <div style={{display:'inline-flex',alignItems:'center',gap:6,background:C.primary,borderRadius:R.pill,padding:'5px 12px',marginBottom:12}}>
@@ -113,6 +118,17 @@ export function RecipeScreen({ recipeId, portion, onAddMeal, toddlerDob, onOpenT
           <span style={{...mn,fontSize:15,fontWeight:700,color:C.onSurface}}>{data.min_portions||1} servings</span>
         </div>
       </div>
+
+      {goalMode&&recipeNutrition?.kcal!=null&&(
+        <div onClick={()=>setShowGoalSheet(true)} style={{background:C.primaryFixed,borderRadius:R.md,padding:'12px 14px',marginBottom:16,display:'flex',alignItems:'center',gap:12,cursor:'pointer'}}>
+          <span style={{fontSize:16,lineHeight:1}}>🎯</span>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{...mn,fontSize:13,fontWeight:700,color:C.primary,marginBottom:2}}>Supports your goal</div>
+            <div style={{...mn,fontSize:12,color:C.onSurfaceVariant,lineHeight:1.5}}>One portion is about {Math.round(recipeNutrition.kcal/goalTargets.calories*100)}% of today's calories, {Math.round(recipeNutrition.protein_g/goalTargets.protein*100)}% of your protein</div>
+          </div>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={C.primary} strokeWidth="2.75" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="m9 18 6-6-6-6"/></svg>
+        </div>
+      )}
 
       {/* Storage */}
       {(data.fridge_storage||data.freezer_storage)&&(
@@ -278,5 +294,51 @@ export function RecipeScreen({ recipeId, portion, onAddMeal, toddlerDob, onOpenT
         </div>
       )}
     </div>
+
+    {showGoalSheet&&goalMode&&recipeNutrition?.kcal!=null&&(()=>{
+      const already = day&&plan ? dayNutritionTotals([...plan[day].breakfast,...plan[day].main,...plan[day].side], nutritionByRecipe) : null
+      const alreadyCal=already?.hasData?already.calories:0, alreadyPro=already?.hasData?already.protein:0, alreadyFib=already?.hasData?already.fibre:0
+      const withCal=alreadyCal+recipeNutrition.kcal, withPro=alreadyPro+recipeNutrition.protein_g, withFib=alreadyFib+recipeNutrition.fibre_g
+      const toGoCal=Math.max(0,Math.round(goalTargets.calories-withCal)), toGoPro=Math.max(0,Math.round(goalTargets.protein-withPro)), toGoFib=Math.max(0,Math.round(goalTargets.fibre-withFib))
+      const pctCal=Math.round(recipeNutrition.kcal/goalTargets.calories*100), pctPro=Math.round(recipeNutrition.protein_g/goalTargets.protein*100), pctFib=Math.round(recipeNutrition.fibre_g/goalTargets.fibre*100)
+      return(
+        <div onClick={()=>setShowGoalSheet(false)} style={{position:'fixed',inset:0,background:'rgba(24,36,23,0.42)',zIndex:60,display:'flex',justifyContent:'center',alignItems:'flex-end'}}>
+          <div onClick={e=>e.stopPropagation()} style={{width:'100%',maxWidth:430,maxHeight:'86vh',overflowY:'auto',background:C.white,borderRadius:'16px 16px 0 0',padding:'8px 20px 22px'}}>
+            <div style={{width:44,height:4,borderRadius:R.pill,background:C.outlineVariant,margin:'0 auto 16px'}}/>
+            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:16}}>
+              <span style={{fontSize:17,lineHeight:1}}>🎯</span>
+              <span style={{...ep,fontSize:19,color:C.primary,flex:1}}>Supports your goal</span>
+              <button onClick={()=>setShowGoalSheet(false)} style={{border:'none',background:C.primaryFixed,borderRadius:R.pill,width:30,height:30,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',padding:0}}>
+                <Icon name='x' size={15} color={C.onSurfaceVariant}/>
+              </button>
+            </div>
+            <div style={{...mn,fontSize:11,fontWeight:700,color:C.onSurfaceVariant,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:10}}>Per portion, one of {scaledFor}</div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginBottom:16}}>
+              {[['calories',Math.round(recipeNutrition.kcal),pctCal],['protein',`${Math.round(recipeNutrition.protein_g)}g`,pctPro],['fibre',`${Math.round(recipeNutrition.fibre_g)}g`,pctFib]].map(([label,val,pct])=>(
+                <div key={label} style={{background:C.primaryFixed,borderRadius:R.md,padding:12}}>
+                  <div style={{...mn,fontSize:20,fontWeight:700,color:C.onSurface,lineHeight:1.1}}>{val}</div>
+                  <div style={{...mn,fontSize:11,color:C.onSurfaceVariant,marginTop:3}}>{label}</div>
+                  <div style={{...mn,fontSize:12,fontWeight:700,color:C.primary,marginTop:6}}>{pct}% of day</div>
+                </div>
+              ))}
+            </div>
+            <div style={{background:C.surface,borderRadius:R.md,padding:'14px 16px',marginBottom:12}}>
+              <div style={{...mn,fontSize:11,fontWeight:700,color:C.onSurfaceVariant,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:10}}>Where this leaves your day</div>
+              <div style={{display:'flex',flexDirection:'column',gap:9,fontVariantNumeric:'tabular-nums'}}>
+                <div style={{display:'flex',justifyContent:'space-between',gap:12}}><span style={{...mn,fontSize:13,color:C.onSurfaceVariant}}>Already planned today</span><span style={{...mn,fontSize:13,fontWeight:700,color:C.onSurfaceVariant}}>{already?.hasData?rowFigure({kcal:alreadyCal,protein_g:alreadyPro,is_estimated:false}):'Nothing yet'}</span></div>
+                <div style={{display:'flex',justifyContent:'space-between',gap:12}}><span style={{...mn,fontSize:13,color:C.onSurfaceVariant}}>With one portion of this</span><span style={{...mn,fontSize:13,fontWeight:700,color:C.onSurface}}>{Math.round(withCal)} cal · {Math.round(withPro)}g P</span></div>
+                <div style={{display:'flex',justifyContent:'space-between',gap:12,borderTop:`1px solid ${C.outlineVariant}80`,paddingTop:9}}><span style={{...mn,fontSize:13,color:C.onSurfaceVariant}}>Still to go</span><span style={{...mn,fontSize:13,fontWeight:700,color:C.primary}}>{toGoCal.toLocaleString('en-GB')} cal · {toGoPro}g P · {toGoFib}g fibre</span></div>
+              </div>
+            </div>
+            <div style={{background:C.primaryFixed,borderRadius:R.md,padding:'14px 16px',marginBottom:14,display:'flex',gap:10,alignItems:'flex-start'}}>
+              <span style={{fontSize:14,lineHeight:1.4}}>💡</span>
+              <p style={{...mn,fontSize:13,color:C.onSurface,lineHeight:1.7,margin:0}}>That leaves {toGoPro}g of protein across the rest of today.</p>
+            </div>
+            <div style={{...mn,fontSize:11,color:C.onSurfaceVariant,lineHeight:1.6}}>Percentages are against today's targets — {goalTargets.calories.toLocaleString('en-GB')} cal, {goalTargets.protein}g protein, {goalTargets.fibre}g fibre. Change them any time in Settings.</div>
+          </div>
+        </div>
+      )
+    })()}
+    </>
   )
 }
