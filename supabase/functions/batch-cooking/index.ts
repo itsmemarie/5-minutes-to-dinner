@@ -34,6 +34,11 @@ Instruction specificity (non-negotiable):
 - Every step tagged TM6 must include the exact appliance setting inline, in parentheses, inside the "body" text itself, e.g. "Cut 4 medium size onions (TM6 instructions: speed 10, time 3 sec)." This must match the values also given in "chips" — the body text must stand on its own even if chips are not shown.
 - Do the same for HOB/OVEN steps where relevant: state exact heat/time, e.g. "Roast at 200°C Fan for 35 minutes, tossing at the halfway point."
 
+Portion scaling (non-negotiable):
+- Each meal in the plan states the portions actually being cooked and the portions its recipe was written for. Every quantity you write in "qty" and "body" must be scaled to the portions ACTUALLY BEING COOKED, not the recipe's own base.
+- Where the same ingredient is prepped once for several meals, sum the scaled amounts across those meals and state the combined quantity.
+- Scale only food quantities. Never scale cooking times, oven temperatures, Thermomix speeds or settings, pan and dish sizes, or resting/chilling times.
+
 Food safety (non-negotiable):
 - Cooked rice: 1 day max
 - Cooked meat/stews: 3 days max
@@ -64,14 +69,22 @@ Deno.serve(async (req: Request) => {
   try {
     const { meals, ageBandLabel } = await req.json()
 
+    // Each meal carries the portions actually being cooked plus the portions the
+    // recipe is written for. Quantities in the schedule must reflect the former.
+    const describe = (label: string) => (m: any) => {
+      const portion = m?.portion, base = m?.base
+      const scale = portion && base ? ` — cooking ${portion} portions, recipe written for ${base} (scale ${(portion / base).toFixed(2)}x)` : ''
+      return `${label}: ${m.name}${scale}`
+    }
+
     const mealSummary = Object.entries(meals)
       .map(([day, sections]: [string, any]) => {
         const items = [
-          ...(sections.breakfast || []).map((m: any) => `breakfast: ${m.name}`),
-          ...(sections.main || []).map((m: any) => `main: ${m.name}`),
-          ...(sections.side || []).map((m: any) => `side: ${m.name}`),
+          ...(sections.breakfast || []).map(describe('breakfast')),
+          ...(sections.main || []).map(describe('main')),
+          ...(sections.side || []).map(describe('side')),
         ]
-        return items.length ? `${day}: ${items.join(', ')}` : null
+        return items.length ? `${day}:\n  ${items.join('\n  ')}` : null
       })
       .filter(Boolean)
       .join('\n')

@@ -35,7 +35,7 @@ export function HomeScreen({ plan, onDayOpen, onRecipeOpen, moveMeal, onCopy, on
             </div>
             <div onDragOver={e=>onDragOver(e,day)} onDragLeave={onDragLeave} onDrop={e=>onDrop(e,day)} style={{...CARD,overflow:'hidden',outline:over===day&&drag?.fromDay!==day?`2px solid ${C.primary}`:'2px solid transparent',transition:'outline 0.12s'}}>
               {meals.map((m,i) => (
-                <div key={m.id} draggable onDragStart={e=>onDragStart(e,m.id,day,m.section)} onDragEnd={onDragEnd} onClick={()=>onRecipeOpen(m.recipeId, m.portion)} style={{padding:'11px 14px',borderBottom:i<meals.length-1?`1px solid ${C.outlineVariant}26`:undefined,display:'flex',alignItems:'center',cursor:'pointer',opacity:drag?.mealId===m.id?0.45:1,transition:'opacity 0.15s'}}>
+                <div key={m.id} draggable onDragStart={e=>onDragStart(e,m.id,day,m.section)} onDragEnd={onDragEnd} onClick={()=>onRecipeOpen(m.recipeId, m.portion, m.id)} style={{padding:'11px 14px',borderBottom:i<meals.length-1?`1px solid ${C.outlineVariant}26`:undefined,display:'flex',alignItems:'center',cursor:'pointer',opacity:drag?.mealId===m.id?0.45:1,transition:'opacity 0.15s'}}>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{...mn,fontSize:13,fontWeight:600,color:C.onSurface,marginBottom:3,textDecoration:'underline',textDecorationColor:C.outlineVariant,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.name}</div>
                     <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>

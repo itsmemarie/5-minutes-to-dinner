@@ -6,7 +6,7 @@ import {
   fetchShoppingList, saveShoppingList, updateShoppingItem,
   fetchFreezerItems, replaceFreezerItems, addFreezerItem, updateFreezerStock, removeFreezerItem,
   fetchToddlerCookingGuide, saveToddlerCookingGuide, saveToddlerDob,
-  fetchUserProfile, saveUserProfile, fetchAllRecipeNutrition,
+  fetchUserProfile, saveUserProfile, fetchAllRecipeNutrition, saveRecipeView,
 } from './supabase.js'
 import { callEdgeFn } from './ai.js'
 import { computeTargets } from './goalMaths.js'
@@ -28,6 +28,19 @@ import { ToddlerCookingScreen } from '../components/ToddlerCookingScreen.jsx'
 // Fallback toddler DOB (used before app_settings.toddler_dob loads / if unset)
 const DEFAULT_TODDLER_DOB = '2024-09-27'
 
+// Recipe selection view mode. Persisted to app_settings so it follows the user
+// across devices, and mirrored to localStorage so the first paint doesn't flash
+// the list before Supabase answers. Both accesses can throw (Safari private
+// mode), so neither is allowed to take the app down.
+const RECIPE_VIEW_KEY = '5mtd.recipeView'
+const readStoredRecipeView = () => {
+  try {
+    const v = localStorage.getItem(RECIPE_VIEW_KEY)
+    return v === 'list' || v === 'photos' ? v : null
+  } catch { return null }
+}
+const writeStoredRecipeView = v => { try { localStorage.setItem(RECIPE_VIEW_KEY, v) } catch {} }
+
 // ─── Root App ──────────────────────────────────────────────────────────
 export default function App() {
   // Nav
@@ -37,8 +50,18 @@ export default function App() {
   const [selSec,    setSelSec]   = useState('main')
   const [batchTab,  setBatchTab] = useState('big')
   const [nutriProf, setNutriProf]= useState('adult')
+  // Recipe selection screen state lives here, not in the screen: opening a
+  // recipe preview swaps `screen`, which unmounts the screen and would otherwise
+  // discard a pending multi-select (and the search term) on the way back.
+  const [recipeView,   setRecipeViewSt]  = useState(() => readStoredRecipeView() ?? 'list')
+  const [selectedRecipes, setSelectedRecipes] = useState([])
+  const [recipeSearch, setRecipeSearch] = useState('')
+  const [recipeChip,   setRecipeChip]   = useState('cat')
   const [selRecipeId,      setSelRecipeId]      = useState(null)
   const [recipeDetailPortion, setRecipeDetailPortion] = useState(4)
+  // Set when the recipe screen was opened from a planned meal, so changing
+  // servings there writes back to the plan instead of being a preview.
+  const [recipeDetailMealId, setRecipeDetailMealId] = useState(null)
   const [prevScreen,       setPrevScreen]       = useState(null)
   const [screenBeforeToddler, setScreenBeforeToddler] = useState(null)
 
@@ -84,6 +107,12 @@ export default function App() {
         setFreezerItems(freezer)
         if (settings?.default_portions) setDefPortSt(settings.default_portions)
         if (settings?.toddler_dob) setToddlerDobSt(settings.toddler_dob)
+        // Adopt the saved view only when this device has no local choice yet,
+        // so a fresh device inherits it and an existing one isn't overridden.
+        if (settings?.recipe_view && !readStoredRecipeView()) {
+          setRecipeViewSt(settings.recipe_view)
+          writeStoredRecipeView(settings.recipe_view)
+        }
         setGoalProfileSt(profile)
         setNutritionByRecipe(nutritionMap)
 
@@ -129,14 +158,25 @@ export default function App() {
   // ── Mutations (optimistic UI + background DB write) ───────────────
   const setPlan = newPlan => setPlanState(newPlan)
 
-  const setDefPort = async val => {
+  // These three are optimistic: the UI moves immediately and the write follows.
+  // The save functions now throw on failure, so each catch is load-bearing —
+  // without it a rejected promise from an event handler becomes an unhandled
+  // rejection. There is no toast surface here, so a failure is logged and the
+  // optimistic value stands until the next reload re-reads the saved one.
+  const setDefPort = val => {
     setDefPortSt(val)
-    await saveSettings(val)
+    saveSettings(val).catch(e => console.error('default portions save failed', e))
   }
 
-  const setToddlerDob = async val => {
+  const setToddlerDob = val => {
     setToddlerDobSt(val)
-    await saveToddlerDob(val)
+    saveToddlerDob(val).catch(e => console.error('toddler DOB save failed', e))
+  }
+
+  const setRecipeView = val => {
+    setRecipeViewSt(val)
+    writeStoredRecipeView(val)
+    saveRecipeView(val).catch(e => console.error('recipe view save failed', e))
   }
 
   // Keep the age band in sync with the DOB (from Settings edits or the initial
@@ -396,11 +436,31 @@ export default function App() {
 
   // ── Nav ─────────────────────────────────────────────────────────
   const openDayPlan   = day => { setSelDay(day); setScreen('dailyPlan') }
-  const openAddSec    = (day, sec) => { setSelDay(day); setSelSec(sec); setScreen('recipeSelection') }
+  // Entering the picker afresh starts clean; returning from a recipe preview
+  // goes through goBack(), which leaves these intact.
+  const openAddSec    = (day, sec) => { setSelDay(day); setSelSec(sec); setSelectedRecipes([]); setRecipeSearch(''); setRecipeChip('cat'); setScreen('recipeSelection') }
   const openFreezerManage = () => { setPrevScreen('recipeSelection'); setScreen('freezerManage') }
-  const openRecipeFromSelection = recipeId => { setPrevScreen('recipeSelection'); setSelRecipeId(recipeId); setRecipeDetailPortion(4); setScreen('recipe') }
-  const openRecipeFromHome = (recipeId, portion) => { setPrevScreen(null); setSelRecipeId(recipeId); setRecipeDetailPortion(portion ?? 4); setScreen('recipe') }
-  const openRecipeFromDailyPlan = (recipeId, portion) => { setPrevScreen('dailyPlan'); setSelRecipeId(recipeId); setRecipeDetailPortion(portion ?? 4); setScreen('recipe') }
+  const findPlannedMeal = id => {
+    if (!id) return null
+    for (const day of DAYS) {
+      for (const sec of ['breakfast', 'main', 'side']) {
+        const meal = plan[day]?.[sec]?.find(x => x.id === id)
+        if (meal) return { day, sec, meal }
+      }
+    }
+    return null
+  }
+  const openRecipeFromSelection = recipeId => { setPrevScreen('recipeSelection'); setSelRecipeId(recipeId); setRecipeDetailMealId(null); setRecipeDetailPortion(defPort); setScreen('recipe') }
+  const openRecipeFromHome = (recipeId, portion, mealId=null) => { setPrevScreen(null); setSelRecipeId(recipeId); setRecipeDetailMealId(mealId); setRecipeDetailPortion(portion ?? defPort); setScreen('recipe') }
+  const openRecipeFromDailyPlan = (recipeId, portion, mealId=null) => { setPrevScreen('dailyPlan'); setSelRecipeId(recipeId); setRecipeDetailMealId(mealId); setRecipeDetailPortion(portion ?? defPort); setScreen('recipe') }
+  // Changing servings on the recipe screen persists to the plan when the recipe
+  // was opened from one, so the shopping list and nutrition follow.
+  const changeRecipeDetailPortion = async v => {
+    const found = findPlannedMeal(recipeDetailMealId)
+    const val = Math.max(found?.meal?.min || 1, v)
+    setRecipeDetailPortion(val)
+    if (found) await updatePortion(found.day, found.sec, recipeDetailMealId, val)
+  }
   const openToddlerCooking = (fromRecipe) => {
     setScreenBeforeToddler(fromRecipe ? 'recipe' : null)
     setScreen('toddlerCooking')
@@ -472,8 +532,8 @@ export default function App() {
     if (screen === 'freezerManage')   return <FreezerScreen items={freezerItems} onReplace={async names=>setFreezerItems(await replaceFreezerItems(names))} onAddOne={async name=>{const item=await addFreezerItem(name);setFreezerItems(items=>{const i=items.findIndex(x=>x.id===item.id);return i>=0?items.map(x=>x.id===item.id?item:x):[...items,item].sort((a,b)=>a.name.localeCompare(b.name))})}} onToggleStock={async(id,inStock)=>{setFreezerItems(items=>items.map(x=>x.id===id?{...x,in_stock:inStock}:x));await updateFreezerStock(id,inStock)}} onDelete={async id=>{setFreezerItems(items=>items.filter(x=>x.id!==id));await removeFreezerItem(id)}}/>
     if (screen === 'nutrition')       return <NutritionScreen profile={nutriProf} setProfile={setNutriProf} nutriData={nutriData} nutriLoading={nutriLoading} nutriError={nutriError} onAnalyse={analyseNutrition} goalProfile={goalProfile} goalTargets={goalTargets} plan={plan} nutritionByRecipe={nutritionByRecipe}/>
     if (screen === 'dailyPlan')       return <DailyPlanScreen day={selDay} plan={plan} recipes={recipes} updatePortion={updatePortion} removeMeal={removeMeal} onAddToSection={openAddSec} onRecipeOpen={openRecipeFromDailyPlan} onSave={()=>setScreen(null)} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe}/>
-    if (screen === 'recipeSelection') return <RecipeSelectionScreen day={selDay} section={selSec} plan={plan} recipes={recipes} freezerItems={freezerItems} onAdd={addMeals} onAddFreezer={addFreezerMeals} onManageFreezer={openFreezerManage} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))} onPreview={openRecipeFromSelection} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe}/>
-    if (screen === 'recipe')          return <RecipeScreen recipeId={selRecipeId} portion={recipeDetailPortion} onAddMeal={()=>addMeals([selRecipeId])} toddlerDob={toddlerDob} onOpenToddlerCooking={()=>openToddlerCooking(true)} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe} day={selDay} plan={plan}/>
+    if (screen === 'recipeSelection') return <RecipeSelectionScreen day={selDay} section={selSec} plan={plan} recipes={recipes} freezerItems={freezerItems} onAdd={addMeals} onAddFreezer={addFreezerMeals} onManageFreezer={openFreezerManage} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))} onPreview={openRecipeFromSelection} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe} recipeView={recipeView} setRecipeView={setRecipeView} search={recipeSearch} setSearch={setRecipeSearch} chip={recipeChip} setChip={setRecipeChip} selected={selectedRecipes} setSelected={setSelectedRecipes}/>
+    if (screen === 'recipe')          return <RecipeScreen recipeId={selRecipeId} portion={recipeDetailPortion} onPortionChange={changeRecipeDetailPortion} onAddMeal={()=>addMeals([selRecipeId])} toddlerDob={toddlerDob} onOpenToddlerCooking={()=>openToddlerCooking(true)} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe} day={selDay} plan={plan}/>
     if (screen === 'toddlerCooking')  return <ToddlerCookingScreen guide={toddlerGuide} loading={toddlerGuideLoading} error={toddlerGuideError} activeBand={toddlerBand} setActiveBand={setToddlerBand} currentBand={ageBandFromDob(toddlerDob)} onGenerate={generateToddlerGuide}/>
     if (tab === 'home')    return <HomeScreen plan={plan} onDayOpen={openDayPlan} onRecipeOpen={openRecipeFromHome} moveMeal={moveMeal} onCopy={copyWeekPlan} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))}/>
     if (tab === 'planner') return <PlannerScreen plan={plan} removeMeal={removeMeal} moveMeal={moveMeal} duplicateMeal={duplicateMeal} updatePortion={updatePortion} onDayOpen={openDayPlan} onRecipeOpen={openRecipeFromHome} onNutrition={()=>{ setScreen('nutrition'); if(!nutriData) analyseNutrition() }} onShoppingList={generateShoppingList} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe}/>

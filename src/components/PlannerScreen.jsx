@@ -59,7 +59,7 @@ export function PlannerScreen({plan,removeMeal,moveMeal,duplicateMeal,updatePort
                   <div key={m.id} draggable onDragStart={e=>onDragStart(e,m.id,day,m.section)} onDragEnd={onDragEnd} onClick={()=>onDayOpen(day)} style={{padding:'11px 14px',borderBottom:i<meals.length-1?`1px solid ${C.outlineVariant}25`:undefined,display:'flex',flexDirection:'column',alignItems:'stretch',cursor:drag?'grabbing':'grab',opacity:drag?.mealId===m.id?0.45:1,transition:'opacity 0.15s'}}>
                     <div style={{display:'flex',alignItems:'center',width:'100%'}}>
                       <div style={{flex:1,minWidth:0}}>
-                        <div onClick={e=>{if(m.recipeId){e.stopPropagation();onRecipeOpen(m.recipeId,m.portion)}}} style={{...mn,fontSize:13,fontWeight:600,color:C.onSurface,marginBottom:3,cursor:m.recipeId?'pointer':'default',textDecoration:m.recipeId?'underline':'none',textDecorationColor:m.recipeId?C.outlineVariant:'transparent'}}>{m.name}</div>
+                        <div onClick={e=>{if(m.recipeId){e.stopPropagation();onRecipeOpen(m.recipeId,m.portion,m.id)}}} style={{...mn,fontSize:13,fontWeight:600,color:C.onSurface,marginBottom:3,cursor:m.recipeId?'pointer':'default',textDecoration:m.recipeId?'underline':'none',textDecorationColor:m.recipeId?C.outlineVariant:'transparent'}}>{m.name}</div>
                         <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
                           <span style={{...mn,fontSize:11,color:C.onSurface,opacity:0.55}}>{SEC_LBL[m.section]}</span>
                           <span style={{...mn,fontSize:11,color:C.onSurface,opacity:0.6}}>{m.prep}m</span>

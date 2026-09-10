@@ -37,6 +37,8 @@ Color palette actually in use (hex — these are not exported constants, just th
 | `onSurface` | `#182417` | Primary text |
 | `onSurfaceVariant` | `#5c6a58` | Secondary/muted text, uppercase captions |
 | `outline` / `outlineVariant` | `#5c6a58` / `#c8d6c5` | Borders, dividers |
+| `placeholderStripeA` / `placeholderStripeB` | `#e7efe5` / `#dde8db` | Diagonal-stripe stand-in where a recipe photo is missing |
+| `placeholderInk` | `#8c9a88` | Recipe code centred on that placeholder (9px monospace) |
 
 Common patterns: 10px border-radius + `0 1px 2px rgba(24,36,23,0.14)` box-shadow for cards; 99px (pill) border-radius for buttons/badges/tags; uppercase + `0.06–0.08em` letter-spacing for small caption/label text.
 

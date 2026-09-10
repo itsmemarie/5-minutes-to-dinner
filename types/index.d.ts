@@ -15,6 +15,19 @@ export interface RecipeSummary {
   fun?: boolean;
   /** Flagged as husband-approved (shows an "H" badge). */
   husband?: boolean;
+  /** Public URL of the recipe photo, or null when none has been ingested yet. */
+  imageUrl?: string | null;
+}
+
+/** Per-portion nutrition figures for one recipe, keyed by recipe id upstream. */
+export interface RecipeNutrition {
+  kcal?: number | null;
+  protein_g?: number | null;
+  fibre_g?: number | null;
+  /** Share of ingredients matched to reference data, 0–100. */
+  coverage_pct?: number | null;
+  /** True when some ingredients are unmatched, so figures are partial (shown as "~"). */
+  is_estimated?: boolean;
 }
 
 export interface BtnProps {
@@ -78,6 +91,12 @@ export interface RecipeCardProps {
   onToggle: (id: string) => void;
   /** When provided, the recipe name becomes a clickable preview link. */
   onPreview?: (id: string) => void;
+  /** Name of the main this recipe pairs with — shows a "Goes well with X" pill. */
+  suggestionLabel?: string;
+  /** Last row in its bucket — drops the bottom hairline. */
+  isLast?: boolean;
+  /** Per-portion figures; the macro line is omitted when kcal is null/absent. */
+  nutrition?: RecipeNutrition | null;
 }
 export declare function RecipeCard(props: RecipeCardProps): JSX.Element;
 
@@ -89,5 +108,9 @@ export interface RecipeBucketProps {
   selected: string[];
   onToggle: (id: string) => void;
   onPreview?: (id: string) => void;
+  /** Passed through to every card in the bucket (used by the "Suggested" group). */
+  suggestionLabel?: string;
+  /** Per-portion figures keyed by recipe id; null hides macro lines entirely. */
+  nutritionByRecipe?: Record<string, RecipeNutrition> | null;
 }
 export declare function RecipeBucket(props: RecipeBucketProps): JSX.Element;

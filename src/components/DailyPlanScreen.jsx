@@ -51,7 +51,7 @@ export function DailyPlanScreen({day,plan,recipes,updatePortion,removeMeal,onAdd
               {plan[day][s.key].map(m=>(
                 <div key={m.id} style={{...CARD,background:C.surfaceContainerHigh,boxShadow:'none',padding:'14px'}}>
                   <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:8}}>
-                    <span onClick={()=>m.recipeId&&onRecipeOpen(m.recipeId,m.portion)} style={{...mn,fontSize:15,fontWeight:700,color:C.onSurface,flex:1,marginRight:8,cursor:m.recipeId?'pointer':'default',textDecoration:m.recipeId?'underline':'none',textDecorationColor:m.recipeId?C.outlineVariant:'transparent'}}>{m.name}</span>
+                    <span onClick={()=>m.recipeId&&onRecipeOpen(m.recipeId,m.portion,m.id)} style={{...mn,fontSize:15,fontWeight:700,color:C.onSurface,flex:1,marginRight:8,cursor:m.recipeId?'pointer':'default',textDecoration:m.recipeId?'underline':'none',textDecorationColor:m.recipeId?C.outlineVariant:'transparent'}}>{m.name}</span>
                     <button onClick={()=>removeMeal(day,s.key,m.id)} style={{width:26,height:26,flexShrink:0,border:'none',background:'none',padding:0,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}><Icon name='x' size={16} color={C.primary}/></button>
                   </div>
                   <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>

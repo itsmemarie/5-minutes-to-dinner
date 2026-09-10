@@ -9,6 +9,18 @@ if (!url || !key) {
 
 export const supabase = createClient(url, key)
 
+// ─── Recipe images ─────────────────────────────────────────────────
+// `recipes.image_path` holds a storage key relative to the bucket ("MP-VCBN.jpg"),
+// not a URL. The bucket is public, so getPublicUrl is pure string building — no
+// network, no auth. Call it once at fetch time rather than per render.
+const RECIPE_IMAGE_BUCKET = 'recipe-images'
+
+export function recipeImageUrl(path) {
+  if (!path) return null
+  if (/^https?:\/\//.test(path)) return path
+  return supabase.storage.from(RECIPE_IMAGE_BUCKET).getPublicUrl(path).data.publicUrl
+}
+
 // ─── Recipes ───────────────────────────────────────────────────────
 export async function fetchRecipes() {
   const { data, error } = await supabase
@@ -27,6 +39,8 @@ export async function fetchRecipes() {
       advance_prep_hours,
       advance_prep_note,
       side_recommendation,
+      image_path,
+      image_credit,
       recipe_dietary_tags ( dietary_tag_id )
     `)
     .in('meal_type_id', ['breakfast', 'main', 'side', 'entree', 'dessert'])
@@ -59,6 +73,9 @@ export async function fetchRecipes() {
       advancePrepHours: r.advance_prep_hours != null ? Number(r.advance_prep_hours) : null,
       advancePrepNote:  r.advance_prep_note || null,
       sideRecommendation: r.side_recommendation || null,
+      imagePath:   r.image_path   || null,
+      imageUrl:    recipeImageUrl(r.image_path),
+      imageCredit: r.image_credit || null,
     }
   })
 }
@@ -83,24 +100,38 @@ export async function createRecipe(fields) {
 export async function fetchSettings() {
   const { data } = await supabase
     .from('app_settings')
-    .select('default_portions, toddler_dob')
+    .select('default_portions, toddler_dob, recipe_view')
     .eq('id', 1)
     .single()
   return data
 }
 
+// All three writers below upsert rather than update: app_settings is a singleton
+// keyed id=1, and an update against a missing row succeeds while changing
+// nothing, so the setting would silently revert on the next reload. They also
+// surface the error instead of discarding it — callers log it (there is no
+// toast surface in this app), which at least makes a failed write visible.
 export async function saveSettings(defaultPortions) {
-  await supabase
+  const { error } = await supabase
     .from('app_settings')
-    .update({ default_portions: defaultPortions, updated_at: new Date().toISOString() })
-    .eq('id', 1)
+    .upsert({ id: 1, default_portions: defaultPortions, updated_at: new Date().toISOString() }, { onConflict: 'id' })
+  if (error) throw error
 }
 
 export async function saveToddlerDob(dob) {
-  // upsert (not update): app_settings may have no row yet
-  await supabase
+  const { error } = await supabase
     .from('app_settings')
     .upsert({ id: 1, toddler_dob: dob, updated_at: new Date().toISOString() }, { onConflict: 'id' })
+  if (error) throw error
+}
+
+// Recipe selection view mode ('list' | 'photos'). Mirrored to localStorage for an
+// instant first paint; this copy is what carries the choice across devices.
+export async function saveRecipeView(view) {
+  const { error } = await supabase
+    .from('app_settings')
+    .upsert({ id: 1, recipe_view: view, updated_at: new Date().toISOString() }, { onConflict: 'id' })
+  if (error) throw error
 }
 
 // ─── Weight goal profile (singleton, same pattern as app_settings) ─

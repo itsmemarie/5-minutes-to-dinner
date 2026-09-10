@@ -4,10 +4,11 @@ import { callEdgeFn } from '../lib/ai.js'
 import { C, ep, mn, CARD, R } from '../lib/theme.js'
 import { ageBandFromDob, TODDLER_AGE_BANDS } from '../lib/dateHelpers.js'
 import { parseIngredients, parseIngredientParts, parseSteps } from '../lib/recipeParsing.js'
-import { Spinner, Btn, Icon, NeedMoreIdeasBtn } from './ui/index.js'
+import { collectQuantities } from '../lib/quantityScaling.js'
+import { Spinner, Btn, Icon, NeedMoreIdeasBtn, Stepper, ScaledText } from './ui/index.js'
 import { dayNutritionTotals, rowFigure } from '../lib/goalMaths.js'
 
-export function RecipeScreen({ recipeId, portion, onAddMeal, toddlerDob, onOpenToddlerCooking, goalProfile, goalTargets, nutritionByRecipe={}, day, plan }) {
+export function RecipeScreen({ recipeId, portion, onPortionChange, onAddMeal, toddlerDob, onOpenToddlerCooking, goalProfile, goalTargets, nutritionByRecipe={}, day, plan }) {
   const goalMode = !!goalProfile?.goalModeEnabled && !!goalTargets
   const recipeNutrition = nutritionByRecipe[recipeId]
   const [showGoalSheet, setShowGoalSheet] = useState(false)
@@ -85,9 +86,15 @@ export function RecipeScreen({ recipeId, portion, onAddMeal, toddlerDob, onOpenT
   const base = data.portion_size || 4
   const scale = portion ? portion / base : 1
   const scaledFor = portion || base
+  const minPortions = data.min_portions || 1
   const ingSections = parseIngredients(data.ingredients)
   const stdSteps = parseSteps(data.instructions_standard)
   const tmSteps = parseSteps(data.instructions_thermomix)
+  // The set of amounts this recipe legitimately owns — the guard that stops
+  // times, oven temps and Thermomix speeds being rescaled as if they were food.
+  const knownQtys = collectQuantities(data.ingredients)
+  const prose = text => <ScaledText text={text} scale={scale} knownQtys={knownQtys}/>
+  const scaleBadge = <span style={{...mn,fontSize:11,fontWeight:700,background:C.primaryFixed,color:C.primary,padding:'3px 10px',borderRadius:R.pill}}>Scaled for {scaledFor} portions</span>
 
   return (
     <>
@@ -113,17 +120,17 @@ export function RecipeScreen({ recipeId, portion, onAddMeal, toddlerDob, onOpenT
       </div>
 
       {/* Portions */}
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
-        <div style={{...CARD,padding:'12px 14px'}}>
-          <div style={{...mn,fontSize:10,fontWeight:700,color:C.onSurfaceVariant,letterSpacing:'0.06em',marginBottom:6}}>SAVED PORTIONS</div>
-          <div style={{display:'flex',alignItems:'center',gap:8}}>
-            <span style={{...mn,fontSize:15,fontWeight:700,color:C.onSurface}}>{scaledFor} servings</span>
-            {scale!==1&&<span style={{...mn,fontSize:11,fontWeight:700,background:C.primaryFixed,color:C.primary,padding:'2px 7px',borderRadius:R.pill}}>{scale.toFixed(1)}x</span>}
+      <div style={{...CARD,padding:'12px 14px',marginBottom:10}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap'}}>
+          <div>
+            <div style={{...mn,fontSize:10,fontWeight:700,color:C.onSurfaceVariant,letterSpacing:'0.06em',marginBottom:6}}>PORTIONS</div>
+            <div style={{display:'flex',alignItems:'center',gap:8}}>
+              <span style={{...mn,fontSize:15,fontWeight:700,color:C.onSurface}}>{scaledFor} servings</span>
+              {scale!==1&&<span style={{...mn,fontSize:11,fontWeight:700,background:C.primaryFixed,color:C.primary,padding:'2px 7px',borderRadius:R.pill}}>{scale.toFixed(1)}x</span>}
+            </div>
+            <div style={{...mn,fontSize:11,color:C.onSurfaceVariant,marginTop:4}}>Recipe written for {base} · min {minPortions}</div>
           </div>
-        </div>
-        <div style={{...CARD,padding:'12px 14px'}}>
-          <div style={{...mn,fontSize:10,fontWeight:700,color:C.onSurfaceVariant,letterSpacing:'0.06em',marginBottom:6}}>MIN. PORTIONS</div>
-          <span style={{...mn,fontSize:15,fontWeight:700,color:C.onSurface}}>{data.min_portions||1} servings</span>
+          {onPortionChange&&<Stepper value={scaledFor} min={minPortions} onChange={onPortionChange}/>}
         </div>
       </div>
 
@@ -151,7 +158,7 @@ export function RecipeScreen({ recipeId, portion, onAddMeal, toddlerDob, onOpenT
         <div style={{marginBottom:20}}>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
             <span style={{...ep,fontSize:18,color:C.onSurface}}>Ingredients</span>
-            <span style={{...mn,fontSize:11,fontWeight:700,background:C.primaryFixed,color:C.primary,padding:'3px 10px',borderRadius:R.pill}}>Scaled for {scaledFor} portions</span>
+            {scaleBadge}
           </div>
           {ingSections.map((sec,si)=>(
             <div key={si} style={{marginBottom:12}}>
@@ -161,7 +168,7 @@ export function RecipeScreen({ recipeId, portion, onAddMeal, toddlerDob, onOpenT
                   const {qty,name}=parseIngredientParts(item,scale)
                   return(
                     <div key={ii} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 14px',borderBottom:ii<sec.items.length-1?`1px solid ${C.outlineVariant}20`:undefined,gap:12}}>
-                      <span style={{...mn,fontSize:13,color:C.onSurface,flex:1}}>{name||item}</span>
+                      <span style={{...mn,fontSize:13,color:C.onSurface,flex:1}}>{prose(name||item)}</span>
                       {qty&&<span style={{...mn,fontSize:13,fontWeight:700,color:C.onSurface,whiteSpace:'nowrap'}}>{qty}</span>}
                     </div>
                   )
@@ -175,7 +182,10 @@ export function RecipeScreen({ recipeId, portion, onAddMeal, toddlerDob, onOpenT
       {/* Preparation Methods */}
       {(stdSteps.length>0||tmSteps.length>0)&&(
         <div style={{marginBottom:20}}>
-          <div style={{...ep,fontSize:18,color:C.onSurface,marginBottom:12}}>Preparation Methods</div>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,marginBottom:12}}>
+            <span style={{...ep,fontSize:18,color:C.onSurface}}>Preparation Methods</span>
+            {scale!==1&&scaleBadge}
+          </div>
           {stdSteps.length>0&&(
             <div style={{...CARD,marginBottom:10,overflow:'hidden'}}>
               <button onClick={()=>setShowStd(s=>!s)} style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 16px',background:'none',border:'none',cursor:'pointer',borderBottom:showStd?`1px solid ${C.outlineVariant}25`:'none'}}>
@@ -187,7 +197,7 @@ export function RecipeScreen({ recipeId, portion, onAddMeal, toddlerDob, onOpenT
                   {stdSteps.map((step,i)=>(
                     <div key={i} style={{display:'flex',gap:12}}>
                       <div style={{width:24,height:24,borderRadius:R.pill,background:C.secondaryContainer,color:C.onSecondaryContainer,...mn,fontSize:12,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:2}}>{step.num}</div>
-                      <p style={{...mn,fontSize:13,color:C.onSurface,lineHeight:1.7,margin:0,flex:1}}>{step.text}</p>
+                      <p style={{...mn,fontSize:13,color:C.onSurface,lineHeight:1.7,margin:0,flex:1}}>{prose(step.text)}</p>
                     </div>
                   ))}
                 </div>
@@ -208,7 +218,7 @@ export function RecipeScreen({ recipeId, portion, onAddMeal, toddlerDob, onOpenT
                   {tmSteps.map((step,i)=>(
                     <div key={i} style={{display:'flex',gap:12}}>
                       <div style={{width:24,height:24,borderRadius:R.pill,background:C.primary,color:C.onPrimary,...mn,fontSize:12,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:2}}>{step.num}</div>
-                      <p style={{...mn,fontSize:13,color:C.onSurface,lineHeight:1.7,margin:0,flex:1}}>{step.text}</p>
+                      <p style={{...mn,fontSize:13,color:C.onSurface,lineHeight:1.7,margin:0,flex:1}}>{prose(step.text)}</p>
                     </div>
                   ))}
                 </div>
@@ -225,19 +235,19 @@ export function RecipeScreen({ recipeId, portion, onAddMeal, toddlerDob, onOpenT
           {data.chef_notes&&(
             <div style={{...CARD,padding:'14px 16px',marginBottom:10}}>
               <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}><span style={{fontSize:14}}>📖</span><span style={{...mn,fontSize:10,fontWeight:700,color:C.onSurfaceVariant,letterSpacing:'0.07em',textTransform:'uppercase'}}>Chef's Notes</span></div>
-              <p style={{...mn,fontSize:13,color:C.onSurface,lineHeight:1.7,margin:0}}>{data.chef_notes}</p>
+              <p style={{...mn,fontSize:13,color:C.onSurface,lineHeight:1.7,margin:0}}>{prose(data.chef_notes)}</p>
             </div>
           )}
           {data.husband_variations&&(
             <div style={{...CARD,padding:'14px 16px',marginBottom:10,background:'#fff8f0'}}>
               <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}><span style={{fontSize:14}}>❤️</span><span style={{...mn,fontSize:10,fontWeight:700,color:'#A86000',letterSpacing:'0.07em',textTransform:'uppercase'}}>Husband Variations</span></div>
-              <p style={{...mn,fontSize:13,color:C.onSurface,lineHeight:1.7,margin:0}}>{data.husband_variations}</p>
+              <p style={{...mn,fontSize:13,color:C.onSurface,lineHeight:1.7,margin:0}}>{prose(data.husband_variations)}</p>
             </div>
           )}
           {data.toddler_variations&&(
             <div style={{...CARD,padding:'14px 16px',marginBottom:10,background:'#f0f8ff'}}>
               <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}><span style={{fontSize:14}}>👶</span><span style={{...mn,fontSize:10,fontWeight:700,color:'#0050A0',letterSpacing:'0.07em',textTransform:'uppercase'}}>Toddler Variations</span></div>
-              <p style={{...mn,fontSize:13,color:C.onSurface,lineHeight:1.7,margin:0}}>{data.toddler_variations}</p>
+              <p style={{...mn,fontSize:13,color:C.onSurface,lineHeight:1.7,margin:0}}>{prose(data.toddler_variations)}</p>
             </div>
           )}
           {data.side_recommendation&&data.side_recommendation!=='Not Recommended'&&(
@@ -266,7 +276,7 @@ export function RecipeScreen({ recipeId, portion, onAddMeal, toddlerDob, onOpenT
                   <span style={{fontSize:16,flexShrink:0,marginTop:1}}>{a.icon||'🍽️'}</span>
                   <div style={{flex:1,minWidth:0}}>
                     {a.title&&<div style={{...mn,fontSize:13,fontWeight:700,color:C.onSurface,marginBottom:2}}>{a.title}</div>}
-                    <p style={{...mn,fontSize:13,color:C.onSurface,lineHeight:1.6,margin:0,marginBottom:a.needsTool?6:0}}>{a.task}</p>
+                    <p style={{...mn,fontSize:13,color:C.onSurface,lineHeight:1.6,margin:0,marginBottom:a.needsTool?6:0}}>{prose(a.task)}</p>
                     {a.needsTool&&<div style={{...mn,fontSize:11,fontWeight:700,color:C.primary,background:C.primaryFixed,padding:'4px 10px',borderRadius:R.sm,display:'inline-block'}}>Needs: {a.needsTool}</div>}
                   </div>
                 </div>

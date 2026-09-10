@@ -11,6 +11,8 @@ export const C = {
   outline:'#5c6a58', outlineVariant:'#c8d6c5',
   accent2_100:'#fff3e8', accent2_300:'#f0c090', accent2_600:'#d9791f',
   accent2_700:'#b85f16', accent2_800:'#8a4410',
+  // Striped stand-in for a recipe photo we don't have yet (photo tile view).
+  placeholderStripeA:'#e7efe5', placeholderStripeB:'#dde8db', placeholderInk:'#8c9a88',
 }
 export const ep = {fontFamily:"'Caprasimo',cursive",fontWeight:400,letterSpacing:'-0.015em'}
 export const mn = {fontFamily:"'Figtree',sans-serif"}
