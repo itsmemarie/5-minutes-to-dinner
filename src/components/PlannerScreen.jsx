@@ -1,12 +1,11 @@
 import { useState } from 'react'
 import { C, ep, mn, CARD, screenTitle, R } from '../lib/theme.js'
 import { DAYS, DAY_LBL, TODAY, WEEK_LBL } from '../lib/dateHelpers.js'
+import { ALL_SECTION_IDS, dayMeals, sectionShort } from '../lib/mealSections.js'
 import { Btn, Icon } from './ui/index.js'
 import { dayNutritionTotals, dayRemainingLine, rowFigure, mealNutrition } from '../lib/goalMaths.js'
 
-const SEC_LBL = { breakfast:'Breakfast', main:'Main', side:'Side' }
-
-export function PlannerScreen({plan,removeMeal,moveMeal,duplicateMeal,updatePortion,onDayOpen,onRecipeOpen,onNutrition,goalProfile,goalTargets,nutritionByRecipe={}}){
+export function PlannerScreen({plan,days=DAYS,sectionIds=ALL_SECTION_IDS,weekLabel=WEEK_LBL,removeMeal,moveMeal,duplicateMeal,updatePortion,onDayOpen,onRecipeOpen,onNutrition,goalProfile,goalTargets,nutritionByRecipe={}}){
   const goalMode = !!goalProfile?.goalModeEnabled && !!goalTargets
   const [drag,setDrag]=useState(null)   // {mealId,fromDay,section}
   const [over,setOver]=useState(null)   // day string being hovered
@@ -20,7 +19,7 @@ export function PlannerScreen({plan,removeMeal,moveMeal,duplicateMeal,updatePort
     <div style={{padding:'16px 20px 20px'}}>
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:18}}>
         <div style={{...screenTitle,color:C.onSurface}}>Weekly planner</div>
-        <span style={{...mn,fontSize:12,color:C.onSurfaceVariant,background:C.surfaceContainerHigh,padding:'5px 12px',borderRadius:R.pill,whiteSpace:'nowrap'}}>{WEEK_LBL}</span>
+        <span style={{...mn,fontSize:12,color:C.onSurfaceVariant,background:C.surfaceContainerHigh,padding:'5px 12px',borderRadius:R.pill,whiteSpace:'nowrap'}}>{weekLabel}</span>
       </div>
       {goalMode&&(
         <div style={{...mn,fontSize:12,color:C.onSurfaceVariant,lineHeight:1.5,margin:'-10px 0 16px'}}>Nutritional figures assume one portion per person, per planned meal.</div>
@@ -28,8 +27,8 @@ export function PlannerScreen({plan,removeMeal,moveMeal,duplicateMeal,updatePort
       <button onClick={onNutrition} style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,border:'none',background:C.secondaryContainer,color:'#924b1a',borderRadius:R.pill,padding:'12px 14px',...mn,fontWeight:700,fontSize:14,whiteSpace:'nowrap',cursor:'pointer',marginBottom:20}}>
         <Icon name='barChart3' size={16}/>{goalMode?'Goal & Nutritional Insights':'Calculate nutritional insights'}
       </button>
-      {DAYS.map(day=>{
-        const meals=[...plan[day].breakfast,...plan[day].main,...plan[day].side]
+      {days.map(day=>{
+        const meals=dayMeals(plan[day],sectionIds)
         const isToday=day===TODAY
         const dayTotals=goalMode?dayNutritionTotals(meals,nutritionByRecipe):null
         return(
@@ -61,7 +60,7 @@ export function PlannerScreen({plan,removeMeal,moveMeal,duplicateMeal,updatePort
                       <div style={{flex:1,minWidth:0}}>
                         <div onClick={e=>{if(m.recipeId){e.stopPropagation();onRecipeOpen(m.recipeId,m.portion,m.id)}}} style={{...mn,fontSize:13,fontWeight:600,color:C.onSurface,marginBottom:3,cursor:m.recipeId?'pointer':'default',textDecoration:m.recipeId?'underline':'none',textDecorationColor:m.recipeId?C.outlineVariant:'transparent'}}>{m.name}</div>
                         <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
-                          <span style={{...mn,fontSize:11,color:C.onSurface,opacity:0.55}}>{SEC_LBL[m.section]}</span>
+                          <span style={{...mn,fontSize:11,color:C.onSurface,opacity:0.55}}>{sectionShort(m.section)}</span>
                           <span style={{...mn,fontSize:11,color:C.onSurface,opacity:0.6}}>{m.prep}m</span>
                           <span onClick={e=>{e.stopPropagation();setServingsOpenId(id=>id===m.id?null:m.id)}} style={{...mn,fontSize:11,fontWeight:700,display:'inline-flex',alignItems:'center',gap:3,background:C.primaryFixed,color:C.primary,padding:'2px 7px',borderRadius:R.pill,cursor:'pointer'}}>
                             <Icon name='utensilsCrossed' size={11} color={C.primary}/>{m.portion}

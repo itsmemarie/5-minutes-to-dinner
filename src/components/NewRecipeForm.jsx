@@ -9,7 +9,7 @@ import { Icon } from './ui/Icon.jsx'
 const MEAL_TYPES = [
   { value: 'main',      label: 'Mains' },
   { value: 'breakfast', label: 'Breakfast' },
-  { value: 'side',      label: 'Sides & Snacks' },
+  { value: 'side',      label: 'Sides & snacks' },
   { value: 'entree',    label: 'Starters' },
   { value: 'dessert',   label: 'Desserts' },
 ]

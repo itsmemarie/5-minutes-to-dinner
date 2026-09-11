@@ -3,7 +3,9 @@ import { Spinner, Btn, Icon, NeedMoreIdeasBtn } from './ui/index.js'
 
 const TAG_LABEL = { TM6:'THERMOMIX', HOB:'HOB', OVEN:'OVEN', KNIFE:'PREP', NO_COOK:'NO COOK', DONE:'DONE' }
 
-export function BatchScreen({activeTab,setActiveTab,batchData,batchLoading,batchError,onGenerate,onOpenToddlerCooking}){
+// showToddler follows Settings › Your children; off hides the "Little helpers"
+// card even when a cached schedule still carries toddler activities.
+export function BatchScreen({activeTab,setActiveTab,batchData,batchLoading,batchError,onGenerate,onOpenToddlerCooking,showToddler=true}){
   const TABS=[{id:'big',label:'Monday · Big'},{id:'medium',label:'Thursday · Med'},{id:'evenings',label:'Evenings'}]
   const session = batchData?.sessions?.find(s=>s.id===activeTab) || null
   return(
@@ -63,7 +65,7 @@ export function BatchScreen({activeTab,setActiveTab,batchData,batchLoading,batch
           })}
         </div>
       </div>}
-      {batchData?.toddlerActivities?.length>0&&(
+      {showToddler&&batchData?.toddlerActivities?.length>0&&(
         <div style={{...CARD,padding:0,overflow:'hidden',marginTop:14,background:C.accent2_100,border:`1px solid ${C.accent2_300}`}}>
           <div style={{display:'flex',alignItems:'center',gap:6,padding:'14px 16px 8px'}}>
             <span style={{fontSize:14}}>🧸</span>

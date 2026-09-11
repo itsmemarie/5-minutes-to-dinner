@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { C, mn, CARD, R } from '../lib/theme.js'
 import { DAYS } from '../lib/dateHelpers.js'
+import { ALL_SECTION_IDS, dayMeals, sectionInfo } from '../lib/mealSections.js'
 import { Btn, PillBtn, Icon, BudgetStrip } from './ui/index.js'
 import { RecipeBucket } from './RecipeBucket.jsx'
 import { RecipePhotoBucket } from './RecipePhotoBucket.jsx'
@@ -33,30 +34,30 @@ function ViewToggle({ value, onChange }) {
   )
 }
 
-export function RecipeSelectionScreen({day,section,plan,recipes,freezerItems,onAdd,onAddFreezer,onManageFreezer,onRecipeCreated,onPreview,goalProfile,goalTargets,nutritionByRecipe={},recipeView='list',setRecipeView,search,setSearch,chip,setChip,selected,setSelected}){
+export function RecipeSelectionScreen({day,section,plan,recipes,freezerItems,onAdd,onAddFreezer,onManageFreezer,onRecipeCreated,onPreview,goalProfile,goalTargets,nutritionByRecipe={},recipeView='list',setRecipeView,search,setSearch,chip,setChip,selected,setSelected,days=DAYS,sectionIds=ALL_SECTION_IDS}){
   const goalMode=!!goalProfile?.goalModeEnabled&&!!goalTargets
-  const dayTotals=useMemo(()=>goalMode?dayNutritionTotals([...plan[day].breakfast,...plan[day].main,...plan[day].side],nutritionByRecipe):null,[goalMode,plan,day,nutritionByRecipe])
+  const dayTotals=useMemo(()=>goalMode?dayNutritionTotals(dayMeals(plan[day],sectionIds),nutritionByRecipe):null,[goalMode,plan,day,nutritionByRecipe,sectionIds])
   const [freezerSelected,setFreezerSelected]=useState([])
   // Same prop signature on both, so only the identifier changes below.
   const Bucket=recipeView==='photos'?RecipePhotoBucket:RecipeBucket
-  const catName=section==='breakfast'?'Breakfast':section==='main'?'Mains':'Sides'
-  const sectionLabel=section==='breakfast'?'Breakfast':section==='main'?'Main Meal':'Sides & Snacks'
+  // Which recipe category this section draws from (null = every recipe).
+  const { category:catName, label:sectionLabel, mealType:defaultMealType } = sectionInfo(section)
 
   // Recipes already on the *current* day (any section) — prevent duplicates on the same day
-  const currentDayIds=useMemo(()=>[...plan[day].breakfast,...plan[day].main,...plan[day].side].map(m=>m.recipeId),[plan,day])
+  const currentDayIds=useMemo(()=>dayMeals(plan[day]).map(m=>m.recipeId),[plan,day])
 
   // Recipes planned on *other* days this week — surface as "Already Planned This Week" (selectable for leftovers)
   const otherDaysIds=useMemo(()=>{
     const ids=new Set()
-    DAYS.forEach(d=>{
+    days.forEach(d=>{
       if(d===day)return
-      ;['breakfast','main','side'].forEach(sec=>plan[d][sec].forEach(m=>ids.add(m.recipeId)))
+      dayMeals(plan[d]).forEach(m=>ids.add(m.recipeId))
     })
     return [...ids]
-  },[plan,day])
+  },[plan,day,days])
 
   const filtered=useMemo(()=>{
-    let list=recipes.filter(r=>r.cat===catName)
+    let list=catName?recipes.filter(r=>r.cat===catName):recipes
     if(search)list=list.filter(r=>r.name.toLowerCase().includes(search.toLowerCase()))
     return list
   },[catName,search,recipes])
@@ -96,7 +97,7 @@ export function RecipeSelectionScreen({day,section,plan,recipes,freezerItems,onA
 
   return(
     <div style={{display:'flex',flexDirection:'column',minHeight:'100%'}}>
-      {showNewRecipe&&<NewRecipeForm defaultMealType={section==='breakfast'?'breakfast':section==='side'?'side':'main'} onSave={handleRecipeCreated} onCancel={()=>setShowNewRecipe(false)}/>}
+      {showNewRecipe&&<NewRecipeForm defaultMealType={defaultMealType} onSave={handleRecipeCreated} onCancel={()=>setShowNewRecipe(false)}/>}
       {goalMode&&<div style={{padding:'0 20px'}}><BudgetStrip dayTotals={dayTotals} targets={goalTargets}/></div>}
       <div style={{flex:1,padding:'12px 20px 120px'}}>
         <div style={{display:'flex',gap:8,marginBottom:12,alignItems:'center'}}>

@@ -1,28 +1,30 @@
 import { useState } from 'react'
 import { C, ep, mn, CARD, R } from '../lib/theme.js'
 import { DAY_LBL } from '../lib/dateHelpers.js'
+import { ALL_SECTION_IDS, dayMeals, sectionLabel } from '../lib/mealSections.js'
 import { Btn, Stepper, BudgetStrip } from './ui/index.js'
 import { Icon } from './ui/Icon.jsx'
 import { parseSideNames, formatSideNames } from '../lib/sidePairing.js'
 import { dayNutritionTotals, dayRemainingLine } from '../lib/goalMaths.js'
 
-export function DailyPlanScreen({day,plan,recipes,updatePortion,removeMeal,onAddToSection,onRecipeOpen,onSave,goalProfile,goalTargets,nutritionByRecipe={}}){
+export function DailyPlanScreen({day,plan,recipes,updatePortion,removeMeal,onAddToSection,onRecipeOpen,onSave,goalProfile,goalTargets,nutritionByRecipe={},sectionIds=ALL_SECTION_IDS}){
   const [saved,setSaved]=useState(false)
-  const secs=[{key:'breakfast',label:'Breakfast'},{key:'main',label:'Main Meal'},{key:'side',label:'Sides & Snacks'}]
+  // The day's rows, in the order and set the user chose in Settings › Meal sections.
+  const secs=sectionIds.map(id=>({key:id,label:sectionLabel(id)}))
   const go=()=>{setSaved(true);setTimeout(()=>{setSaved(false);onSave()},1000)}
   const mainMeal=plan[day].main[0]
   const mainRecipe=recipes?.find(r=>r.id===mainMeal?.recipeId)
   const sideNames=parseSideNames(mainRecipe?.sideRecommendation)
   const showSideHint=plan[day].side.length===0&&mainMeal&&sideNames.length>0
   const goalMode=!!goalProfile?.goalModeEnabled&&!!goalTargets
-  const dayMeals=[...plan[day].breakfast,...plan[day].main,...plan[day].side]
-  const dayTotals=goalMode?dayNutritionTotals(dayMeals,nutritionByRecipe):null
+  const mealsToday=dayMeals(plan[day],sectionIds)
+  const dayTotals=goalMode?dayNutritionTotals(mealsToday,nutritionByRecipe):null
   return(
     <div style={{padding:'0 20px'}}>
       {goalMode&&<BudgetStrip dayTotals={dayTotals} targets={goalTargets}/>}
       <div style={{...ep,fontSize:24,color:C.onSurface,padding:'16px 0 2px'}}>{DAY_LBL[day]}</div>
       {goalMode&&(
-        <div style={{...mn,fontSize:12,color:C.onSurfaceVariant,lineHeight:1.5,paddingBottom:4}}>{dayMeals.length===0?'Nothing planned yet':dayRemainingLine(dayTotals,goalTargets)}</div>
+        <div style={{...mn,fontSize:12,color:C.onSurfaceVariant,lineHeight:1.5,paddingBottom:4}}>{mealsToday.length===0?'Nothing planned yet':dayRemainingLine(dayTotals,goalTargets)}</div>
       )}
       <div style={{height:12}}/>
       {secs.map(s=>(

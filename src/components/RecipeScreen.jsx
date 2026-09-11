@@ -3,12 +3,16 @@ import { fetchRecipeDetails, fetchRecipeNotes, saveRecipeNotes, fetchRecipeToddl
 import { callEdgeFn } from '../lib/ai.js'
 import { C, ep, mn, CARD, R } from '../lib/theme.js'
 import { ageBandFromDob, TODDLER_AGE_BANDS } from '../lib/dateHelpers.js'
+import { ALL_SECTION_IDS, dayMeals } from '../lib/mealSections.js'
 import { parseIngredients, parseIngredientParts, parseSteps } from '../lib/recipeParsing.js'
 import { collectQuantities } from '../lib/quantityScaling.js'
 import { Spinner, Btn, Icon, NeedMoreIdeasBtn, Stepper, ScaledText } from './ui/index.js'
 import { dayNutritionTotals, rowFigure } from '../lib/goalMaths.js'
 
-export function RecipeScreen({ recipeId, portion, onPortionChange, onAddMeal, toddlerDob, onOpenToddlerCooking, goalProfile, goalTargets, nutritionByRecipe={}, day, plan }) {
+// toddlerDob is null when toddler activities are off in Settings; that hides the
+// activities card and the ideas button. showToddlerVariations gates the recipe's
+// own toddler variation notes separately.
+export function RecipeScreen({ recipeId, portion, onPortionChange, onAddMeal, toddlerDob, showToddlerVariations = true, onOpenToddlerCooking, goalProfile, goalTargets, nutritionByRecipe={}, day, plan, sectionIds = ALL_SECTION_IDS }) {
   const goalMode = !!goalProfile?.goalModeEnabled && !!goalTargets
   const recipeNutrition = nutritionByRecipe[recipeId]
   const [showGoalSheet, setShowGoalSheet] = useState(false)
@@ -229,7 +233,7 @@ export function RecipeScreen({ recipeId, portion, onPortionChange, onAddMeal, to
       )}
 
       {/* The Extras */}
-      {(data.chef_notes||data.husband_variations||data.toddler_variations||(data.side_recommendation&&data.side_recommendation!=='Not Recommended'))&&(
+      {(data.chef_notes||data.husband_variations||(showToddlerVariations&&data.toddler_variations)||(data.side_recommendation&&data.side_recommendation!=='Not Recommended'))&&(
         <div>
           <div style={{...ep,fontSize:18,color:C.onSurface,marginBottom:12}}>The Extras</div>
           {data.chef_notes&&(
@@ -244,10 +248,10 @@ export function RecipeScreen({ recipeId, portion, onPortionChange, onAddMeal, to
               <p style={{...mn,fontSize:13,color:C.onSurface,lineHeight:1.7,margin:0}}>{prose(data.husband_variations)}</p>
             </div>
           )}
-          {data.toddler_variations&&(
+          {(showToddlerVariations&&data.toddler_variations)&&(
             <div style={{...CARD,padding:'14px 16px',marginBottom:10,background:'#f0f8ff'}}>
               <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}><span style={{fontSize:14}}>👶</span><span style={{...mn,fontSize:10,fontWeight:700,color:'#0050A0',letterSpacing:'0.07em',textTransform:'uppercase'}}>Toddler Variations</span></div>
-              <p style={{...mn,fontSize:13,color:C.onSurface,lineHeight:1.7,margin:0}}>{prose(data.toddler_variations)}</p>
+              <p style={{...mn,fontSize:13,color:C.onSurface,lineHeight:1.7,margin:0}}>{prose((showToddlerVariations&&data.toddler_variations))}</p>
             </div>
           )}
           {data.side_recommendation&&data.side_recommendation!=='Not Recommended'&&(
@@ -264,7 +268,7 @@ export function RecipeScreen({ recipeId, portion, onPortionChange, onAddMeal, to
 
       {/* Toddler activities */}
       {toddlerDob&&(toddlerActivities||toddlerTaskLoading||toddlerTaskError)&&(
-        <div style={{...CARD,padding:'14px 16px',marginBottom:10,marginTop:data.chef_notes||data.husband_variations||data.toddler_variations||(data.side_recommendation&&data.side_recommendation!=='Not Recommended')?0:20,background:C.accent2_100,border:`1px solid ${C.accent2_300}`}}>
+        <div style={{...CARD,padding:'14px 16px',marginBottom:10,marginTop:data.chef_notes||data.husband_variations||(showToddlerVariations&&data.toddler_variations)||(data.side_recommendation&&data.side_recommendation!=='Not Recommended')?0:20,background:C.accent2_100,border:`1px solid ${C.accent2_300}`}}>
           <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}><span style={{fontSize:14}}>🧸</span><span style={{...mn,fontSize:10,fontWeight:700,color:C.accent2_700,letterSpacing:'0.07em',textTransform:'uppercase'}}>Cooking with your toddler</span></div>
           {toddlerTaskLoading&&<p style={{...mn,fontSize:13,color:C.onSurfaceVariant,margin:0}}>Finding age-appropriate activities…</p>}
           {toddlerTaskError&&<p style={{...mn,fontSize:13,color:C.error,margin:0}}>⚠️ {toddlerTaskError}</p>}
@@ -327,7 +331,7 @@ export function RecipeScreen({ recipeId, portion, onPortionChange, onAddMeal, to
     </div>
 
     {showGoalSheet&&goalMode&&recipeNutrition?.kcal!=null&&(()=>{
-      const already = day&&plan ? dayNutritionTotals([...plan[day].breakfast,...plan[day].main,...plan[day].side], nutritionByRecipe) : null
+      const already = day&&plan ? dayNutritionTotals(dayMeals(plan[day], sectionIds), nutritionByRecipe) : null
       const alreadyCal=already?.hasData?already.calories:0, alreadyPro=already?.hasData?already.protein:0, alreadyFib=already?.hasData?already.fibre:0
       const withCal=alreadyCal+recipeNutrition.kcal, withPro=alreadyPro+recipeNutrition.protein_g, withFib=alreadyFib+recipeNutrition.fibre_g
       const toGoCal=Math.max(0,Math.round(goalTargets.calories-withCal)), toGoPro=Math.max(0,Math.round(goalTargets.protein-withPro)), toGoFib=Math.max(0,Math.round(goalTargets.fibre-withFib))

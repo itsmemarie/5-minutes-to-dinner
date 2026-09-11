@@ -1,5 +1,6 @@
 import { C, ep, mn, CARD, R } from '../lib/theme.js'
 import { DAYS, DAY_LBL } from '../lib/dateHelpers.js'
+import { ALL_SECTION_IDS, dayMeals } from '../lib/mealSections.js'
 import {
   dayNutritionTotals, dailyScoreRaw, weeklyScore, weakestComponentReason,
   formatCalorieBand, WHOLE_FOOD_TARGET_PCT,
@@ -43,9 +44,9 @@ function biggestLever(dayEntries, targets) {
   return { label, suggestion, projectedScore: simulated?.score }
 }
 
-export function GoalInsightsTab({ plan, targets, nutritionByRecipe }) {
-  const perDay = DAYS.map(day => {
-    const meals = [...plan[day].breakfast, ...plan[day].main, ...plan[day].side]
+export function GoalInsightsTab({ plan, targets, nutritionByRecipe, days = DAYS, sectionIds = ALL_SECTION_IDS }) {
+  const perDay = days.map(day => {
+    const meals = dayMeals(plan[day], sectionIds)
     const isPlanned = meals.length > 0
     const totals = dayNutritionTotals(meals, nutritionByRecipe)
     return { day, isPlanned, totals }

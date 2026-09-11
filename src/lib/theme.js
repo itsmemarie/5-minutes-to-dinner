@@ -9,6 +9,9 @@ export const C = {
   surface:'#f3f8f2', white:'#fff', surfaceContainerHigh:'#eaf6ea',
   onSurface:'#182417', onSurfaceVariant:'#5c6a58',
   outline:'#5c6a58', outlineVariant:'#c8d6c5',
+  // Settings list chrome: chevrons and drag handles, a disabled row label, and a
+  // destructive-label red that sits better on the green ground than `error`.
+  outlineStrong:'#a4b3a0', onSurfaceDisabled:'#7a8877', errorInk:'#a3341f',
   accent2_100:'#fff3e8', accent2_300:'#f0c090', accent2_600:'#d9791f',
   accent2_700:'#b85f16', accent2_800:'#8a4410',
   // Striped stand-in for a recipe photo we don't have yet (photo tile view).

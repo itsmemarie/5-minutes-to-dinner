@@ -97,41 +97,83 @@ export async function createRecipe(fields) {
 }
 
 // ─── App settings ─────────────────────────────────────────────────
+// camelCase preference key → app_settings column. This is the single list of
+// what the Settings screen persists; `fetchSettings` reads the same columns.
+const PREFERENCE_FIELD_MAP = {
+  suggestFromHistory: 'suggest_from_history',
+  weekStartsOn:       'week_starts_on',
+  mealSections:       'meal_sections',
+  country:            'country',
+  recipeUnits:        'recipe_units',
+  measurements:       'measurements',
+  toddlerModeEnabled: 'toddler_mode_enabled',
+  children:           'children',
+  selectedChildId:    'selected_child_id',
+  toddlerActivities:  'toddler_activities',
+  toddlerVariations:  'toddler_variations',
+  toddlerPortion:     'toddler_portion',
+}
+const PREFERENCE_COLUMNS = Object.values(PREFERENCE_FIELD_MAP).join(', ')
+
 export async function fetchSettings() {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('app_settings')
-    .select('default_portions, toddler_dob, recipe_view')
+    .select(`default_portions, toddler_dob, recipe_view, ${PREFERENCE_COLUMNS}`)
     .eq('id', 1)
     .single()
-  return data
+  if (error) throw error
+  const preferences = {}
+  for (const [k, col] of Object.entries(PREFERENCE_FIELD_MAP)) preferences[k] = data[col]
+  return {
+    defaultPortions: data.default_portions,
+    recipeView:      data.recipe_view,
+    legacyToddlerDob: data.toddler_dob,
+    preferences,
+  }
 }
 
-// All three writers below upsert rather than update: app_settings is a singleton
+// The writers below upsert rather than update: app_settings is a singleton
 // keyed id=1, and an update against a missing row succeeds while changing
 // nothing, so the setting would silently revert on the next reload. They also
 // surface the error instead of discarding it — callers log it (there is no
 // toast surface in this app), which at least makes a failed write visible.
-export async function saveSettings(defaultPortions) {
+async function upsertSettings(columns) {
   const { error } = await supabase
     .from('app_settings')
-    .upsert({ id: 1, default_portions: defaultPortions, updated_at: new Date().toISOString() }, { onConflict: 'id' })
+    .upsert({ id: 1, ...columns, updated_at: new Date().toISOString() }, { onConflict: 'id' })
   if (error) throw error
 }
 
-export async function saveToddlerDob(dob) {
-  const { error } = await supabase
-    .from('app_settings')
-    .upsert({ id: 1, toddler_dob: dob, updated_at: new Date().toISOString() }, { onConflict: 'id' })
-  if (error) throw error
+export const saveSettings = defaultPortions => upsertSettings({ default_portions: defaultPortions })
+
+// patch: any subset of the camelCase preference keys above. Unknown keys are
+// ignored so a caller can hand over a whole preferences object.
+export function savePreferences(patch) {
+  const columns = {}
+  for (const [k, v] of Object.entries(patch)) {
+    if (PREFERENCE_FIELD_MAP[k]) columns[PREFERENCE_FIELD_MAP[k]] = v
+  }
+  if (!Object.keys(columns).length) return Promise.resolve()
+  return upsertSettings(columns)
 }
 
 // Recipe selection view mode ('list' | 'photos'). Mirrored to localStorage for an
 // instant first paint; this copy is what carries the choice across devices.
-export async function saveRecipeView(view) {
-  const { error } = await supabase
-    .from('app_settings')
-    .upsert({ id: 1, recipe_view: view, updated_at: new Date().toISOString() }, { onConflict: 'id' })
+export const saveRecipeView = view => upsertSettings({ recipe_view: view })
+
+// ─── Export (Settings › Your data) ─────────────────────────────────
+// Every recipe row as stored, plus its dietary tags — the raw data, not the
+// trimmed shape `fetchRecipes` builds for the UI.
+export async function fetchRecipesForExport() {
+  const { data, error } = await supabase
+    .from('recipes')
+    .select('*, recipe_dietary_tags ( dietary_tag_id )')
+    .order('name')
   if (error) throw error
+  return data.map(({ recipe_dietary_tags, ...r }) => ({
+    ...r,
+    dietary_tags: (recipe_dietary_tags || []).map(t => t.dietary_tag_id),
+  }))
 }
 
 // ─── Weight goal profile (singleton, same pattern as app_settings) ─
@@ -194,7 +236,9 @@ export async function fetchAllRecipeNutrition() {
 }
 
 // ─── Meal plan (get or create for a given week) ───────────────────
-export async function getOrCreatePlan(weekOf) {
+// `days` is the week's day names in order starting from `weekOf` (see
+// dateHelpers.weekBounds) — the week can start on any weekday.
+export async function getOrCreatePlan(weekOf, days) {
   // Upsert plan
   const { data: plan, error: planErr } = await supabase
     .from('meal_plans')
@@ -204,10 +248,9 @@ export async function getOrCreatePlan(weekOf) {
   if (planErr) throw planErr
 
   // Upsert day entries
-  const days = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday']
-  const mon = new Date(weekOf)
+  const start = new Date(weekOf)
   const entries = days.map((day, i) => {
-    const d = new Date(mon)
+    const d = new Date(start)
     d.setDate(d.getDate() + i)
     return {
       meal_plan_id: plan.id,
@@ -275,6 +318,15 @@ export async function removePlannedMeal(id) {
   await supabase.from('planned_meals').delete().eq('id', id)
 }
 
+// ─── Reset a week (Settings › Your data) ──────────────────────────
+// Deletes every planned meal on the given day entries. The entries and the
+// plan row stay, so the week is empty rather than gone.
+export async function clearPlannedMeals(dayEntryIds) {
+  if (!dayEntryIds.length) return
+  const { error } = await supabase.from('planned_meals').delete().in('day_entry_id', dayEntryIds)
+  if (error) throw error
+}
+
 // ─── Update portion ───────────────────────────────────────────────
 export async function updatePlannedMealPortion(id, portion) {
   await supabase.from('planned_meals').update({ portion }).eq('id', id)
@@ -295,7 +347,7 @@ export async function fetchShoppingList(planId) {
     .from('shopping_lists')
     .select('id, shopping_list_items(*)')
     .eq('meal_plan_id', planId)
-    .single()
+    .maybeSingle()
   return data
 }
 

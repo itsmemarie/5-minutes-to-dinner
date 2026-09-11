@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { C, ep, mn, screenTitle, R, CARD } from '../lib/theme.js'
 import { DAYS, DAY_LBL, TODAY, formatAdvance } from '../lib/dateHelpers.js'
+import { ALL_SECTION_IDS, dayMeals, sectionShort } from '../lib/mealSections.js'
 import { Icon, TodayTag } from './ui/index.js'
 import { NewRecipeForm } from './NewRecipeForm.jsx'
 
-const SEC_LBL = { breakfast:'Breakfast', main:'Main', side:'Side' }
-
-export function HomeScreen({ plan, onDayOpen, onRecipeOpen, moveMeal, onCopy, onRecipeCreated }) {
+// days is the week in the user's order; sectionIds the sections turned on
+// in Settings — both come from App's preferences.
+export function HomeScreen({ plan, days = DAYS, sectionIds = ALL_SECTION_IDS, onDayOpen, onRecipeOpen, moveMeal, onCopy, onRecipeCreated }) {
   const [showNewRecipe, setShowNewRecipe] = useState(false)
   const [drag, setDrag] = useState(null)   // {mealId,fromDay,section}
   const [over, setOver] = useState(null)   // day string being hovered
@@ -24,8 +25,8 @@ export function HomeScreen({ plan, onDayOpen, onRecipeOpen, moveMeal, onCopy, on
           <Icon name='plus' size={14}/>Add recipe
         </button>
       </div>
-      {DAYS.map(day => {
-        const meals = [...plan[day].breakfast, ...plan[day].main, ...plan[day].side]
+      {days.map(day => {
+        const meals = dayMeals(plan[day], sectionIds)
         const isToday = day === TODAY
         return (
           <div key={day} style={{ marginBottom:16 }}>
@@ -39,7 +40,7 @@ export function HomeScreen({ plan, onDayOpen, onRecipeOpen, moveMeal, onCopy, on
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{...mn,fontSize:13,fontWeight:600,color:C.onSurface,marginBottom:3,textDecoration:'underline',textDecorationColor:C.outlineVariant,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{m.name}</div>
                     <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
-                      <span style={{...mn,fontSize:11,color:C.onSurface,opacity:0.55}}>{SEC_LBL[m.section]}</span>
+                      <span style={{...mn,fontSize:11,color:C.onSurface,opacity:0.55}}>{sectionShort(m.section)}</span>
                       <span style={{...mn,fontSize:11,color:C.onSurface,opacity:0.6}}>{m.prep}m</span>
                       {m.advancePrepHours>0&&(
                         <span title={m.advancePrepNote||undefined} style={{...mn,fontSize:11,fontWeight:700,display:'inline-flex',alignItems:'center',gap:4,color:C.onSecondaryContainer}}>
