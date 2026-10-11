@@ -8,8 +8,19 @@ import { matchProduceGuide } from '../lib/supabase.js'
 const PRODUCE_AISLES=['FRUIT','VEGETABLES']
 const NO_TIPS_KEY='buyersEyeNoTips'
 
-export function ShoppingListScreen({shopping,onToggle,loading,error,onRegenerate}){
+// Manual mode needs no AI: onBuildBasic makes a plain list from the planned
+// recipes' ingredients, onAddItem / onRemoveItem edit it by hand. `notice`
+// explains what a basic list is (or which recipes had no ingredients).
+export function ShoppingListScreen({shopping,onToggle,loading,loadingMsg,error,notice,onRegenerate,onBuildBasic,onAddItem,onRemoveItem}){
   const [copied,setCopied]=useState(false)
+  const [newItem,setNewItem]=useState('')
+  const [adding,setAdding]=useState(false)
+  const addItem=async()=>{
+    const name=newItem.trim()
+    if(!name||adding)return
+    setAdding(true)
+    try{await onAddItem(name);setNewItem('')}finally{setAdding(false)}
+  }
   const [guideMap,setGuideMap]=useState({}) // itemId -> uuid | null | 'checking'
   const [noTipsNames,setNoTipsNames]=useState(()=>new Set(JSON.parse(sessionStorage.getItem(NO_TIPS_KEY)||'[]')))
   const [sheetItem,setSheetItem]=useState(null) // {id,name,guideId} | null
@@ -64,18 +75,23 @@ export function ShoppingListScreen({shopping,onToggle,loading,error,onRegenerate
         )}
       </div>
       <HDivider/>
+      {notice&&!loading&&<div role='status' style={{...mn,fontSize:12,lineHeight:1.5,color:C.onSurface,background:C.surfaceContainerHigh,borderRadius:R.md,padding:'10px 12px',marginBottom:14}}>{notice}</div>}
       {loading?(
-        <Spinner msg='Building your shopping list with AI…'/>
+        <Spinner msg={loadingMsg||'Building your shopping list with AI…'}/>
       ):error?(
         <div style={{...CARD,padding:16,marginBottom:14,borderLeft:`4px solid ${C.error}`}}>
           <p style={{...mn,fontSize:13,color:C.error,margin:'0 0 12px',lineHeight:1.6}}>⚠️ {error}</p>
-          <Btn label='Try Again' onClick={onRegenerate} secondary small/>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+            <Btn label='Try Again' onClick={onRegenerate} secondary small/>
+            <Btn label='Make a basic list (no AI)' onClick={onBuildBasic} secondary small/>
+          </div>
         </div>
       ):shopping.length===0?(
         <div style={{...CARD,padding:32,textAlign:'center',display:'flex',flexDirection:'column',alignItems:'center',gap:12}}>
           <Icon name='cart' size={30} color={C.outlineVariant}/>
-          <p style={{...mn,fontSize:13,color:C.onSurfaceVariant,lineHeight:1.6,margin:0}}>No shopping list yet. Plan some meals, then generate.</p>
+          <p style={{...mn,fontSize:13,color:C.onSurfaceVariant,lineHeight:1.6,margin:0}}>No shopping list yet. Plan some meals, then generate — or make a basic list straight from the recipes, no AI needed.</p>
           <Btn label='✨ Generate Shopping List' onClick={onRegenerate} small/>
+          <Btn label='Make a basic list (no AI)' onClick={onBuildBasic} secondary small/>
         </div>
       ):(
         orderedAisles.map(aisle=>{
@@ -107,12 +123,22 @@ export function ShoppingListScreen({shopping,onToggle,loading,error,onRegenerate
                         </button>
                       )
                     })()}
+                    <button onClick={e=>{e.stopPropagation();onRemoveItem(item.id)}} aria-label={`Remove ${item.name}`} title='Remove' style={{border:'none',background:'transparent',padding:4,display:'flex',cursor:'pointer',flexShrink:0,opacity:0.5}}>
+                      <Icon name='x' size={14} color={C.onSurfaceVariant}/>
+                    </button>
                   </div>
                 ))}
               </div>
             </div>
           )
         })
+      )}
+      {!loading&&(
+        <div style={{display:'flex',gap:8,margin:'4px 0 16px'}}>
+          <input value={newItem} onChange={e=>setNewItem(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addItem()} placeholder='Add an item by hand…' aria-label='Add an item' disabled={adding}
+            style={{...mn,flex:1,padding:'10px 12px',borderRadius:R.md,border:`1px solid ${C.outlineVariant}`,fontSize:14,background:C.white,outline:'none',boxSizing:'border-box'}}/>
+          <Btn label={adding?'…':'Add'} small onClick={addItem} disabled={adding||!newItem.trim()}/>
+        </div>
       )}
       {unc>0&&!loading&&(
         <div style={{position:'sticky',bottom:10,padding:'8px 0'}}>

@@ -1,14 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
-
-const GROQ_KEY = (Deno.env.get('GROQ_API_KEY') ?? '').replace(/[^\x20-\x7E]/g, '').trim()
-const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
-const MODEL = 'openai/gpt-oss-120b'
-
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
+import { aiHandler, aiResponse, badInput, runAiStep } from '../_shared/router.ts'
 
 const SYSTEM_PROMPT = `You are a fresh-produce buyer for Harrods Food Hall who also sources for Michelin-starred restaurants. You write selection guides for a home shopper's grocery app. Your advice is practical, specific and confident — the kind of tells a market veteran uses, not generic supermarket advice.
 
@@ -49,53 +40,9 @@ Field rules:
 
 Return ONLY a raw JSON object — no markdown, no backticks, no preamble. Must be parseable by JSON.parse().`
 
-Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
-
-  if (!GROQ_KEY) {
-    return new Response(JSON.stringify({ error: 'GROQ_API_KEY secret is not configured on this project' }), {
-      status: 500,
-      headers: { ...CORS, 'Content-Type': 'application/json' }
-    })
-  }
-
-  try {
-    const { name } = await req.json()
-    const userPrompt = `Shopping list item: "${name}"`
-
-    const resp = await fetch(GROQ_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_KEY}` },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.3,
-        max_tokens: 700,
-        response_format: { type: 'json_object' },
-        include_reasoning: false,
-      })
-    })
-
-    if (!resp.ok) {
-      const err = await resp.text()
-      throw new Error(`Groq error: ${err}`)
-    }
-
-    const data = await resp.json()
-    let raw = data.choices?.[0]?.message?.content || '{}'
-    raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')
-    const result = JSON.parse(raw)
-
-    return new Response(JSON.stringify(result), {
-      headers: { ...CORS, 'Content-Type': 'application/json' }
-    })
-  } catch (e: any) {
-    return new Response(JSON.stringify({ error: e.message }), {
-      status: 500,
-      headers: { ...CORS, 'Content-Type': 'application/json' }
-    })
-  }
-})
+Deno.serve(aiHandler(async (req, body) => {
+  const name = typeof body.name === 'string' ? body.name.trim().slice(0, 120) : ''
+  if (!name) throw badInput('Which item?')
+  const { data, meta } = await runAiStep(req, 'buyers_eye', { system: SYSTEM_PROMPT, user: `Shopping list item: "${name}"` })
+  return aiResponse(data, meta)
+}))

@@ -1,12 +1,15 @@
-const MAX_DIMENSION = 1500
-const JPEG_QUALITY = 0.75
+// ─── Photos → AI payloads ─────────────────────────────────────────
+// Everything happens on the device, before upload: crop to the part that
+// matters → ≤1024px long edge → grayscale when colour doesn't matter → JPEG
+// at quality 0.7. A phone photo of a recipe page goes from ~3 MB to ~100 KB.
+import { AI_IMAGE_QUALITY, cropToPixels, fitWithin, toGrayscale } from './imageMath.js'
 
-function loadImage(file) {
+function loadImage(blob) {
   return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file)
+    const url = URL.createObjectURL(blob)
     const img = new Image()
     img.onload = () => { URL.revokeObjectURL(url); resolve(img) }
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error(`Could not read image: ${file.name || 'file'}`)) }
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('decode failed')) }
     img.src = url
   })
 }
@@ -21,101 +24,41 @@ function blobToBase64(blob) {
 }
 
 /**
- * Resizes an image to a 1500px long edge and re-encodes as JPEG at 75%
- * quality so large phone screenshots/photos fit under upload size limits.
- * Falls back to sending the original file's base64 if the browser can't
- * decode it (e.g. HEIC on non-Safari browsers) rather than dropping it.
+ * @param {Blob & {name?: string}} file
+ * @param {{crop?: {x,y,w,h}|null, grayscale?: boolean}} opts  crop is relative (0–1)
+ * @returns {Promise<{base64, mediaType, name, bytes, width, height}>}
  */
-export async function compressImageFile(file) {
-  if (!file.type || !file.type.startsWith('image/')) {
-    throw new Error(`${file.name || 'File'} is not an image`)
-  }
-
+export async function prepareImageForAi(file, { crop = null, grayscale = true } = {}) {
+  const name = file.name || 'photo'
+  if (!file.type || !file.type.startsWith('image/')) throw new Error(`${name} is not an image`)
+  let img
   try {
-    const img = await loadImage(file)
-    const { width, height } = img
-    const scale = Math.min(1, MAX_DIMENSION / Math.max(width, height))
-    const targetW = Math.round(width * scale)
-    const targetH = Math.round(height * scale)
-
-    const canvas = document.createElement('canvas')
-    canvas.width = targetW
-    canvas.height = targetH
-    canvas.getContext('2d').drawImage(img, 0, 0, targetW, targetH)
-
-    const blob = await new Promise((resolve, reject) => {
-      canvas.toBlob(
-        b => b ? resolve(b) : reject(new Error('Canvas compression failed')),
-        'image/jpeg',
-        JPEG_QUALITY
-      )
-    })
-
-    const base64 = await blobToBase64(blob)
-    return { base64, mediaType: 'image/jpeg', name: file.name }
+    img = await loadImage(file)
   } catch {
-    const base64 = await blobToBase64(file)
-    return { base64, mediaType: file.type, name: file.name }
+    // e.g. HEIC outside Safari. The AI providers can't read it either, so say so
+    // rather than uploading a file that will fail.
+    throw new Error(`${name} couldn't be opened here. Try a screenshot of it, or save it as a JPEG.`)
   }
-}
-
-/** Compresses multiple files concurrently; a failed file becomes null rather than blocking the rest. */
-export async function compressImageFiles(files) {
-  const results = await Promise.allSettled(files.map(compressImageFile))
-  return results.map(r => r.status === 'fulfilled' ? r.value : null)
-}
-
-const RESIZE_MAX_DIMENSION = 1024
-const RESIZE_JPEG_QUALITY = 0.8
-
-/**
- * Resizes an image File to a maximum of 1024px on the longest edge
- * (preserving aspect ratio) and re-encodes as JPEG at 80% quality, so
- * photos stay under the Groq vision API's free-tier token-per-minute
- * limit. Returns the original file unchanged if it's already small
- * enough, or if the browser can't decode it (e.g. HEIC on non-Safari).
- */
-export async function resizeImage(file) {
-  if (!file.type || !file.type.startsWith('image/')) {
-    throw new Error(`${file.name || 'File'} is not an image`)
+  const { sx, sy, sw, sh } = cropToPixels(crop, img.naturalWidth, img.naturalHeight)
+  const { width, height } = fitWithin(sw, sh)
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const ctx = canvas.getContext('2d')
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, width, height)
+  if (grayscale) {
+    const px = ctx.getImageData(0, 0, width, height)
+    toGrayscale(px.data)
+    ctx.putImageData(px, 0, 0)
   }
-
-  try {
-    const img = await loadImage(file)
-    const { width, height } = img
-    if (Math.max(width, height) <= RESIZE_MAX_DIMENSION) return file
-
-    const scale = RESIZE_MAX_DIMENSION / Math.max(width, height)
-    const targetW = Math.round(width * scale)
-    const targetH = Math.round(height * scale)
-
-    const canvas = document.createElement('canvas')
-    canvas.width = targetW
-    canvas.height = targetH
-    canvas.getContext('2d').drawImage(img, 0, 0, targetW, targetH)
-
-    const blob = await new Promise((resolve, reject) => {
-      canvas.toBlob(
-        b => b ? resolve(b) : reject(new Error('Canvas resize failed')),
-        'image/jpeg',
-        RESIZE_JPEG_QUALITY
-      )
-    })
-
-    return new File([blob], file.name || 'photo.jpg', { type: 'image/jpeg' })
-  } catch {
-    return file
-  }
+  const blob = await new Promise((resolve, reject) => {
+    canvas.toBlob(b => (b ? resolve(b) : reject(new Error('Could not compress the photo'))), 'image/jpeg', AI_IMAGE_QUALITY)
+  })
+  return { base64: await blobToBase64(blob), mediaType: 'image/jpeg', name, bytes: blob.size, width, height }
 }
 
-async function resizeImageToPayload(file) {
-  const resized = await resizeImage(file)
-  const base64 = await blobToBase64(resized)
-  return { base64, mediaType: resized.type || 'image/jpeg', name: file.name }
-}
-
-/** Resizes multiple files concurrently; a failed file becomes null rather than blocking the rest. */
-export async function resizeImageFiles(files) {
-  const results = await Promise.allSettled(files.map(resizeImageToPayload))
-  return results.map(r => r.status === 'fulfilled' ? r.value : null)
+// PhotoPicker items ({ file, crop }) → the { base64, mediaType } list the edge functions take.
+export async function preparePhotoItems(items, { grayscale = true } = {}) {
+  const prepared = await Promise.all(items.map(it => prepareImageForAi(it.file, { crop: it.crop, grayscale })))
+  return prepared.map(({ base64, mediaType }) => ({ base64, mediaType }))
 }

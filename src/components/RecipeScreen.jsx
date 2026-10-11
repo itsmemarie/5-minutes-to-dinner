@@ -51,13 +51,15 @@ export function RecipeScreen({ recipeId, portion, onPortionChange, onAddMeal, to
         }
         const recipe = await fetchRecipeDetails(recipeId)
         setToddlerTaskLoading(true)
+        // Quiet: this runs on its own when a recipe opens, so an AI limit shows
+        // inline here rather than interrupting with the limit sheet.
         const result = await callEdgeFn('recipe-toddler-task', {
           ageBandLabel: bandLabel,
           recipeName: recipe.name,
           ingredients: recipe.ingredients,
           instructions: recipe.instructions_standard || recipe.instructions_thermomix,
           toddlerVariations: recipe.toddler_variations,
-        })
+        }, { quiet: true })
         const list = Array.isArray(result.activities) && result.activities.length
           ? result.activities
           : (result.task ? [{ title: '', task: result.task, needsTool: result.needsTool ?? null }] : [])

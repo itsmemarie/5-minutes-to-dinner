@@ -4,6 +4,7 @@ import { Icon } from '../ui/Icon.jsx'
 import { Btn } from '../ui/Btn.jsx'
 import { RowCard, Row, FieldBox, fieldInputStyle, ConfirmDialog } from './primitives.jsx'
 import { childMeta } from './ChildrenSection.jsx'
+import { openExternal } from '../../lib/platform.js'
 
 // ─── Settings sub-screens ─────────────────────────────────────────
 // Each one is pushed by a chevron row and rendered under the app header with
@@ -98,7 +99,7 @@ export function FeedbackScreen({ versionLabel }) {
       <div style={{ ...ep, fontSize:22, color:C.onSurface, marginBottom:4 }}>Feedback &amp; support</div>
       <div style={intro}>Found something broken, or want a feature? Open an issue on the project's GitHub — include the version below so it can be reproduced.</div>
       <RowCard>
-        <Row title='Report a problem or idea' sub='Opens GitHub in a new tab.' onClick={() => window.open(REPO_ISSUES_URL, '_blank', 'noopener')}>
+        <Row title='Report a problem or idea' sub='Opens GitHub in a new tab.' onClick={() => openExternal(REPO_ISSUES_URL)}>
           <Icon name='externalLink' size={16} color={C.outlineStrong} strokeWidth={2.5}/>
         </Row>
         <Row divider title='Version'>

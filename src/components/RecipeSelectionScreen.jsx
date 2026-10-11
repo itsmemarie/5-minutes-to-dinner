@@ -34,7 +34,7 @@ function ViewToggle({ value, onChange }) {
   )
 }
 
-export function RecipeSelectionScreen({day,section,plan,recipes,freezerItems,onAdd,onAddFreezer,onManageFreezer,onRecipeCreated,onPreview,goalProfile,goalTargets,nutritionByRecipe={},recipeView='list',setRecipeView,search,setSearch,chip,setChip,selected,setSelected,days=DAYS,sectionIds=ALL_SECTION_IDS}){
+export function RecipeSelectionScreen({day,section,plan,recipes,freezerItems,onAdd,onAddFreezer,onManageFreezer,onRecipeCreated,onPreview,goalProfile,goalTargets,nutritionByRecipe={},recipeView='list',setRecipeView,search,setSearch,chip,setChip,selected,setSelected,days=DAYS,sectionIds=ALL_SECTION_IDS,aiContext}){
   const goalMode=!!goalProfile?.goalModeEnabled&&!!goalTargets
   const dayTotals=useMemo(()=>goalMode?dayNutritionTotals(dayMeals(plan[day],sectionIds),nutritionByRecipe):null,[goalMode,plan,day,nutritionByRecipe,sectionIds])
   const [freezerSelected,setFreezerSelected]=useState([])
@@ -97,7 +97,7 @@ export function RecipeSelectionScreen({day,section,plan,recipes,freezerItems,onA
 
   return(
     <div style={{display:'flex',flexDirection:'column',minHeight:'100%'}}>
-      {showNewRecipe&&<NewRecipeForm defaultMealType={defaultMealType} onSave={handleRecipeCreated} onCancel={()=>setShowNewRecipe(false)}/>}
+      {showNewRecipe&&<NewRecipeForm defaultMealType={defaultMealType} aiContext={aiContext} onSave={handleRecipeCreated} onCancel={()=>setShowNewRecipe(false)}/>}
       {goalMode&&<div style={{padding:'0 20px'}}><BudgetStrip dayTotals={dayTotals} targets={goalTargets}/></div>}
       <div style={{flex:1,padding:'12px 20px 120px'}}>
         <div style={{display:'flex',gap:8,marginBottom:12,alignItems:'center'}}>

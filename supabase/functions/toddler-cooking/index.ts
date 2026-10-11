@@ -1,14 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
-
-const GROQ_KEY = (Deno.env.get('GROQ_API_KEY') ?? '').replace(/[^\x20-\x7E]/g, '').trim()
-const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
-const MODEL = 'openai/gpt-oss-120b'
-
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
+import { aiHandler, aiResponse, runAiStep } from '../_shared/router.ts'
 
 const SYSTEM_PROMPT = `You are a paediatric-informed toddler cooking educator helping a parent involve their toddler in home cooking every day, matched to their skill level.
 
@@ -27,53 +18,12 @@ Rules for tasks (non-negotiable):
 
 Return ONLY a raw JSON object — no markdown, no backticks, no preamble. Must be parseable by JSON.parse().`
 
-Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
+Deno.serve(aiHandler(async (req, body) => {
+  const { dob } = body
+  const today = new Date().toISOString().split('T')[0]
 
-  if (!GROQ_KEY) {
-    return new Response(JSON.stringify({ error: 'GROQ_API_KEY secret is not configured on this project' }), {
-      status: 500,
-      headers: { ...CORS, 'Content-Type': 'application/json' }
-    })
-  }
+  const userPrompt = `Toddler's date of birth: ${dob}\nToday's date: ${today}\n\nGenerate the reference content with this exact JSON structure:\n{\n  "tools": [\n    { "icon": "🔪", "name": "Kids' safety knife (nylon, crinkle edge)", "description": "Cuts soft food but is too dull to cut skin." }\n  ],\n  "ageBands": {\n    "18-24m": [\n      { "icon": "💧", "title": "Pour water or milk into a bowl", "description": "Use a small jug, adult keeps a hand near the base.", "needsTool": null }\n    ],\n    "2-3y": [],\n    "3-4y": [],\n    "4-5y": []\n  }\n}\n\n"tools" must have exactly 5 entries. Every age band key must be present with 4-6 task entries each. The example entries above are formatting examples only, not content to copy.`
 
-  try {
-    const { dob } = await req.json()
-    const today = new Date().toISOString().split('T')[0]
-
-    const userPrompt = `Toddler's date of birth: ${dob}\nToday's date: ${today}\n\nGenerate the reference content with this exact JSON structure:\n{\n  "tools": [\n    { "icon": "🔪", "name": "Kids' safety knife (nylon, crinkle edge)", "description": "Cuts soft food but is too dull to cut skin." }\n  ],\n  "ageBands": {\n    "18-24m": [\n      { "icon": "💧", "title": "Pour water or milk into a bowl", "description": "Use a small jug, adult keeps a hand near the base.", "needsTool": null }\n    ],\n    "2-3y": [],\n    "3-4y": [],\n    "4-5y": []\n  }\n}\n\n"tools" must have exactly 5 entries. Every age band key must be present with 4-6 task entries each. The example entries above are formatting examples only, not content to copy.`
-
-    const resp = await fetch(GROQ_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_KEY}` },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.4,
-        max_tokens: 4096,
-        response_format: { type: 'json_object' },
-        include_reasoning: false,
-      })
-    })
-
-    if (!resp.ok) {
-      const err = await resp.text()
-      throw new Error(`Groq error: ${err}`)
-    }
-
-    const data = await resp.json()
-    const result = JSON.parse(data.choices?.[0]?.message?.content || '{}')
-
-    return new Response(JSON.stringify(result), {
-      headers: { ...CORS, 'Content-Type': 'application/json' }
-    })
-  } catch (e: any) {
-    return new Response(JSON.stringify({ error: e.message }), {
-      status: 500,
-      headers: { ...CORS, 'Content-Type': 'application/json' }
-    })
-  }
-})
+  const { data, meta } = await runAiStep(req, 'toddler_guide', { system: SYSTEM_PROMPT, user: userPrompt })
+  return aiResponse(data, meta)
+}))

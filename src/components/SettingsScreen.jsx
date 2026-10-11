@@ -3,29 +3,36 @@ import { C, ep, mn } from '../lib/theme.js'
 import { WEEK_START_OPTIONS } from '../lib/dateHelpers.js'
 import { countryName, RECIPE_UNIT_OPTIONS, MEASUREMENT_OPTIONS } from '../lib/preferences.js'
 import { APP_VERSION_LABEL } from '../lib/appVersion.js'
+import { useGeminiKey } from '../lib/geminiKey.js'
+import { useInstallState } from '../lib/install.js'
 import { SectionHeading, RowCard, Row, RowValue, Switch, SegPill, InlineStepper, ConfirmDialog, ROW_DIVIDER } from './settings/primitives.jsx'
 import { MealSectionsCard } from './settings/MealSectionsCard.jsx'
 import { ChildrenSection } from './settings/ChildrenSection.jsx'
 import { GoalSection } from './settings/GoalSection.jsx'
 
 // ─── Settings ─────────────────────────────────────────────────────
-// Nine sections of row cards. Every control saves on interaction (App debounces
+// Ten sections of row cards. Every control saves on interaction (App debounces
 // the write); chevron rows push a sub-screen via `onOpen`. The destructive
 // "Reset this week's plan" row confirms before it calls `onResetWeek`.
 //
-// The Account section ships without an identity row: the app has no sign-in
-// (everything is a singleton behind the anon key), so there is nobody to show
-// or sign out. See README › Still open › 4.
+// Sign-in is optional and only identifies the owner (checked server-side
+// against OWNER_EMAIL); the data itself is still one shared set behind the
+// anon key. `isOwner` comes from the ai-config function and only decides
+// whether the AI models row is shown — the server re-checks every owner action.
 export function SettingsScreen({
   defPort, setDefPort,
   prefs, setPrefs,
   goalProfile, goalTargets, setGoalProfile,
   freezerItems = [], weekLabel,
+  session, isOwner,
   onOpen, onExportRecipes, onResetWeek,
 }) {
   const [confirmReset, setConfirmReset] = useState(false)
   const [resetting, setResetting] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const geminiKey = useGeminiKey()
+  const install = useInstallState()
+  const equipmentCount = prefs.kitchenEquipment.length
 
   const weekStartLabel = WEEK_START_OPTIONS.find(o => o.id === prefs.weekStartsOn)?.label
   const freezerInStock = freezerItems.filter(i => i.in_stock).length
@@ -78,6 +85,22 @@ export function SettingsScreen({
         </Row>
       </RowCard>
 
+      {/* AI assistant */}
+      <SectionHeading sub={isOwner ? 'Owner account: AI runs on your own keys, with a model you choose per step.' : 'Free AI is on by default. If it gets busy, your own free Google key keeps it going, and everything can always be filled in by hand.'}>AI assistant</SectionHeading>
+      <RowCard>
+        <Row title='Free Google AI key' sub={geminiKey ? 'Saved on this device. Used when the free AI is busy.' : 'Optional. Keeps AI working when the free tier is busy.'} titleWeight={400} onClick={() => onOpen({ kind:'geminiKey' })}>
+          <RowValue>{geminiKey ? 'Added' : 'Not added'}</RowValue>
+        </Row>
+        <Row divider title='Kitchen equipment' sub='The expert review and batch plans only use what you have.' titleWeight={400} onClick={() => onOpen({ kind:'equipment' })}>
+          <RowValue>{equipmentCount ? `${equipmentCount} selected` : 'None'}</RowValue>
+        </Row>
+        {isOwner && (
+          <Row divider title='AI models' sub='Owner only. Choose Claude, Groq or Gemini for each step and compare.' titleWeight={400} onClick={() => onOpen({ kind:'aiModels' })}>
+            <RowValue/>
+          </Row>
+        )}
+      </RowCard>
+
       {/* 4 · Your children */}
       <ChildrenSection prefs={prefs} setPrefs={setPrefs}
         onEditChild={childId => onOpen({ kind:'child', childId })}
@@ -109,7 +132,21 @@ export function SettingsScreen({
       {/* 8 · Account */}
       <SectionHeading>Account</SectionHeading>
       <RowCard>
-        <Row title='Feedback & support' onClick={() => onOpen({ kind:'feedback' })}>
+        {session ? (
+          <Row title={session.user?.email} sub={isOwner ? 'Owner account' : 'Signed in'} onClick={() => onOpen({ kind:'signIn' })}>
+            <RowValue/>
+          </Row>
+        ) : (
+          <Row title='Sign in' sub='For the owner account. Everything else works without one.' onClick={() => onOpen({ kind:'signIn' })}>
+            <RowValue/>
+          </Row>
+        )}
+        {!install.installed && (
+          <Row divider title='Install the app' sub={install.platform === 'ios' ? 'Add it to your home screen.' : 'Add it to your home screen and share recipes into it.'} onClick={() => onOpen({ kind:'install' })}>
+            <RowValue/>
+          </Row>
+        )}
+        <Row divider title='Feedback & support' onClick={() => onOpen({ kind:'feedback' })}>
           <RowValue/>
         </Row>
         <Row divider title='Version' style={{ justifyContent:'space-between' }}>

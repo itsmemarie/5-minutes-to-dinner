@@ -2,35 +2,21 @@ import { useState } from 'react'
 import { C, ep, mn, CARD, R } from '../lib/theme.js'
 import { Btn } from './ui/index.js'
 import { extractFreezerItems } from '../lib/ai.js'
-import { compressImageFiles } from '../lib/imageHelpers.js'
+import { preparePhotoItems } from '../lib/imageHelpers.js'
+import { PhotoPicker, photoItem } from './PhotoPicker.jsx'
 
-export function FreezerScreen({items,onReplace,onAddOne,onToggleStock,onDelete}){
-  const [pasteText,setPasteText]=useState('')
-  const [images,setImages]=useState([])
+// initialShare: { text?, files? } when a list or photo was shared into the app.
+// It's pre-loaded for the user to check — nothing replaces the inventory until
+// they press the button.
+export function FreezerScreen({items,onReplace,onAddOne,onToggleStock,onDelete,initialShare}){
+  const [pasteText,setPasteText]=useState(initialShare?.text||'')
+  const [photos,setPhotos]=useState(()=>(initialShare?.files||[]).map(photoItem))
+  const [grayscale,setGrayscale]=useState(true)
   const [manualName,setManualName]=useState('')
   const [busy,setBusy]=useState(false)
-  const [imagesLoading,setImagesLoading]=useState(false)
   const [error,setError]=useState(null)
 
   const inp=(extra)=>({...mn,width:'100%',padding:'10px 12px',borderRadius:R.md,border:`1px solid ${C.outlineVariant}`,fontSize:14,background:C.white,outline:'none',boxSizing:'border-box',...extra})
-
-  const handleImageSelect=async(e)=>{
-    const files=Array.from(e.target.files||[])
-    if(!files.length)return
-    e.target.value=''
-    setImagesLoading(true)
-    try{
-      const results=await compressImageFiles(files)
-      const ok=results.filter(Boolean)
-      if(ok.length<results.length){
-        setError(`${results.length-ok.length} file(s) couldn't be processed and were skipped.`)
-      }
-      setImages(p=>[...p,...ok])
-    }finally{
-      setImagesLoading(false)
-    }
-  }
-  const removeImage=(idx)=>setImages(p=>p.filter((_,i)=>i!==idx))
 
   const handleReplaceFromText=async()=>{
     if(!pasteText.trim())return
@@ -45,13 +31,13 @@ export function FreezerScreen({items,onReplace,onAddOne,onToggleStock,onDelete})
   }
 
   const handleReplaceFromImages=async()=>{
-    if(!images.length)return
+    if(!photos.length)return
     setBusy(true);setError(null)
     try{
-      const names=await extractFreezerItems({images:images.map(({base64,mediaType})=>({base64,mediaType}))})
+      const names=await extractFreezerItems({images:await preparePhotoItems(photos,{grayscale})})
       if(!names.length){setError('No items found in those photos.');return}
       await onReplace(names)
-      setImages([])
+      setPhotos([])
     }catch(e){setError(e.message)}
     finally{setBusy(false)}
   }
@@ -71,7 +57,13 @@ export function FreezerScreen({items,onReplace,onAddOne,onToggleStock,onDelete})
       <div style={{...ep,fontSize:26,color:C.onSurface,marginBottom:4}}>Freezer</div>
       <div style={{...mn,fontSize:13,color:C.onSurfaceVariant,marginBottom:20,lineHeight:1.5}}>Import a list to use when planning meals. Importing a new list replaces your entire current inventory.</div>
 
-      {error&&<div style={{...mn,fontSize:13,color:C.error,background:C.errorContainer,padding:'10px 14px',borderRadius:R.md,marginBottom:16}}>{error}</div>}
+      {initialShare&&(
+        <div style={{...mn,fontSize:12,lineHeight:1.5,color:C.onSurface,background:C.primaryFixed,borderRadius:R.md,padding:'10px 12px',marginBottom:16}}>
+          Shared into the app: check it below, then import it. Your current inventory isn't touched until you do.
+        </div>
+      )}
+
+      {error&&<div role='alert' style={{...mn,fontSize:13,color:C.error,background:C.errorContainer,padding:'10px 14px',borderRadius:R.md,marginBottom:16}}>{error}</div>}
 
       <div style={{...CARD,padding:'16px 16px',marginBottom:16}}>
         <div style={{...mn,fontSize:11,fontWeight:700,color:C.onSurfaceVariant,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:8}}>Paste a list</div>
@@ -87,21 +79,8 @@ export function FreezerScreen({items,onReplace,onAddOne,onToggleStock,onDelete})
 
       <div style={{...CARD,padding:'16px 16px',marginBottom:20}}>
         <div style={{...mn,fontSize:11,fontWeight:700,color:C.onSurfaceVariant,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:8}}>Upload a photo</div>
-        <label style={{display:'block',border:`2px dashed ${C.outlineVariant}`,borderRadius:R.md,padding:'14px 16px',textAlign:'center',cursor:(busy||imagesLoading)?'not-allowed':'pointer',background:C.white}}>
-          <input type='file' accept='image/*' multiple onChange={handleImageSelect} style={{display:'none'}} disabled={busy||imagesLoading}/>
-          <div style={{...mn,fontSize:13,color:images.length?C.onSurface:C.onSurfaceVariant}}>{imagesLoading?'Compressing photo(s)…':images.length?`Tap to add more photos (${images.length} selected)`:'Tap to choose photo(s) of your freezer list'}</div>
-        </label>
-        {images.length>0&&(
-          <div style={{display:'flex',flexDirection:'column',gap:6,marginTop:10}}>
-            {images.map((img,idx)=>(
-              <div key={idx} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 10px',borderRadius:R.sm,background:C.white,border:`1px solid ${C.outlineVariant}40`}}>
-                <span style={{...mn,fontSize:13,color:C.onSurface,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>📷 {img.name}</span>
-                <button onClick={()=>removeImage(idx)} disabled={busy} style={{border:'none',background:'none',color:C.error,fontSize:16,cursor:busy?'not-allowed':'pointer',padding:'0 4px',lineHeight:1}}>×</button>
-              </div>
-            ))}
-          </div>
-        )}
-        {images.length>0&&(
+        <PhotoPicker items={photos} onChange={setPhotos} disabled={busy} grayscale={grayscale} onGrayscaleChange={setGrayscale} emptyLabel='Tap to choose photos of your freezer list'/>
+        {photos.length>0&&(
           <div style={{marginTop:10}}>
             <Btn label={busy?'Working…':'Extract & Replace'} full onClick={handleReplaceFromImages} disabled={busy}/>
           </div>
