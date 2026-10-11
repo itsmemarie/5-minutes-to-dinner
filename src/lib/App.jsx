@@ -7,17 +7,26 @@ import {
   fetchFreezerItems, replaceFreezerItems, addFreezerItem, updateFreezerStock, removeFreezerItem,
   fetchToddlerCookingGuide, saveToddlerCookingGuide,
   fetchUserProfile, saveUserProfile, fetchAllRecipeNutrition, saveRecipeView, fetchRecipesForExport,
+  getSession, onAuthChange, addShoppingItem, removeShoppingItem, fetchRecipeIngredients,
 } from './supabase.js'
-import { callEdgeFn } from './ai.js'
+import { callEdgeFn, fetchAiConfig, onAiLimit } from './ai.js'
 import { computeTargets } from './goalMaths.js'
 import { C, ep, mn, R } from './theme.js'
-import { TODAY, DAY_LBL, WEEK_START_OPTIONS, weekBounds, uid, emptyWeek, ageBandFromDob, ageBandLabel } from './dateHelpers.js'
+import { TODAY, DAY_LBL, WEEK_START_OPTIONS, weekBounds, uid, emptyWeek, ageBandFromDob, ageBandLabel, formatAge } from './dateHelpers.js'
 import { ALL_SECTION_IDS, enabledSectionIds, sectionLabel, sectionShort, dayMeals } from './mealSections.js'
-import { normalisePreferences, migrateLegacyToddlerDob, activeToddlerDob, newChild, COUNTRIES, countryName } from './preferences.js'
+import { normalisePreferences, migrateLegacyToddlerDob, activeToddlerDob, newChild, COUNTRIES, countryName, equipmentLabels } from './preferences.js'
+import { buildBasicShoppingList, guessAisle } from './basicShoppingList.js'
+import { consumePwaShare } from './share/pwaShareInbox.js'
+import { onIncomingShare, clearIncomingShare } from './share/handleIncomingShare.js'
 import { APP_VERSION_LABEL } from './appVersion.js'
 import { useScrollMemory } from './useScrollMemory.js'
 import { Spinner, Btn, Icon } from '../components/ui/index.js'
 import { OptionListScreen, ChildEditorScreen, FeedbackScreen } from '../components/settings/subscreens.jsx'
+import { GeminiKeyScreen, SignInScreen, EquipmentScreen, InstallScreen, OwnerModelsScreen } from '../components/settings/aiScreens.jsx'
+import { NewRecipeForm } from '../components/NewRecipeForm.jsx'
+import { ShareSheet } from '../components/ShareSheet.jsx'
+import { AiLimitSheet } from '../components/AiLimitSheet.jsx'
+import { Sheet } from '../components/ui/Sheet.jsx'
 import { RecipeScreen } from '../components/RecipeScreen.jsx'
 import { HomeScreen } from '../components/HomeScreen.jsx'
 import { PlannerScreen } from '../components/PlannerScreen.jsx'
@@ -31,7 +40,10 @@ import { FreezerScreen } from '../components/FreezerScreen.jsx'
 import { ToddlerCookingScreen } from '../components/ToddlerCookingScreen.jsx'
 
 // Header titles for the Settings sub-screens (keyed by `settingsSub.kind`).
-const SETTINGS_SUB_TITLE = { weekStart:'Week starts on', country:'Country', child:'Child', feedback:'Feedback & support' }
+const SETTINGS_SUB_TITLE = {
+  weekStart:'Week starts on', country:'Country', child:'Child', feedback:'Feedback & support',
+  geminiKey:'Free Google AI key', signIn:'Account', equipment:'Kitchen equipment', aiModels:'AI models', install:'Install the app',
+}
 
 // Recipe selection view mode. Persisted to app_settings so it follows the user
 // across devices, and mirrored to localStorage so the first paint doesn't flash
@@ -84,7 +96,21 @@ export default function App() {
   const [shopping,    setShopping]    = useState([])
   const [shoppingId,  setShoppingId]  = useState(null)
   const [shoppingLoading,setShoppingLoading]=useState(false)
+  const [shoppingLoadingMsg,setShoppingLoadingMsg]=useState(null)
   const [shoppingError,  setShoppingError]  =useState(null)
+  const [shoppingNotice, setShoppingNotice] =useState(null)
+  // Accounts & AI access. `aiConfig.isOwner` is the server's verdict (ai-config
+  // checks the verified email against OWNER_EMAIL); it only decides what
+  // Settings shows — every owner action is re-checked server-side.
+  const [session,   setSession]   = useState(null)
+  const [aiConfig,  setAiConfig]  = useState(null)
+  const [aiNotice,  setAiNotice]  = useState(null)   // { code, message } from the fallback chain
+  // Shared into the app (see lib/share): the chooser sheet, the recipe form
+  // opened with the shared content, or the freezer screen pre-loaded with it.
+  const [incomingShare, setIncomingShare] = useState(null)
+  const [shareRecipe,   setShareRecipe]   = useState(null)
+  const [freezerShare,  setFreezerShare]  = useState(null)
+  const [shareError,    setShareError]    = useState(null)
   const [nutriData,   setNutriData]   = useState(null)
   const [nutriLoading,setNutriLoading]= useState(false)
   const [nutriError,  setNutriError]  = useState(null)
@@ -115,6 +141,15 @@ export default function App() {
   const toddlerActivitiesOn = !!toddlerDob && prefs.toddlerActivities
   const toddlerVariationsOn = prefs.toddlerModeEnabled && prefs.toddlerVariations
   const region = countryName(prefs.country)
+  // The household details the recipe AI steps and the batch planner take into
+  // account. Only ages leave the device, never names or birth dates.
+  const aiContext = useMemo(() => ({
+    equipment: equipmentLabels(prefs.kitchenEquipment),
+    region,
+    units: prefs.recipeUnits,
+    measurements: prefs.measurements,
+    children: prefs.toddlerModeEnabled ? prefs.children.map(c => formatAge(c.dob)).filter(Boolean) : [],
+  }), [prefs.kitchenEquipment, region, prefs.recipeUnits, prefs.measurements, prefs.toddlerModeEnabled, prefs.children])
 
   // ── Plan loading ─────────────────────────────────────────────────
   // Reads (or creates) the plan for a week and swaps it in. Called at
@@ -189,6 +224,50 @@ export default function App() {
       }
     })()
   }, [])
+
+  // ── Session & AI access ──────────────────────────────────────────
+  useEffect(() => {
+    getSession().then(setSession).catch(() => {})
+    const sub = onAuthChange(setSession)
+    return () => sub.unsubscribe()
+  }, [])
+
+  // Re-asked whenever the signed-in user changes: is this the owner?
+  const sessionUserId = session?.user?.id ?? null
+  useEffect(() => {
+    let cancelled = false
+    fetchAiConfig()
+      .then(cfg => { if (!cancelled) setAiConfig(cfg) })
+      .catch(e => { if (!cancelled) { setAiConfig(null); console.error('ai-config failed', e) } })
+    return () => { cancelled = true }
+  }, [sessionUserId])
+
+  useEffect(() => onAiLimit(n => setAiNotice({ ...n, id: Date.now() })), [])
+
+  // ── Shares ───────────────────────────────────────────────────────
+  // A link goes straight to the recipe form (reading it is step 1); text and
+  // photos ask whether they're a recipe or a freezer list.
+  useEffect(() => {
+    consumePwaShare().catch(e => setShareError(e.message))
+    return onIncomingShare(share => {
+      clearIncomingShare()
+      if (share.kind === 'url') { setIncomingShare(null); setShareRecipe({ url: share.url, text: share.text }) }
+      else setIncomingShare(share)
+    })
+  }, [])
+
+  const routeShare = destination => {
+    const share = incomingShare
+    setIncomingShare(null)
+    if (!share) return
+    if (destination === 'recipe') {
+      setShareRecipe({ url: share.url, text: share.text || share.title, files: share.files })
+    } else {
+      setFreezerShare({ text: share.text || share.title, files: share.files, receivedAt: share.receivedAt })
+      setPrevScreen(null)
+      setScreen('freezerManage')
+    }
+  }
 
   // Changing "Week starts on" moves the week, so the plan on screen has to
   // follow. Skips the bootstrap week, which loadPlan above already handled.
@@ -395,7 +474,7 @@ export default function App() {
 
     // Switch to the List tab so the user sees the loading state
     setTab('list'); setScreen(null)
-    setShoppingLoading(true); setShoppingError(null)
+    setShoppingLoading(true); setShoppingError(null); setShoppingNotice(null)
 
     try {
       // Edge function should: fetch ingredients per recipeId, scale by portion,
@@ -419,6 +498,50 @@ export default function App() {
     } finally {
       setShoppingLoading(false)
     }
+  }
+
+  // Manual mode for the shopping list: the planned recipes' own ingredients,
+  // scaled and grouped without any AI (basicShoppingList.js).
+  const buildBasicList = async () => {
+    const meals = plannedMealsPayload().filter(m => m.recipeId)
+    if (!meals.length) { alert('Add some meals to the planner first.'); return }
+    setTab('list'); setScreen(null)
+    setShoppingLoading(true); setShoppingLoadingMsg('Making a basic list from your recipes…'); setShoppingError(null); setShoppingNotice(null)
+    try {
+      const portions = new Map()
+      meals.forEach(m => portions.set(m.recipeId, (portions.get(m.recipeId) ?? 0) + (m.portion ?? defPort)))
+      const rows = await fetchRecipeIngredients([...portions.keys()])
+      const { items, missing } = buildBasicShoppingList(rows, portions)
+      const toSave = items.map(it => ({ ...it, checked: false }))
+      setShopping(toSave.map((it, i) => ({ ...it, id: `tmp-${i}` })))
+      const sid = await saveShoppingList(planId, toSave)
+      setShoppingId(sid)
+      const sl = await fetchShoppingList(planId)
+      if (sl) setShopping(sl.shopping_list_items || [])
+      setShoppingNotice(`Basic list, made without AI. Amounts from different recipes are listed side by side rather than added up, and aisles are a best guess.${missing.length ? ` No ingredients saved for: ${missing.join(', ')}.` : ''}`)
+    } catch (e) {
+      setShoppingError(e.message)
+    } finally {
+      setShoppingLoading(false); setShoppingLoadingMsg(null)
+    }
+  }
+
+  const addShoppingItemByHand = async name => {
+    try {
+      const { listId, item } = await addShoppingItem(planId, { name, amount: '', unit: '', aisle: guessAisle(name) })
+      setShoppingId(listId)
+      setShopping(s => [...s, item])
+    } catch (e) {
+      setShoppingNotice(`Couldn't add “${name}”: ${e.message}`)
+    }
+  }
+
+  const removeShoppingItemByHand = async id => {
+    const before = shopping
+    setShopping(s => s.filter(x => x.id !== id))
+    if (String(id).startsWith('tmp-')) return
+    try { await removeShoppingItem(id) }
+    catch (e) { setShopping(before); setShoppingNotice(`Couldn't remove that item: ${e.message}`) }
   }
 
   // Every visible planned meal this week, in the shape the shopping-list and
@@ -492,7 +615,7 @@ export default function App() {
     setBatchLoading(true); setBatchError(null)
     try {
       const result = await callEdgeFn('batch-cooking', {
-        meals: plan, region,
+        meals: plan, region, equipment: aiContext.equipment,
         ageBandLabel: toddlerActivitiesOn ? ageBandLabel(ageBandFromDob(toddlerDob)) : null,
       })
       setBatchData(result)
@@ -574,6 +697,7 @@ export default function App() {
     navigator.clipboard.writeText(lines.join('\n'))
   }
   const goBack = () => {
+    if (screen === 'freezerManage') setFreezerShare(null)
     if (screen === 'settings' && settingsSub) {
       setSettingsSub(null)
     } else if (screen === 'freezerManage' && prevScreen === 'settings') {
@@ -626,17 +750,22 @@ export default function App() {
       if (settingsSub?.kind === 'country')   return <OptionListScreen heading='Country' description='Sets the ingredient names and shopping aisles the AI uses — courgette, not zucchini.' options={COUNTRIES.map(c=>({value:c.code,label:c.name}))} value={prefs.country} onSelect={v=>{setPrefs({country:v});setSettingsSub(null)}}/>
       if (settingsSub?.kind === 'child')     return <ChildEditorScreen key={settingsSub.childId||'new'} child={editingChild} onChange={patch=>updateChild(settingsSub.childId,patch)} onCreate={c=>{addChild(c);setSettingsSub(null)}} onDelete={()=>{removeChild(settingsSub.childId);setSettingsSub(null)}}/>
       if (settingsSub?.kind === 'feedback')  return <FeedbackScreen versionLabel={APP_VERSION_LABEL}/>
-      return <SettingsScreen defPort={defPort} setDefPort={setDefPort} prefs={prefs} setPrefs={setPrefs} goalProfile={goalProfile} goalTargets={goalTargets} setGoalProfile={setGoalProfile} freezerItems={freezerItems} weekLabel={week.label} onOpen={openSettingsSub} onExportRecipes={exportRecipes} onResetWeek={resetWeekPlan}/>
+      if (settingsSub?.kind === 'geminiKey') return <GeminiKeyScreen/>
+      if (settingsSub?.kind === 'signIn')    return <SignInScreen session={session} isOwner={!!aiConfig?.isOwner} onDone={()=>setSettingsSub(null)}/>
+      if (settingsSub?.kind === 'equipment') return <EquipmentScreen value={prefs.kitchenEquipment} onChange={kitchenEquipment=>setPrefs({kitchenEquipment})}/>
+      if (settingsSub?.kind === 'install')   return <InstallScreen/>
+      if (settingsSub?.kind === 'aiModels')  return <OwnerModelsScreen config={aiConfig} onConfigChange={setAiConfig}/>
+      return <SettingsScreen defPort={defPort} setDefPort={setDefPort} prefs={prefs} setPrefs={setPrefs} goalProfile={goalProfile} goalTargets={goalTargets} setGoalProfile={setGoalProfile} freezerItems={freezerItems} weekLabel={week.label} session={session} isOwner={!!aiConfig?.isOwner} onOpen={openSettingsSub} onExportRecipes={exportRecipes} onResetWeek={resetWeekPlan}/>
     }
-    if (screen === 'freezerManage')   return <FreezerScreen items={freezerItems} onReplace={async names=>setFreezerItems(await replaceFreezerItems(names))} onAddOne={async name=>{const item=await addFreezerItem(name);setFreezerItems(items=>{const i=items.findIndex(x=>x.id===item.id);return i>=0?items.map(x=>x.id===item.id?item:x):[...items,item].sort((a,b)=>a.name.localeCompare(b.name))})}} onToggleStock={async(id,inStock)=>{setFreezerItems(items=>items.map(x=>x.id===id?{...x,in_stock:inStock}:x));await updateFreezerStock(id,inStock)}} onDelete={async id=>{setFreezerItems(items=>items.filter(x=>x.id!==id));await removeFreezerItem(id)}}/>
+    if (screen === 'freezerManage')   return <FreezerScreen key={freezerShare?.receivedAt ?? 'freezer'} initialShare={freezerShare} items={freezerItems} onReplace={async names=>setFreezerItems(await replaceFreezerItems(names))} onAddOne={async name=>{const item=await addFreezerItem(name);setFreezerItems(items=>{const i=items.findIndex(x=>x.id===item.id);return i>=0?items.map(x=>x.id===item.id?item:x):[...items,item].sort((a,b)=>a.name.localeCompare(b.name))})}} onToggleStock={async(id,inStock)=>{setFreezerItems(items=>items.map(x=>x.id===id?{...x,in_stock:inStock}:x));await updateFreezerStock(id,inStock)}} onDelete={async id=>{setFreezerItems(items=>items.filter(x=>x.id!==id));await removeFreezerItem(id)}}/>
     if (screen === 'nutrition')       return <NutritionScreen profile={nutriProf} setProfile={setNutriProf} nutriData={nutriData} nutriLoading={nutriLoading} nutriError={nutriError} onAnalyse={analyseNutrition} goalProfile={goalProfile} goalTargets={goalTargets} plan={plan} nutritionByRecipe={nutritionByRecipe} days={week.days} sectionIds={sectionIds} toddlerEnabled={!!toddlerDob}/>
     if (screen === 'dailyPlan')       return <DailyPlanScreen day={selDay} plan={plan} recipes={recipes} updatePortion={updatePortion} removeMeal={removeMeal} onAddToSection={openAddSec} onRecipeOpen={openRecipeFromDailyPlan} onSave={()=>setScreen(null)} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe} sectionIds={sectionIds}/>
-    if (screen === 'recipeSelection') return <RecipeSelectionScreen day={selDay} section={selSec} plan={plan} recipes={recipes} freezerItems={freezerItems} onAdd={addMeals} onAddFreezer={addFreezerMeals} onManageFreezer={openFreezerManage} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))} onPreview={openRecipeFromSelection} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe} recipeView={recipeView} setRecipeView={setRecipeView} search={recipeSearch} setSearch={setRecipeSearch} chip={recipeChip} setChip={setRecipeChip} selected={selectedRecipes} setSelected={setSelectedRecipes} days={week.days} sectionIds={sectionIds}/>
+    if (screen === 'recipeSelection') return <RecipeSelectionScreen day={selDay} section={selSec} plan={plan} recipes={recipes} freezerItems={freezerItems} onAdd={addMeals} onAddFreezer={addFreezerMeals} onManageFreezer={openFreezerManage} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))} onPreview={openRecipeFromSelection} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe} recipeView={recipeView} setRecipeView={setRecipeView} search={recipeSearch} setSearch={setRecipeSearch} chip={recipeChip} setChip={setRecipeChip} selected={selectedRecipes} setSelected={setSelectedRecipes} days={week.days} sectionIds={sectionIds} aiContext={aiContext}/>
     if (screen === 'recipe')          return <RecipeScreen recipeId={selRecipeId} portion={recipeDetailPortion} onPortionChange={changeRecipeDetailPortion} onAddMeal={()=>addMeals([selRecipeId])} toddlerDob={toddlerActivitiesOn?toddlerDob:null} showToddlerVariations={toddlerVariationsOn} onOpenToddlerCooking={()=>openToddlerCooking(true)} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe} day={selDay} plan={plan} sectionIds={sectionIds}/>
     if (screen === 'toddlerCooking')  return <ToddlerCookingScreen guide={toddlerGuide} loading={toddlerGuideLoading} error={toddlerGuideError} activeBand={toddlerBand} setActiveBand={setToddlerBand} currentBand={toddlerDob?ageBandFromDob(toddlerDob):null} onGenerate={generateToddlerGuide}/>
-    if (tab === 'home')    return <HomeScreen plan={plan} days={week.days} sectionIds={sectionIds} onDayOpen={openDayPlan} onRecipeOpen={openRecipeFromHome} moveMeal={moveMeal} onCopy={copyWeekPlan} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))}/>
+    if (tab === 'home')    return <HomeScreen plan={plan} days={week.days} sectionIds={sectionIds} onDayOpen={openDayPlan} onRecipeOpen={openRecipeFromHome} moveMeal={moveMeal} onCopy={copyWeekPlan} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))} aiContext={aiContext}/>
     if (tab === 'planner') return <PlannerScreen plan={plan} days={week.days} sectionIds={sectionIds} weekLabel={week.label} removeMeal={removeMeal} moveMeal={moveMeal} duplicateMeal={duplicateMeal} updatePortion={updatePortion} onDayOpen={openDayPlan} onRecipeOpen={openRecipeFromHome} onNutrition={()=>{ setScreen('nutrition'); if(!nutriData) analyseNutrition() }} onShoppingList={generateShoppingList} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe}/>
-    if (tab === 'list')    return <ShoppingListScreen shopping={shopping} onToggle={onShoppingToggle} loading={shoppingLoading} error={shoppingError} onRegenerate={generateShoppingList}/>
+    if (tab === 'list')    return <ShoppingListScreen shopping={shopping} onToggle={onShoppingToggle} loading={shoppingLoading} loadingMsg={shoppingLoadingMsg} error={shoppingError} notice={shoppingNotice} onRegenerate={generateShoppingList} onBuildBasic={buildBasicList} onAddItem={addShoppingItemByHand} onRemoveItem={removeShoppingItemByHand}/>
     if (tab === 'batch')   return <BatchScreen activeTab={batchTab} setActiveTab={setBatchTab} batchData={batchData} batchLoading={batchLoading} batchError={batchError} onGenerate={generateBatch} onOpenToddlerCooking={toddlerActivitiesOn?()=>openToddlerCooking(false):null} showToddler={toddlerActivitiesOn}/>
   }
 
@@ -682,6 +811,22 @@ export default function App() {
             </div>
           )}
         </div>
+
+        {!loading && !error && incomingShare && (
+          <ShareSheet share={incomingShare} onChoose={routeShare} onDismiss={() => setIncomingShare(null)}/>
+        )}
+        {!loading && !error && shareRecipe && (
+          <NewRecipeForm key={shareRecipe.url || shareRecipe.text || 'shared'} defaultMealType='main' aiContext={aiContext} initialSource={shareRecipe}
+            onSave={r => { setRecipes(prev => [...prev, r].sort((a, b) => a.name.localeCompare(b.name))); setShareRecipe(null) }}
+            onCancel={() => setShareRecipe(null)}/>
+        )}
+        {shareError && (
+          <Sheet title="That share didn't come through" onClose={() => setShareError(null)}>
+            <div style={{ ...mn, fontSize:14, color:C.onSurfaceVariant, lineHeight:1.6, marginBottom:18 }}>{shareError}</div>
+            <Btn label='OK' full onClick={() => setShareError(null)}/>
+          </Sheet>
+        )}
+        {aiNotice && <AiLimitSheet key={aiNotice.id} notice={aiNotice} onClose={() => setAiNotice(null)}/>}
       </div>
     </div>
   )

@@ -1,94 +1,33 @@
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+// Freezer list from photos — a 1:1 transcription of item names.
+// Input: { images: [{ base64, mediaType }] }   Output: { items: string[] }
+// (Pasted text never reaches here; the client splits it line by line.)
+import { aiHandler, aiResponse, badInput, runAiStep, StepError } from '../_shared/router.ts'
+
+const SYSTEM = `You transcribe an inventory list from photos: a handwritten or printed list, or labelled freezer bags and containers.
+Copy every distinct item name exactly as written, across all photos, into one flat list. Skip quantities, dates and non-food text unless they are part of the item's name. Do not add or correct anything.
+Return JSON: {"items": ["..."]}`
+
+const SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['items'],
+  properties: { items: { type: 'array', items: { type: 'string' } } },
 }
 
-const GROQ_KEY = Deno.env.get('GROQ_API_KEY') ?? ''
-const VISION_MODEL = 'qwen/qwen3.6-27b'
+Deno.serve(aiHandler(async (req, body) => {
+  const images = Array.isArray(body.images) ? body.images : []
+  if (!images.length) throw badInput('Add a photo of your freezer list.')
+  if (images.length > 3) throw badInput('Up to 3 photos at a time, please.')
 
-const SYSTEM = `You are extracting an inventory list from a photo. The photo may show a handwritten or printed list, or labeled freezer bags/containers.
-Extract every distinct item name visible across all provided photos and return ONLY a raw JSON array of strings — no markdown fences, no explanation, no wrapper object, just the array. Combine items from all images into one flat array. Skip quantities, dates, and non-food text unless they're part of the item's name.`
-
-Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
-
-  if (!GROQ_KEY) {
-    return new Response(JSON.stringify({ error: 'GROQ_API_KEY secret is not configured on this project' }), {
-      status: 500,
-      headers: { ...CORS, 'Content-Type': 'application/json' },
-    })
-  }
-
-  try {
-    const { images } = await req.json()
-    if (!images || !images.length) {
-      return new Response(JSON.stringify({ error: 'Provide images' }), {
-        status: 400,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      })
-    }
-
-    const userContent = [
-      ...images.map((img: { base64: string; mediaType?: string }) => ({
-        type: 'image_url',
-        image_url: { url: `data:${img.mediaType ?? 'image/jpeg'};base64,${img.base64}` },
-      })),
-      { type: 'text', text: images.length > 1
-        ? 'These images are multiple photos of freezer inventory (list pages or labeled containers). Extract all item names across all of them and return the JSON array.'
-        : 'Extract the freezer item names from this image and return the JSON array.' },
-    ]
-
-    const apiRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${GROQ_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: VISION_MODEL,
-        max_tokens: 2048,
-        reasoning_effort: 'none',
-        messages: [
-          { role: 'system', content: SYSTEM },
-          { role: 'user', content: userContent },
-        ],
-      }),
-    })
-
-    if (!apiRes.ok) {
-      const errText = await apiRes.text()
-      return new Response(JSON.stringify({ error: `Groq error: ${errText}` }), {
-        status: 500,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-      })
-    }
-
-    const groqData = await apiRes.json()
-    const raw: string = groqData.choices[0].message.content.replace(/<think>[\s\S]*?<\/think>/gi, '')
-
-    const arrMatch = raw.match(/\[[\s\S]*\]/)
-    if (arrMatch) {
-      const parsed = JSON.parse(arrMatch[0])
-      const items = parsed.filter((x: unknown) => typeof x === 'string' && x.trim()).map((x: string) => x.trim())
-      return new Response(JSON.stringify({ items }), { headers: { ...CORS, 'Content-Type': 'application/json' } })
-    }
-    const objMatch = raw.match(/\{[\s\S]*\}/)
-    if (objMatch) {
-      const parsed = JSON.parse(objMatch[0])
-      if (Array.isArray(parsed.items)) {
-        const items = parsed.items.filter((x: unknown) => typeof x === 'string' && x.trim()).map((x: string) => x.trim())
-        return new Response(JSON.stringify({ items }), { headers: { ...CORS, 'Content-Type': 'application/json' } })
-      }
-    }
-    return new Response(JSON.stringify({ error: 'Could not parse freezer items from AI response' }), {
-      status: 500,
-      headers: { ...CORS, 'Content-Type': 'application/json' },
-    })
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e)
-    return new Response(JSON.stringify({ error: msg }), {
-      status: 500,
-      headers: { ...CORS, 'Content-Type': 'application/json' },
-    })
-  }
-})
+  const { data, meta } = await runAiStep(req, 'freezer_extract', {
+    system: SYSTEM,
+    user: images.length > 1 ? 'These photos show one freezer inventory. List every item.' : 'List the freezer items in this photo.',
+    images: images.map((i: { base64: string; mediaType?: string }) => ({ base64: String(i.base64 ?? ''), mediaType: i.mediaType })),
+    schema: SCHEMA,
+  })
+  // Older replies were a bare array; accept either.
+  const list = Array.isArray(data) ? data : (data as { items?: unknown })?.items
+  if (!Array.isArray(list)) throw new StepError("Couldn't read any items from that photo.", 'nothing_found', 422)
+  const items = [...new Set(list.filter((x): x is string => typeof x === 'string' && !!x.trim()).map(x => x.trim()))]
+  return aiResponse({ items }, meta)
+}))

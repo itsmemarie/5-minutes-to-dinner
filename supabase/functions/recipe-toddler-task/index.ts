@@ -1,14 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
-
-const GROQ_KEY = (Deno.env.get('GROQ_API_KEY') ?? '').replace(/[^\x20-\x7E]/g, '').trim()
-const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
-const MODEL = 'openai/gpt-oss-120b'
-
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
+import { aiHandler, aiResponse, runAiStep } from '../_shared/router.ts'
 
 const SYSTEM_PROMPT = `You are a toddler cooking educator helping a parent involve their toddler in cooking a specific recipe, matched to the toddler's age.
 
@@ -26,52 +17,11 @@ Rules (non-negotiable):
 
 Return ONLY a raw JSON object — no markdown, no backticks, no preamble. Must be parseable by JSON.parse().`
 
-Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
+Deno.serve(aiHandler(async (req, body) => {
+  const { ageBandLabel, recipeName, ingredients, instructions, toddlerVariations } = body
 
-  if (!GROQ_KEY) {
-    return new Response(JSON.stringify({ error: 'GROQ_API_KEY secret is not configured on this project' }), {
-      status: 500,
-      headers: { ...CORS, 'Content-Type': 'application/json' }
-    })
-  }
+  const userPrompt = `Toddler's current age band: ${ageBandLabel}\n\nRecipe: ${recipeName}\n\nIngredients:\n${ingredients || '(none provided)'}\n\nInstructions:\n${instructions || '(none provided)'}\n\n${toddlerVariations ? `Existing general toddler adaptation notes for this recipe (context only, don't repeat verbatim): ${toddlerVariations}\n\n` : ''}Return this exact JSON structure:\n{\n  "activities": [\n    { "title": "Short label", "task": "One concrete, recipe-specific sentence describing what the toddler does.", "needsTool": null }\n  ]\n}`
 
-  try {
-    const { ageBandLabel, recipeName, ingredients, instructions, toddlerVariations } = await req.json()
-
-    const userPrompt = `Toddler's current age band: ${ageBandLabel}\n\nRecipe: ${recipeName}\n\nIngredients:\n${ingredients || '(none provided)'}\n\nInstructions:\n${instructions || '(none provided)'}\n\n${toddlerVariations ? `Existing general toddler adaptation notes for this recipe (context only, don't repeat verbatim): ${toddlerVariations}\n\n` : ''}Return this exact JSON structure:\n{\n  "activities": [\n    { "title": "Short label", "task": "One concrete, recipe-specific sentence describing what the toddler does.", "needsTool": null }\n  ]\n}`
-
-    const resp = await fetch(GROQ_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_KEY}` },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.5,
-        max_tokens: 900,
-        response_format: { type: 'json_object' },
-        include_reasoning: false,
-      })
-    })
-
-    if (!resp.ok) {
-      const err = await resp.text()
-      throw new Error(`Groq error: ${err}`)
-    }
-
-    const data = await resp.json()
-    const result = JSON.parse(data.choices?.[0]?.message?.content || '{}')
-
-    return new Response(JSON.stringify(result), {
-      headers: { ...CORS, 'Content-Type': 'application/json' }
-    })
-  } catch (e: any) {
-    return new Response(JSON.stringify({ error: e.message }), {
-      status: 500,
-      headers: { ...CORS, 'Content-Type': 'application/json' }
-    })
-  }
-})
+  const { data, meta } = await runAiStep(req, 'recipe_toddler', { system: SYSTEM_PROMPT, user: userPrompt })
+  return aiResponse(data, meta)
+}))

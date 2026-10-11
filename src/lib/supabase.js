@@ -9,6 +9,31 @@ if (!url || !key) {
 
 export const supabase = createClient(url, key)
 
+// ─── Sign-in (owner identification) ────────────────────────────────
+// Everything in the app works signed out. Signing in exists so the server can
+// recognise the owner (ai-config / router.ts compare the verified email with
+// OWNER_EMAIL); the client never decides that itself.
+//
+// Email sign-in: the email carries a link (the Supabase "Magic Link" template).
+// Open it on the device you're signing in on. An iPhone web app added to the
+// home screen can't receive a link opened in Safari, so sign in from a normal
+// Safari tab there. To support a typed code instead, add {{ .Token }} to the
+// template and call supabase.auth.verifyOtp({ email, token, type: 'email' }).
+export async function getSession() {
+  const { data } = await supabase.auth.getSession()
+  return data.session
+}
+export const onAuthChange = cb => supabase.auth.onAuthStateChange((_event, session) => cb(session)).data.subscription
+
+export async function sendSignInEmail(email) {
+  const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } })
+  if (error) throw error
+}
+export async function signOut() {
+  const { error } = await supabase.auth.signOut()
+  if (error) throw error
+}
+
 // ─── Recipe images ─────────────────────────────────────────────────
 // `recipes.image_path` holds a storage key relative to the bucket ("MP-VCBN.jpg"),
 // not a URL. The bucket is public, so getPublicUrl is pure string building — no
@@ -112,13 +137,16 @@ const PREFERENCE_FIELD_MAP = {
   toddlerActivities:  'toddler_activities',
   toddlerVariations:  'toddler_variations',
   toddlerPortion:     'toddler_portion',
+  kitchenEquipment:   'kitchen_equipment',
 }
-const PREFERENCE_COLUMNS = Object.values(PREFERENCE_FIELD_MAP).join(', ')
 
 export async function fetchSettings() {
+  // `*` rather than a column list: a preference column that hasn't been
+  // migrated yet then reads as undefined (→ its default) instead of failing
+  // the whole bootstrap. It's a single row.
   const { data, error } = await supabase
     .from('app_settings')
-    .select(`default_portions, toddler_dob, recipe_view, ${PREFERENCE_COLUMNS}`)
+    .select('*')
     .eq('id', 1)
     .single()
   if (error) throw error
@@ -371,6 +399,39 @@ export async function saveShoppingList(planId, items) {
 
 export async function updateShoppingItem(id, checked) {
   await supabase.from('shopping_list_items').update({ checked }).eq('id', id)
+}
+
+// Manual edits (no AI): add one item, creating the week's list if needed.
+export async function addShoppingItem(planId, item) {
+  const { data: list, error: listErr } = await supabase
+    .from('shopping_lists')
+    .upsert({ meal_plan_id: planId }, { onConflict: 'meal_plan_id' })
+    .select('id')
+    .single()
+  if (listErr) throw listErr
+  const { data, error } = await supabase
+    .from('shopping_list_items')
+    .insert({ ...item, checked: false, shopping_list_id: list.id })
+    .select('*')
+    .single()
+  if (error) throw error
+  return { listId: list.id, item: data }
+}
+
+export async function removeShoppingItem(id) {
+  const { error } = await supabase.from('shopping_list_items').delete().eq('id', id)
+  if (error) throw error
+}
+
+// Ingredients for the no-AI shopping list (basicShoppingList.js).
+export async function fetchRecipeIngredients(ids) {
+  if (!ids.length) return []
+  const { data, error } = await supabase
+    .from('recipes')
+    .select('id, name, portion_size, ingredients')
+    .in('id', ids)
+  if (error) throw error
+  return data
 }
 
 // ─── Recipe notes ─────────────────────────────────────────────────

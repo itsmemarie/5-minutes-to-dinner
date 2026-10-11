@@ -1,16 +1,10 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
+import { aiHandler, aiResponse, runAiStep } from '../_shared/router.ts'
 
-const GROQ_KEY = (Deno.env.get('GROQ_API_KEY') ?? '').replace(/[^\x20-\x7E]/g, '').trim()
-const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
-const MODEL = 'openai/gpt-oss-120b'
+// Before kitchen equipment was a setting, every plan assumed this kitchen.
+const DEFAULT_EQUIPMENT = ['Thermomix TM6', 'Oven', 'Hob']
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
-
-const SYSTEM_PROMPT = `You are an expert batch cooking planner for a TM6 Thermomix household with a standard oven and hob.
+const SYSTEM_PROMPT = `You are an expert batch cooking planner for a home kitchen. The household's equipment is listed in the user message: plan only with what they have.
 
 Your task: generate a structured batch cooking schedule from the provided weekly meal plan.
 
@@ -26,7 +20,7 @@ Rules:
 - Every storage label must include: item + days + eat-by day
 - Open oven preheat as first step of each session
 - Group all chopping into a single mise en place block at the start
-- Use TM6 for aromatics first (sequential, no washing between)
+- If they have a Thermomix (TM6), use it for aromatics first (sequential, no washing between)
 - Run parallel tasks where possible (oven + TM6 simultaneously)
 
 Instruction specificity (non-negotiable):
@@ -56,72 +50,34 @@ Toddler helpers (non-negotiable):
 
 Return ONLY a raw JSON object — no markdown, no backticks, no preamble. Must be parseable by JSON.parse().`
 
-Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
+Deno.serve(aiHandler(async (req, body) => {
+  const { meals, ageBandLabel } = body
+  const equipment: string[] = Array.isArray(body.equipment) && body.equipment.length ? body.equipment.map(String) : DEFAULT_EQUIPMENT
 
-  if (!GROQ_KEY) {
-    return new Response(JSON.stringify({ error: 'GROQ_API_KEY secret is not configured on this project' }), {
-      status: 500,
-      headers: { ...CORS, 'Content-Type': 'application/json' }
-    })
+  // Each meal carries the portions actually being cooked plus the portions the
+  // recipe is written for. Quantities in the schedule must reflect the former.
+  // deno-lint-ignore no-explicit-any
+  const describe = (label: string) => (m: any) => {
+    const portion = m?.portion, base = m?.base
+    const scale = portion && base ? ` — cooking ${portion} portions, recipe written for ${base} (scale ${(portion / base).toFixed(2)}x)` : ''
+    return `${label}: ${m.name}${scale}`
   }
 
-  try {
-    const { meals, ageBandLabel } = await req.json()
-
-    // Each meal carries the portions actually being cooked plus the portions the
-    // recipe is written for. Quantities in the schedule must reflect the former.
-    const describe = (label: string) => (m: any) => {
-      const portion = m?.portion, base = m?.base
-      const scale = portion && base ? ` — cooking ${portion} portions, recipe written for ${base} (scale ${(portion / base).toFixed(2)}x)` : ''
-      return `${label}: ${m.name}${scale}`
-    }
-
-    const mealSummary = Object.entries(meals)
-      .map(([day, sections]: [string, any]) => {
-        const items = [
-          ...(sections.breakfast || []).map(describe('breakfast')),
-          ...(sections.main || []).map(describe('main')),
-          ...(sections.side || []).map(describe('side')),
-        ]
-        return items.length ? `${day}:\n  ${items.join('\n  ')}` : null
-      })
-      .filter(Boolean)
-      .join('\n')
-
-    const userPrompt = `Weekly meal plan:\n${mealSummary}\n\nToddler age band (for the toddlerActivities): ${ageBandLabel || '2–3 yrs'}\n\nGenerate a batch cooking schedule with this exact JSON structure:\n{\n  "sessions": [\n    {\n      "id": "big",\n      "label": "Monday · 2 hrs",\n      "groundRule": "",\n      "overview": [{"e": "emoji", "t": "description"}],\n      "steps": [\n        {\n          "time": "0:00",\n          "tag": "OVEN",\n          "title": "",\n          "full": false,\n          "chips": ["200°C Fan"],\n          "qty": null,\n          "body": "",\n          "storage": null,\n          "warn": null,\n          "safety": null\n        },\n        {\n          "time": "0:05",\n          "tag": "TM6",\n          "title": "Chop Aromatics",\n          "full": false,\n          "chips": ["3s", "Speed 10"],\n          "qty": "4 medium onions, 4 garlic cloves",\n          "body": "Cut 4 medium size onions and 4 garlic cloves into rough chunks (TM6 instructions: speed 10, time 3 sec).",\n          "storage": null,\n          "warn": null,\n          "safety": null\n        }\n      ]\n    },\n    {\n      "id": "medium",\n      "label": "Thursday · 1 hr",\n      "groundRule": "",\n      "overview": [{"e": "emoji", "t": "description"}],\n      "steps": []\n    },\n    {\n      "id": "evenings",\n      "label": "Weekday Evenings",\n      "groundRule": "",\n      "overview": null,\n      "steps": [\n        {\n          "time": "Mon",\n          "tag": "HOB",\n          "title": "",\n          "full": false,\n          "chips": ["20m active"],\n          "qty": null,\n          "body": "",\n          "storage": "20 min total",\n          "warn": null,\n          "safety": null\n        }\n      ]\n    }\n  ],\n  "toddlerActivities": [\n    { "icon": "🥔", "title": "Short label", "task": "One concrete sentence tied to a step above.", "needsTool": null }\n  ]\n}\n\nEvery "body" field must follow the instruction specificity rules from the system prompt: exact quantities/sizes, and inline appliance settings for TM6/HOB/OVEN steps. The "Chop Aromatics" step above is an example of the required level of detail, not literal content to reuse verbatim. "toddlerActivities" must follow the Toddler helpers rules: 3-6 items, each tied to real prep in the steps, age-appropriate, never near heat or blades.`
-
-    const resp = await fetch(GROQ_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${GROQ_KEY}` },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.2,
-        max_tokens: 8192,
-        response_format: { type: 'json_object' },
-        include_reasoning: false,
-      })
+  const mealSummary = Object.entries(meals ?? {})
+    // deno-lint-ignore no-explicit-any
+    .map(([day, sections]: [string, any]) => {
+      const items = [
+        ...(sections.breakfast || []).map(describe('breakfast')),
+        ...(sections.main || []).map(describe('main')),
+        ...(sections.side || []).map(describe('side')),
+      ]
+      return items.length ? `${day}:\n  ${items.join('\n  ')}` : null
     })
+    .filter(Boolean)
+    .join('\n')
 
-    if (!resp.ok) {
-      const err = await resp.text()
-      throw new Error(`Groq error: ${err}`)
-    }
+  const userPrompt = `Weekly meal plan:\n${mealSummary}\n\nKitchen equipment: ${equipment.join(', ')}. Only use appliances on this list, and only tag a step TM6 if a Thermomix is listed. If a meal really needs an appliance they don't have, say so in that step's "warn" with a workaround.\n\nToddler age band (for the toddlerActivities): ${ageBandLabel || '2–3 yrs'}\n\nGenerate a batch cooking schedule with this exact JSON structure:\n{\n  "sessions": [\n    {\n      "id": "big",\n      "label": "Monday · 2 hrs",\n      "groundRule": "",\n      "overview": [{"e": "emoji", "t": "description"}],\n      "steps": [\n        {\n          "time": "0:00",\n          "tag": "OVEN",\n          "title": "",\n          "full": false,\n          "chips": ["200°C Fan"],\n          "qty": null,\n          "body": "",\n          "storage": null,\n          "warn": null,\n          "safety": null\n        },\n        {\n          "time": "0:05",\n          "tag": "TM6",\n          "title": "Chop Aromatics",\n          "full": false,\n          "chips": ["3s", "Speed 10"],\n          "qty": "4 medium onions, 4 garlic cloves",\n          "body": "Cut 4 medium size onions and 4 garlic cloves into rough chunks (TM6 instructions: speed 10, time 3 sec).",\n          "storage": null,\n          "warn": null,\n          "safety": null\n        }\n      ]\n    },\n    {\n      "id": "medium",\n      "label": "Thursday · 1 hr",\n      "groundRule": "",\n      "overview": [{"e": "emoji", "t": "description"}],\n      "steps": []\n    },\n    {\n      "id": "evenings",\n      "label": "Weekday Evenings",\n      "groundRule": "",\n      "overview": null,\n      "steps": [\n        {\n          "time": "Mon",\n          "tag": "HOB",\n          "title": "",\n          "full": false,\n          "chips": ["20m active"],\n          "qty": null,\n          "body": "",\n          "storage": "20 min total",\n          "warn": null,\n          "safety": null\n        }\n      ]\n    }\n  ],\n  "toddlerActivities": [\n    { "icon": "🥔", "title": "Short label", "task": "One concrete sentence tied to a step above.", "needsTool": null }\n  ]\n}\n\nEvery "body" field must follow the instruction specificity rules from the system prompt: exact quantities/sizes, and inline appliance settings for TM6/HOB/OVEN steps. The "Chop Aromatics" step above is an example of the required level of detail, not literal content to reuse verbatim. "toddlerActivities" must follow the Toddler helpers rules: 3-6 items, each tied to real prep in the steps, age-appropriate, never near heat or blades.`
 
-    const data = await resp.json()
-    const result = JSON.parse(data.choices?.[0]?.message?.content || '{}')
-
-    return new Response(JSON.stringify(result), {
-      headers: { ...CORS, 'Content-Type': 'application/json' }
-    })
-  } catch (e: any) {
-    return new Response(JSON.stringify({ error: e.message }), {
-      status: 500,
-      headers: { ...CORS, 'Content-Type': 'application/json' }
-    })
-  }
-})
+  const { data, meta } = await runAiStep(req, 'batch_cooking', { system: SYSTEM_PROMPT, user: userPrompt })
+  return aiResponse(data, meta)
+}))

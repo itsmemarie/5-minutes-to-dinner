@@ -19,6 +19,7 @@ export const DEFAULT_PREFERENCES = {
   toddlerActivities: true,
   toddlerVariations: true,
   toddlerPortion: false,
+  kitchenEquipment: ['thermomix', 'oven', 'hob', 'microwave'],  // EQUIPMENT_OPTIONS ids
 }
 
 // ── Catalogues ────────────────────────────────────────────────────
@@ -43,6 +44,23 @@ export const countryName = code => COUNTRIES.find(c => c.code === code)?.name ||
 
 export const RECIPE_UNIT_OPTIONS  = [{ value:'metric', label:'METRIC' }, { value:'imperial', label:'IMPERIAL' }]
 export const MEASUREMENT_OPTIONS  = [{ value:'weight', label:'GRAMS & ML' }, { value:'cups', label:'CUPS' }]
+
+// What the household cooks with. The expert recipe review warns when a recipe
+// needs something missing from here, and the batch planner only plans with it.
+// The labels are what the AI is told, so keep them plain.
+export const EQUIPMENT_OPTIONS = [
+  { id:'thermomix',       label:'Thermomix TM6' },
+  { id:'oven',            label:'Oven' },
+  { id:'hob',             label:'Hob' },
+  { id:'microwave',       label:'Microwave' },
+  { id:'air_fryer',       label:'Air fryer' },
+  { id:'slow_cooker',     label:'Slow cooker' },
+  { id:'pressure_cooker', label:'Pressure cooker / Instant Pot' },
+  { id:'food_processor',  label:'Food processor or blender' },
+  { id:'stand_mixer',     label:'Stand mixer' },
+  { id:'grill',           label:'Grill or BBQ' },
+]
+export const equipmentLabels = ids => EQUIPMENT_OPTIONS.filter(o => ids.includes(o.id)).map(o => o.label)
 
 // ── Normalisation ─────────────────────────────────────────────────
 const oneOf = (v, allowed, fallback) => (allowed.includes(v) ? v : fallback)
@@ -84,6 +102,11 @@ export function normalisePreferences(raw = {}) {
     toddlerActivities: r.toddlerActivities ?? DEFAULT_PREFERENCES.toddlerActivities,
     toddlerVariations: r.toddlerVariations ?? DEFAULT_PREFERENCES.toddlerVariations,
     toddlerPortion: r.toddlerPortion ?? DEFAULT_PREFERENCES.toddlerPortion,
+    // An empty list is a real answer ("none of these"); only a missing or
+    // malformed value falls back to the default kitchen.
+    kitchenEquipment: Array.isArray(r.kitchenEquipment)
+      ? EQUIPMENT_OPTIONS.map(o => o.id).filter(id => r.kitchenEquipment.includes(id))
+      : DEFAULT_PREFERENCES.kitchenEquipment,
   }
 }
 

@@ -7,7 +7,7 @@ import { NewRecipeForm } from './NewRecipeForm.jsx'
 
 // days is the week in the user's order; sectionIds the sections turned on
 // in Settings — both come from App's preferences.
-export function HomeScreen({ plan, days = DAYS, sectionIds = ALL_SECTION_IDS, onDayOpen, onRecipeOpen, moveMeal, onCopy, onRecipeCreated }) {
+export function HomeScreen({ plan, days = DAYS, sectionIds = ALL_SECTION_IDS, onDayOpen, onRecipeOpen, moveMeal, onCopy, onRecipeCreated, aiContext }) {
   const [showNewRecipe, setShowNewRecipe] = useState(false)
   const [drag, setDrag] = useState(null)   // {mealId,fromDay,section}
   const [over, setOver] = useState(null)   // day string being hovered
@@ -18,7 +18,7 @@ export function HomeScreen({ plan, days = DAYS, sectionIds = ALL_SECTION_IDS, on
   const onDrop = (e,day) => { e.preventDefault(); if (!drag) return; const {mealId,fromDay,section}=drag; setDrag(null); setOver(null); moveMeal(fromDay,day,mealId,section) }
   return (
     <div style={{ padding:'16px 20px 20px' }}>
-      {showNewRecipe && <NewRecipeForm defaultMealType='main' onSave={r=>{onRecipeCreated(r);setShowNewRecipe(false)}} onCancel={()=>setShowNewRecipe(false)}/>}
+      {showNewRecipe && <NewRecipeForm defaultMealType='main' aiContext={aiContext} onSave={r=>{onRecipeCreated(r);setShowNewRecipe(false)}} onCancel={()=>setShowNewRecipe(false)}/>}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:18 }}>
         <div style={{...screenTitle, color:C.onSurface}}>This week</div>
         <button onClick={()=>setShowNewRecipe(true)} style={{display:'flex',alignItems:'center',gap:8,border:'none',background:C.secondaryContainer,color:C.onSecondaryContainerStrong,borderRadius:R.pill,padding:'7px 14px',...mn,fontWeight:700,fontSize:12,whiteSpace:'nowrap',cursor:'pointer',flexShrink:0}}>
