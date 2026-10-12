@@ -19,7 +19,9 @@ function useObjectUrl(blob) {
   return url
 }
 
-export function ImageCropper({ file, initial, onDone, onCancel }) {
+const AI_HINT = 'Keep just the recipe inside the box. Less to send means faster, cheaper AI.'
+
+export function ImageCropper({ file, initial, onDone, onCancel, title = 'Crop to the recipe', hint = AI_HINT }) {
   const src = useObjectUrl(file)
   const boxRef = useRef(null)
   const drag = useRef(null)
@@ -46,7 +48,7 @@ export function ImageCropper({ file, initial, onDone, onCancel }) {
     <div style={{ position:'fixed', inset:0, zIndex:300, background:'#121512', display:'flex', flexDirection:'column' }}>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 16px' }}>
         <button onClick={onCancel} style={barBtn}>Cancel</button>
-        <span style={{ ...ep, fontSize:16, color:'#fff' }}>Crop to the recipe</span>
+        <span style={{ ...ep, fontSize:16, color:'#fff' }}>{title}</span>
         <button onClick={() => onDone(rect)} style={{ ...barBtn, color:'#bfe3bf' }}>Done</button>
       </div>
       <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', padding:16, minHeight:0 }}>
@@ -66,7 +68,7 @@ export function ImageCropper({ file, initial, onDone, onCancel }) {
         )}
       </div>
       <div style={{ padding:'8px 20px 22px', display:'flex', alignItems:'center', gap:12 }}>
-        <span style={{ ...mn, fontSize:12, color:'#c9d3c7', lineHeight:1.5, flex:1 }}>Keep just the recipe inside the box. Less to send means faster, cheaper AI.</span>
+        <span style={{ ...mn, fontSize:12, color:'#c9d3c7', lineHeight:1.5, flex:1 }}>{hint}</span>
         <button onClick={() => setRect(FULL)} style={{ ...mn, border:'1px solid #5c6a58', background:'none', color:'#fff', borderRadius:R.pill, padding:'7px 14px', fontSize:12, fontWeight:700, cursor:'pointer', flexShrink:0 }}>Whole photo</button>
       </div>
     </div>

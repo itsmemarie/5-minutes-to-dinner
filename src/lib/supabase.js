@@ -46,6 +46,19 @@ export function recipeImageUrl(path) {
   return supabase.storage.from(RECIPE_IMAGE_BUCKET).getPublicUrl(path).data.publicUrl
 }
 
+// Uploads the user's own photo as a recipe's picture, via the service-role
+// ingest-recipe-image function (it writes the file and the row, and removes
+// the file it replaces). `photo` is the { base64, mediaType } prepareRecipePhoto
+// returns. Resolves to the fields the recipe list holds.
+export async function uploadRecipePhoto(recipeId, photo) {
+  const { data, error } = await supabase.functions.invoke('ingest-recipe-image', {
+    body: { recipe_id: recipeId, image_base64: photo.base64, content_type: photo.mediaType, source: 'user' },
+  })
+  if (error) throw new Error(`Couldn't save the photo: ${error.message}`)
+  if (data?.error) throw new Error(`Couldn't save the photo: ${data.error}`)
+  return { imagePath: data.path, imageUrl: recipeImageUrl(data.path), imageCredit: null }
+}
+
 // ─── Recipes ───────────────────────────────────────────────────────
 export async function fetchRecipes() {
   const { data, error } = await supabase
@@ -499,7 +512,7 @@ export async function removeFreezerItem(id) {
 export async function fetchRecipeDetails(id) {
   const { data, error } = await supabase
     .from('recipes')
-    .select('id, name, prep_time_raw, cook_time_raw, prep_time_minutes, cook_time_minutes, portion_size, min_portions, fridge_storage, freezer_storage, has_thermomix_version, ingredients, instructions_standard, instructions_thermomix, chef_notes, toddler_variations, husband_variations, side_recommendation')
+    .select('id, name, image_path, image_credit, prep_time_raw, cook_time_raw, prep_time_minutes, cook_time_minutes, portion_size, min_portions, fridge_storage, freezer_storage, has_thermomix_version, ingredients, instructions_standard, instructions_thermomix, chef_notes, toddler_variations, husband_variations, side_recommendation')
     .eq('id', id)
     .single()
   if (error) throw error

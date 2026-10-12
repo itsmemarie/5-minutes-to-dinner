@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { createRecipe } from '../lib/supabase.js'
+import { createRecipe, uploadRecipePhoto } from '../lib/supabase.js'
+import { ImageCropper } from './ui/ImageCropper.jsx'
+import { isFullFrame } from '../lib/imageMath.js'
 import { extractRecipe, completeRecipe, reviewRecipe, generateRecipe, isAiLimit } from '../lib/ai.js'
-import { preparePhotoItems } from '../lib/imageHelpers.js'
+import { preparePhotoItems, prepareRecipePhoto } from '../lib/imageHelpers.js'
 import {
   EMPTY_RECIPE, FIELD_LABELS, mergeAiFields, missingFields, recipeForAi, recipeForReview, hasRecipeContent,
 } from '../lib/recipeDraft.js'
@@ -59,6 +61,17 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel, aiContext, in
   const [pasted, setPasted] = useState(initialSource?.text || '')
   const [photos, setPhotos] = useState(() => (initialSource?.files || []).map(photoItem))
   const [grayscale, setGrayscale] = useState(true)
+  const [dish, setDish] = useState(null)          // { file, crop }: the finished dish, kept as the recipe's picture
+  const [dishCropping, setDishCropping] = useState(null)   // { file, crop } being cropped, not yet accepted
+  const [dishUrl, setDishUrl] = useState(null)    // preview of the cropped result
+  useEffect(() => {
+    if (!dish) { setDishUrl(null); return undefined }
+    let live = true
+    prepareRecipePhoto(dish.file, { crop: dish.crop }).then(p => { if (live) setDishUrl(`data:${p.mediaType};base64,${p.base64}`) }).catch(() => { if (live) setDishUrl(null) })
+    return () => { live = false }
+  }, [dish])
+  const dishInput = useRef(null)
+  const savedId = useRef(null)                    // set once the row exists, so a retry after a photo failure doesn't create it twice
   const [description, setDescription] = useState('')
   const [busy, setBusy] = useState(null)        // which AI action is running
   const [aiError, setAiError] = useState(null)  // { where: 'source'|'tools', message, limit }
@@ -210,7 +223,19 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel, aiContext, in
         side_recommendation: f.side_recommendation || null,
         diet: f.diet,
       }
-      const newId = await createRecipe(dbFields)
+      const newId = savedId.current || await createRecipe(dbFields)
+      savedId.current = newId
+      // The photo needs the recipe's id, so it goes up after the row exists. If it
+      // fails, the recipe is kept and the form stays open for a retry or a skip.
+      let image = {}
+      if (dish) {
+        try {
+          image = await uploadRecipePhoto(newId, await prepareRecipePhoto(dish.file, { crop: dish.crop }))
+        } catch (e) {
+          setSaveError(`${e.message} The recipe itself is saved. Try the photo again, or remove it and save.`)
+          return
+        }
+      }
       const catMap = { breakfast: 'Breakfast', main: 'Mains', side: 'Sides', entree: 'Starters', dessert: 'Desserts' }
       onSave({
         id: newId,
@@ -228,6 +253,9 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel, aiContext, in
         defaultDays: f.weekdays,
         fun: f.fun_recipe,
         husband: f.husband_approved,
+        imagePath: image.imagePath || null,
+        imageUrl: image.imageUrl || null,
+        imageCredit: null,
       })
     } catch (e) {
       setSaveError(e.message)
@@ -376,6 +404,42 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel, aiContext, in
         )}
 
         {saveError && <div style={{ ...mn, fontSize: 13, color: C.error, background: C.errorContainer, padding: '10px 14px', borderRadius: R.md, marginBottom: 16 }}>{saveError}</div>}
+
+        {row('Photo of the dish',
+          <div>
+            <input ref={dishInput} type='file' accept='image/*' style={{ display: 'none' }}
+              onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; if (file?.type?.startsWith('image/')) setDishCropping({ file, crop: null }) }}/>
+            {dish ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 96, height: 72, borderRadius: R.md, overflow: 'hidden', background: C.surfaceContainerHigh, flexShrink: 0 }}>
+                  {dishUrl && <img src={dishUrl} alt='Dish' style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}/>}
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <Btn label='Crop' small onClick={() => setDishCropping(dish)} disabled={anyBusy}/>
+                  <button onClick={() => dishInput.current?.click()} disabled={anyBusy} style={{ ...mn, border: `1px solid ${C.outlineVariant}`, background: 'none', borderRadius: R.pill, padding: '5px 14px', fontSize: 12, fontWeight: 700, color: C.primary, cursor: anyBusy ? 'not-allowed' : 'pointer' }}>Change</button>
+                  <button onClick={() => setDish(null)} disabled={anyBusy} style={{ ...mn, border: `1px solid ${C.outlineVariant}`, background: 'none', borderRadius: R.pill, padding: '5px 14px', fontSize: 12, fontWeight: 700, color: C.error, cursor: anyBusy ? 'not-allowed' : 'pointer' }}>Remove</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <button onClick={() => dishInput.current?.click()} disabled={anyBusy}
+                  style={{ ...mn, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, border: `2px dashed ${C.outlineVariant}`, borderRadius: R.md, padding: '14px 16px', background: C.white, fontSize: 13, color: C.onSurfaceVariant, cursor: anyBusy ? 'not-allowed' : 'pointer' }}>
+                  <Icon name='camera' size={16} color={C.onSurfaceVariant}/>Add a photo (optional)
+                </button>
+                {photos.length > 0 && (
+                  <button onClick={() => setDishCropping({ file: photos[0].file, crop: null })} style={{ ...mn, border: 'none', background: 'none', padding: '8px 0 0', fontSize: 12, fontWeight: 700, color: C.primary, cursor: 'pointer' }}>Use the photo I read the recipe from</button>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {dishCropping && (
+          <ImageCropper file={dishCropping.file} initial={dishCropping.crop} title='Crop the photo'
+            hint='Drag the box to frame the dish. The photo is shown wide, so a landscape crop fits best.'
+            onCancel={() => setDishCropping(null)}
+            onDone={crop => { setDish({ file: dishCropping.file, crop: isFullFrame(crop) ? null : crop }); setDishCropping(null) }}/>
+        )}
 
         {row('Recipe Name *',
           <input value={f.name} onChange={e => set('name', e.target.value)} placeholder='e.g. Chicken Stir-Fry' style={inp({ border: `1.5px solid ${f.name.trim() ? C.primary : C.outlineVariant}` }, 'name')}/>, 'name'

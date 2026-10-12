@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react'
-import { fetchRecipeDetails, fetchRecipeNotes, saveRecipeNotes, fetchRecipeToddlerTask, saveRecipeToddlerTask } from '../lib/supabase.js'
+import { fetchRecipeDetails, fetchRecipeNotes, saveRecipeNotes, fetchRecipeToddlerTask, saveRecipeToddlerTask, uploadRecipePhoto, recipeImageUrl } from '../lib/supabase.js'
+import { prepareRecipePhoto } from '../lib/imageHelpers.js'
+import { ImageCropper } from './ui/ImageCropper.jsx'
+import { isFullFrame } from '../lib/imageMath.js'
+import { RecipePhotoStrip } from './recipe/RecipePhotoStrip.jsx'
 import { callEdgeFn } from '../lib/ai.js'
 import { C, ep, mn, CARD, R } from '../lib/theme.js'
 import { ageBandFromDob, TODDLER_AGE_BANDS } from '../lib/dateHelpers.js'
@@ -12,7 +16,7 @@ import { dayNutritionTotals, rowFigure } from '../lib/goalMaths.js'
 // toddlerDob is null when toddler activities are off in Settings; that hides the
 // activities card and the ideas button. showToddlerVariations gates the recipe's
 // own toddler variation notes separately.
-export function RecipeScreen({ recipeId, portion, onPortionChange, onAddMeal, toddlerDob, showToddlerVariations = true, onOpenToddlerCooking, goalProfile, goalTargets, nutritionByRecipe={}, day, plan, sectionIds = ALL_SECTION_IDS }) {
+export function RecipeScreen({ recipeId, portion, onPortionChange, onAddMeal, toddlerDob, showToddlerVariations = true, onOpenToddlerCooking, goalProfile, goalTargets, nutritionByRecipe={}, day, plan, sectionIds = ALL_SECTION_IDS, onPhotoChange }) {
   const goalMode = !!goalProfile?.goalModeEnabled && !!goalTargets
   const recipeNutrition = nutritionByRecipe[recipeId]
   const [showGoalSheet, setShowGoalSheet] = useState(false)
@@ -28,6 +32,12 @@ export function RecipeScreen({ recipeId, portion, onPortionChange, onAddMeal, to
   const [toddlerBand, setToddlerBand] = useState(null)
   const [toddlerTaskLoading, setToddlerTaskLoading] = useState(false)
   const [toddlerTaskError, setToddlerTaskError] = useState(null)
+  const [photo, setPhoto] = useState(null)        // set after an upload; otherwise the fetched row's image
+  const [cropFile, setCropFile] = useState(null)
+  const [photoBusy, setPhotoBusy] = useState(false)
+  const [photoError, setPhotoError] = useState(null)
+
+  useEffect(() => { setPhoto(null); setPhotoError(null) }, [recipeId])
 
   useEffect(() => {
     fetchRecipeDetails(recipeId)
@@ -73,6 +83,21 @@ export function RecipeScreen({ recipeId, portion, onPortionChange, onAddMeal, to
     })()
   }, [recipeId, toddlerDob])
 
+  // Picking a file opens the cropper; the upload starts when the crop is confirmed.
+  async function handlePhotoCropped(file, crop) {
+    setCropFile(null)
+    setPhotoBusy(true); setPhotoError(null)
+    try {
+      const img = await uploadRecipePhoto(recipeId, await prepareRecipePhoto(file, { crop: isFullFrame(crop) ? null : crop }))
+      setPhoto(img)
+      onPhotoChange?.(recipeId, img)
+    } catch (e) {
+      setPhotoError(e.message)
+    } finally {
+      setPhotoBusy(false)
+    }
+  }
+
   function handleNotesChange(e) {
     setNotes(e.target.value)
     setNotesSaved(false)
@@ -104,7 +129,13 @@ export function RecipeScreen({ recipeId, portion, onPortionChange, onAddMeal, to
 
   return (
     <>
-    <div style={{padding:'20px 20px 40px'}}>
+    <RecipePhotoStrip
+      imageUrl={photo ? photo.imageUrl : recipeImageUrl(data.image_path)}
+      credit={photo ? photo.imageCredit : data.image_credit}
+      onPick={setCropFile} busy={photoBusy} error={photoError}/>
+    {cropFile&&<ImageCropper file={cropFile} title='Crop the photo' hint='Drag the box to frame the dish. The photo is shown wide, so a landscape crop fits best.'
+      onCancel={()=>setCropFile(null)} onDone={crop=>handlePhotoCropped(cropFile,crop)}/>}
+    <div style={{padding:'18px 20px 40px'}}>
       {data.has_thermomix_version&&(
         <div style={{display:'inline-flex',alignItems:'center',gap:6,background:C.primary,borderRadius:R.pill,padding:'5px 12px',marginBottom:12}}>
           <span style={{fontSize:12}}>⚡</span>
