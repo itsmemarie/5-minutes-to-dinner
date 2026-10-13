@@ -1,23 +1,28 @@
 import { useRef, useState } from 'react'
 import { C, mn } from '../../lib/theme.js'
 import { Icon } from '../ui/Icon.jsx'
+import { PhotoChoiceSheet } from './PhotoSheets.jsx'
 
 // Recipe photo on the details screen: a 68px strip under the app bar that opens
-// to 200px on tap. Replace opens the device picker (camera roll or camera) and
-// must not toggle the strip. The strip stays when there's no photo so the
-// affordance can be found.
+// to 200px on tap. Add / Replace offers the user's own photo (device picker:
+// camera roll or camera) or an AI one, and must not toggle the strip. The
+// strip stays when there's no photo so the affordance can be found.
 //
-// onPick(file) → Promise; the parent uploads and passes the new imageUrl back.
-export function RecipePhotoStrip({ imageUrl, credit, onPick, busy, error }) {
+// onPick(file) → the parent crops and uploads, and passes the new imageUrl back.
+// onGenerate() → the parent opens the AI photo sheet. Without it, Add goes
+// straight to the picker.
+export function RecipePhotoStrip({ imageUrl, credit, onPick, onGenerate, busy, error }) {
   const [open, setOpen] = useState(false)
   const [failed, setFailed] = useState(null)   // the url that failed to load
+  const [choosing, setChoosing] = useState(false)
   const inputRef = useRef(null)
   const hasPhoto = !!imageUrl && failed !== imageUrl
 
   const choose = e => {
     e.stopPropagation()
     if (busy) return
-    inputRef.current?.click()
+    if (onGenerate) setChoosing(true)
+    else inputRef.current?.click()
   }
   const onFile = e => {
     const file = e.target.files?.[0]
@@ -28,9 +33,9 @@ export function RecipePhotoStrip({ imageUrl, credit, onPick, busy, error }) {
   return (
     <div style={{ flexShrink: 0 }}>
       <div
-        onClick={() => setOpen(o => !o)}
+        onClick={hasPhoto ? () => setOpen(o => !o) : choose}
         style={{
-          position: 'relative', height: open ? 200 : 68, overflow: 'hidden', cursor: 'pointer', transition: 'height 220ms ease',
+          position: 'relative', height: open && hasPhoto ? 200 : 68, overflow: 'hidden', cursor: 'pointer', transition: 'height 220ms ease',
           background: `repeating-linear-gradient(135deg,${C.primaryFixed} 0 8px,#dfeedf 8px 16px)`,
         }}
       >
@@ -40,7 +45,7 @@ export function RecipePhotoStrip({ imageUrl, credit, onPick, busy, error }) {
         ) : (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
             <Icon name='camera' size={15} color={C.onSurfaceVariant}/>
-            <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 10, color: C.onSurfaceVariant }}>{busy ? 'saving photo…' : 'recipe photo'}</span>
+            <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: 10, color: C.onSurfaceVariant }}>{busy ? 'saving photo…' : onGenerate ? 'upload one or create with AI' : 'recipe photo'}</span>
           </div>
         )}
         <div style={{
@@ -48,7 +53,7 @@ export function RecipePhotoStrip({ imageUrl, credit, onPick, busy, error }) {
           background: hasPhoto ? 'linear-gradient(to top, rgba(24,36,23,0.62), rgba(24,36,23,0))' : 'none',
         }}>
           <span style={{ ...mn, fontSize: 11, fontWeight: 700, letterSpacing: '0.02em', color: hasPhoto ? '#fff' : C.onSurface }}>
-            {busy ? 'Saving…' : open ? 'Tap to collapse' : 'Tap to see photo'}
+            {busy ? 'Saving…' : !hasPhoto ? 'No photo yet' : open ? 'Tap to collapse' : 'Tap to see photo'}
           </span>
           {/* Visual size stays ~26px; the ::before-free padding wrapper makes the hit area 44px. */}
           <button onClick={choose} disabled={busy} aria-label={hasPhoto ? 'Replace photo' : 'Add photo'}
@@ -60,7 +65,12 @@ export function RecipePhotoStrip({ imageUrl, credit, onPick, busy, error }) {
         </div>
       </div>
       <input ref={inputRef} type='file' accept='image/*' onChange={onFile} style={{ display: 'none' }}/>
-      {error && <div role='alert' style={{ ...mn, fontSize: 12, color: C.error, background: C.errorContainer, padding: '8px 20px' }}>{error}</div>}
+      {choosing && (
+        <PhotoChoiceSheet title={hasPhoto ? 'Replace the photo' : 'Add a photo'} onClose={() => setChoosing(false)}
+          onUpload={() => { setChoosing(false); inputRef.current?.click() }}
+          onGenerate={() => { setChoosing(false); onGenerate() }}/>
+      )}
+      {error &&<div role='alert' style={{ ...mn, fontSize: 12, color: C.error, background: C.errorContainer, padding: '8px 20px' }}>{error}</div>}
       {open && hasPhoto && credit && <div style={{ ...mn, fontSize: 10, color: C.onSurfaceVariant, padding: '6px 20px 0' }}>{credit}</div>}
     </div>
   )

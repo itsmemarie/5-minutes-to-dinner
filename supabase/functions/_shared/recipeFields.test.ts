@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { completableRequest, completionSchema, recipeForPrompt, sanitiseCompletion, sanitiseReview } from './recipeFields.ts'
+import { completableRequest, completionSchema, householdLines, recipeForPrompt, sanitiseCompletion, sanitiseReview } from './recipeFields.ts'
 
 const recipe = { name: 'Dal', ingredients: '- 200g red lentils\n- 1 onion', instructions_standard: '1. Simmer for 20 minutes.' }
 
@@ -41,6 +41,17 @@ describe('step 3: review', () => {
   })
   it('survives garbage', () => {
     expect(sanitiseReview(null, recipe)).toEqual({ suggestions: [], warnings: [] })
+  })
+  it('never suggests toddler changes', () => {
+    const raw = { suggestions: [{ field: 'toddler_variations', title: 'Softer', why: '', find: '', replace: 'Mash it.' }], warnings: [] }
+    expect(sanitiseReview(raw, recipe).suggestions).toEqual([])
+  })
+})
+
+describe('householdLines', () => {
+  it('keeps children to toddler_variations', () => {
+    expect(householdLines({ children: ['2 yrs'] })).toContain('Use this only for toddler_variations')
+    expect(householdLines({})).not.toContain('Children')
   })
 })
 

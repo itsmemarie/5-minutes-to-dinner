@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  findJsonLdRecipe, pageTextForAi, parseDurationMinutes, parseServings, toIngredientText, toStepsText, transcriptToFields,
+  findJsonLdRecipe, findPageImageUrls, pageTextForAi, parseDurationMinutes, parseServings, toIngredientText, toStepsText, transcriptToFields,
 } from './recipeSource.ts'
 
 const page = (ld: unknown) => `<html><head><script type="application/ld+json">${JSON.stringify(ld)}</script></head><body>story…</body></html>`
@@ -81,5 +81,53 @@ describe('page text for the AI fallback', () => {
   })
   it('caps the text it sends', () => {
     expect(pageTextForAi(`<p>${'word '.repeat(10000)}</p>`, 500).length).toBeLessThanOrEqual(500)
+  })
+})
+
+describe("the page's picture of the dish", () => {
+  const PAGE = 'https://www.example-food.com/recipes/lemon-chicken/'
+
+  it("prefers the Recipe's own image, choosing a well-sized rendition", () => {
+    const html = page({
+      '@type': 'Recipe', name: 'Lemon Chicken',
+      image: [
+        'https://cdn.example-food.com/lemon-chicken-225x225.jpg',
+        'https://cdn.example-food.com/lemon-chicken-500x375.jpg',
+        'https://cdn.example-food.com/lemon-chicken-1200x900.jpg',
+        'https://cdn.example-food.com/lemon-chicken.jpg',
+      ],
+    }).replace('<head>', '<head><meta property="og:image" content="https://cdn.example-food.com/pin.jpg">')
+    expect(findPageImageUrls(html, PAGE)).toEqual([
+      'https://cdn.example-food.com/lemon-chicken-1200x900.jpg',
+      'https://cdn.example-food.com/lemon-chicken-500x375.jpg',
+      'https://cdn.example-food.com/lemon-chicken.jpg',
+      'https://cdn.example-food.com/lemon-chicken-225x225.jpg',
+      'https://cdn.example-food.com/pin.jpg',
+    ])
+  })
+
+  it('reads ImageObject sizes, relative urls and entities', () => {
+    const html = page({ '@graph': [{ '@type': 'Recipe', image: { '@type': 'ImageObject', url: '/img/dish.jpg?w=1&amp;h=2', width: 1600 } }] })
+    expect(findPageImageUrls(html, PAGE)).toEqual(['https://www.example-food.com/img/dish.jpg?w=1&h=2'])
+  })
+
+  it("falls back to the share image — all an Instagram post gives out", () => {
+    const html = `<html><head>
+      <meta name="twitter:image" content="https://scontent-ham3-1.cdninstagram.com/v/t51/502_n.jpg?stp=dst-jpg&amp;_nc_cat=109" />
+      <meta property="og:image" content="https://scontent-ham3-1.cdninstagram.com/v/t51/502_n.jpg?stp=dst-jpg&amp;_nc_cat=109" />
+      <meta property="og:url" content="https://www.instagram.com/terzompls/reel/Cs7MUHIJW7w/" />
+      </head><body></body></html>`
+    expect(findPageImageUrls(html, 'https://www.instagram.com/p/Cs7MUHIJW7w/')).toEqual([
+      'https://scontent-ham3-1.cdninstagram.com/v/t51/502_n.jpg?stp=dst-jpg&_nc_cat=109',
+    ])
+  })
+
+  it('handles attributes in any order and skips logos', () => {
+    const html = `<meta content='https://x.com/site-logo.png' property='og:image'><meta content="https://x.com/dish.webp" name="twitter:image">`
+    expect(findPageImageUrls(html, PAGE)).toEqual(['https://x.com/dish.webp'])
+  })
+
+  it('is empty when the page has no picture', () => {
+    expect(findPageImageUrls('<html><body><p>Just text</p></body></html>', PAGE)).toEqual([])
   })
 })

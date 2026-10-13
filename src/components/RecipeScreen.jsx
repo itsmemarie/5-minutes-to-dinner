@@ -4,6 +4,7 @@ import { prepareRecipePhoto } from '../lib/imageHelpers.js'
 import { ImageCropper } from './ui/ImageCropper.jsx'
 import { isFullFrame } from '../lib/imageMath.js'
 import { RecipePhotoStrip } from './recipe/RecipePhotoStrip.jsx'
+import { AI_PHOTO, AiPhotoSheet } from './recipe/PhotoSheets.jsx'
 import { callEdgeFn } from '../lib/ai.js'
 import { C, ep, mn, CARD, R } from '../lib/theme.js'
 import { ageBandFromDob, TODDLER_AGE_BANDS } from '../lib/dateHelpers.js'
@@ -34,10 +35,11 @@ export function RecipeScreen({ recipeId, portion, onPortionChange, onAddMeal, to
   const [toddlerTaskError, setToddlerTaskError] = useState(null)
   const [photo, setPhoto] = useState(null)        // set after an upload; otherwise the fetched row's image
   const [cropFile, setCropFile] = useState(null)
+  const [aiPhotoOpen, setAiPhotoOpen] = useState(false)
   const [photoBusy, setPhotoBusy] = useState(false)
   const [photoError, setPhotoError] = useState(null)
 
-  useEffect(() => { setPhoto(null); setPhotoError(null) }, [recipeId])
+  useEffect(() => { setPhoto(null); setPhotoError(null); setAiPhotoOpen(false) }, [recipeId])
 
   useEffect(() => {
     fetchRecipeDetails(recipeId)
@@ -84,11 +86,12 @@ export function RecipeScreen({ recipeId, portion, onPortionChange, onAddMeal, to
   }, [recipeId, toddlerDob])
 
   // Picking a file opens the cropper; the upload starts when the crop is confirmed.
-  async function handlePhotoCropped(file, crop) {
+  // An AI picture the user accepts is saved as it is, labelled as AI-made.
+  async function handlePhotoCropped(file, crop, saveAs) {
     setCropFile(null)
     setPhotoBusy(true); setPhotoError(null)
     try {
-      const img = await uploadRecipePhoto(recipeId, await prepareRecipePhoto(file, { crop: isFullFrame(crop) ? null : crop }))
+      const img = await uploadRecipePhoto(recipeId, await prepareRecipePhoto(file, { crop: isFullFrame(crop) ? null : crop }), saveAs)
       setPhoto(img)
       onPhotoChange?.(recipeId, img)
     } catch (e) {
@@ -132,9 +135,11 @@ export function RecipeScreen({ recipeId, portion, onPortionChange, onAddMeal, to
     <RecipePhotoStrip
       imageUrl={photo ? photo.imageUrl : recipeImageUrl(data.image_path)}
       credit={photo ? photo.imageCredit : data.image_credit}
-      onPick={setCropFile} busy={photoBusy} error={photoError}/>
+      onPick={setCropFile} onGenerate={()=>setAiPhotoOpen(true)} busy={photoBusy} error={photoError}/>
     {cropFile&&<ImageCropper file={cropFile} title='Crop the photo' hint='Drag the box to frame the dish. The photo is shown wide, so a landscape crop fits best.'
       onCancel={()=>setCropFile(null)} onDone={crop=>handlePhotoCropped(cropFile,crop)}/>}
+    {aiPhotoOpen&&<AiPhotoSheet name={data.name} ingredients={data.ingredients}
+      onClose={()=>setAiPhotoOpen(false)} onUse={file=>{setAiPhotoOpen(false);handlePhotoCropped(file,null,AI_PHOTO)}}/>}
     <div style={{padding:'18px 20px 40px'}}>
       {data.has_thermomix_version&&(
         <div style={{display:'inline-flex',alignItems:'center',gap:6,background:C.primary,borderRadius:R.pill,padding:'5px 12px',marginBottom:12}}>

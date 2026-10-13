@@ -144,7 +144,7 @@ function flattenInstructions(x: unknown): string[] {
   return []
 }
 
-export function findJsonLdRecipe(html: string): Transcript | null {
+function* jsonLdRecipeNodes(html: string): Generator<Record<string, unknown>> {
   const re = /<script[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi
   for (const m of html.matchAll(re)) {
     let data: unknown
@@ -153,7 +153,12 @@ export function findJsonLdRecipe(html: string): Transcript | null {
       try { data = JSON.parse(m[1].trim().replace(/[\u0000-\u001f]+/g, ' ')) } catch { continue }
     }
     const node = findRecipeNode(data)
-    if (!node) continue
+    if (node) yield node
+  }
+}
+
+export function findJsonLdRecipe(html: string): Transcript | null {
+  for (const node of jsonLdRecipeNodes(html)) {
     const ingredients = (Array.isArray(node.recipeIngredient) ? node.recipeIngredient : Array.isArray(node.ingredients) ? node.ingredients : [])
       .map(cleanText).filter(Boolean)
     const steps = flattenInstructions(node.recipeInstructions)
@@ -171,6 +176,67 @@ export function findJsonLdRecipe(html: string): Transcript | null {
     }
   }
   return null
+}
+
+// ── The page's picture of the dish ────────────────────────────────
+// Copied across with an imported recipe. Candidates, best first:
+//   1. the schema.org Recipe's own `image` — the recipe card photo
+//   2. og:image / twitter:image — the share picture; the only one social
+//      pages like Instagram give out
+// Recipe plugins list several renditions; the ones wide enough for the photo
+// strip but short of a multi-megabyte original go first.
+interface ImageCandidate { url: string; width?: number }
+
+const sizeFromFileName = (url: string) => {
+  const m = url.match(/-(\d{2,4})x(\d{2,4})\.(?:jpe?g|png|webp|avif)(?:[?#]|$)/i)
+  return m ? Number(m[1]) : undefined
+}
+
+function ldImages(x: unknown, depth = 0): ImageCandidate[] {
+  if (!x || depth > 3) return []
+  if (typeof x === 'string') return [{ url: x, width: sizeFromFileName(x) }]
+  if (Array.isArray(x)) return x.flatMap(i => ldImages(i, depth + 1))
+  if (typeof x !== 'object') return []
+  const o = x as Record<string, unknown>
+  const url = typeof o.url === 'string' ? o.url : typeof o.contentUrl === 'string' ? o.contentUrl : null
+  if (!url) return []
+  const w = Number(o.width)
+  return [{ url, width: w > 0 ? w : sizeFromFileName(url) }]
+}
+
+const META_IMAGE_KEYS = ['og:image:secure_url', 'og:image', 'og:image:url', 'twitter:image', 'twitter:image:src']
+const attr = (tag: string, name: string) =>
+  tag.match(new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i'))?.slice(1).find(v => v != null)
+
+function metaImages(html: string): ImageCandidate[] {
+  const found: { rank: number; url: string }[] = []
+  for (const [tag] of html.matchAll(/<meta\b[^>]*>/gi)) {
+    const key = (attr(tag, 'property') ?? attr(tag, 'name') ?? '').toLowerCase()
+    const rank = META_IMAGE_KEYS.indexOf(key)
+    const content = attr(tag, 'content')
+    if (rank !== -1 && content) found.push({ rank, url: content })
+  }
+  return found.sort((a, b) => a.rank - b.rank).map(f => ({ url: f.url }))
+}
+
+// 0: a good known size · 1: size unknown · 2: known but too small or huge.
+const sizeRank = (c: ImageCandidate) => (c.width == null ? 1 : c.width >= 500 && c.width <= 2000 ? 0 : 2)
+
+export function findPageImageUrls(html: string, pageUrl: string): string[] {
+  const fromLd: ImageCandidate[] = []
+  for (const node of jsonLdRecipeNodes(html)) fromLd.push(...ldImages(node.image))
+  fromLd.sort((a, b) => sizeRank(a) - sizeRank(b) || (b.width ?? 0) - (a.width ?? 0))
+
+  const out: string[] = []
+  for (const c of [...fromLd, ...metaImages(html)]) {
+    let u: URL
+    try { u = new URL(decodeEntities(c.url.trim()), pageUrl) } catch { continue }
+    if (!/^https?:$/.test(u.protocol)) continue
+    // Sites with no picture of their own fall back to their logo.
+    if (/\.(svg|ico)$/i.test(u.pathname) || /logo|favicon|sprite|placeholder/i.test(u.pathname)) continue
+    if (!out.includes(u.href)) out.push(u.href)
+  }
+  return out
 }
 
 // ── Page text for the AI fallback ─────────────────────────────────

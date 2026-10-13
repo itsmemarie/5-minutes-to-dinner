@@ -21,6 +21,7 @@ Rules:
 - Open oven preheat as first step of each session
 - Group all chopping into a single mise en place block at the start
 - If they have a Thermomix (TM6), use it for aromatics first (sequential, no washing between)
+- Never brown mince or sear, roast or crisp meat in the TM6: the bowl steams it and the browned flavour never develops. Do it in a very hot pan (HOB step, in batches) or the OVEN, then add it to the TM6 bowl. Dishes that depend on browning, roasting or crisping don't go in the TM6 at all
 - Run parallel tasks where possible (oven + TM6 simultaneously)
 
 Instruction specificity (non-negotiable):

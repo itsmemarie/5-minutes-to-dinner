@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__claude_ai_Supabase__deploy_edge_function",
+      "mcp__claude_ai_Supabase__query_logs",
+      "PowerShell(git -C \"c:\\\\Users\\\\Hanita\\\\Desktop\\\\5 Minutes to Dinner App\" diff --stat)",
+      "PowerShell(git -C \"c:\\\\Users\\\\Hanita\\\\Desktop\\\\5 Minutes to Dinner App\" diff -- src/components/NewRecipeForm.jsx src/lib/ai.js)",
+      "PowerShell(Set-Location \"c:\\\\Users\\\\Hanita\\\\Desktop\\\\5 Minutes to Dinner App\"; $env:DENO_NO_PACKAGE_JSON = '1'; npx deno@2 check --node-modules-dir=none supabase/functions/generate-recipe/index.ts supabase/functions/complete-recipe/index.ts supabase/functions/review-recipe/index.ts supabase/functions/batch-cooking/index.ts 2>&1 | Where-Object { $_ -notmatch 'npm notice' } | Select-Object -Last 20)",
+      "PowerShell(try { \\(Get-Command supabase -ErrorAction Stop\\).Source } catch { \"no global supabase cli\" }; Test-Path \"C:\\\\Users\\\\Hanita\\\\Desktop\\\\5 Minutes to Dinner App\\\\node_modules\\\\.bin\\\\supabase\"; Test-Path \"C:\\\\Users\\\\Hanita\\\\Desktop\\\\5 Minutes to Dinner App\\\\supabase\\\\.temp\\\\project-ref\")",
+      "PowerShell(npx vitest run supabase/functions/_shared/imageGen.test.ts 2>&1)",
+      "PowerShell(npx supabase functions deploy generate-recipe-image --project-ref chcjytxvpvhzdgvwllss --no-verify-jwt 2>&1)",
+      "PowerShell(npx supabase secrets list --project-ref chcjytxvpvhzdgvwllss 2>&1 | Select-String -Pattern 'CLOUDFLARE|GEMINI|NAME' | ForEach-Object { \\($_ -split '\\\\|'\\)[0].Trim\\(\\) })"
+    ]
+  }
+}

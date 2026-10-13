@@ -5,7 +5,7 @@ import { APPLY_FAILURE_TEXT } from '../../lib/reviewSuggestions.js'
 
 // Step 3's result. Each suggestion stands alone and is applied or skipped on
 // its own; an applied one edits the recipe fields below in place. Constraint
-// warnings (equipment they lack, a toddler eating it…) come first.
+// warnings (equipment they lack, a dish that doesn't suit the Thermomix…) come first.
 const clip = (s, n = 220) => (s.length > n ? `${s.slice(0, n)}…` : s)
 
 function Suggestion({ s, onDecide }) {

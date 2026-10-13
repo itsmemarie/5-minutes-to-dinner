@@ -3,7 +3,7 @@ import { createRecipe, uploadRecipePhoto } from '../lib/supabase.js'
 import { ImageCropper } from './ui/ImageCropper.jsx'
 import { isFullFrame } from '../lib/imageMath.js'
 import { extractRecipe, completeRecipe, reviewRecipe, generateRecipe, isAiLimit } from '../lib/ai.js'
-import { preparePhotoItems, prepareRecipePhoto } from '../lib/imageHelpers.js'
+import { base64ToFile, preparePhotoItems, prepareRecipePhoto } from '../lib/imageHelpers.js'
 import {
   EMPTY_RECIPE, FIELD_LABELS, mergeAiFields, missingFields, recipeForAi, recipeForReview, hasRecipeContent,
 } from '../lib/recipeDraft.js'
@@ -13,6 +13,7 @@ import { Btn } from './ui/index.js'
 import { Icon } from './ui/Icon.jsx'
 import { PhotoPicker, photoItem } from './PhotoPicker.jsx'
 import { ReviewPanel } from './recipe/ReviewPanel.jsx'
+import { AI_PHOTO, AiPhotoSheet, PhotoChoiceSheet } from './recipe/PhotoSheets.jsx'
 import { InstallHint } from './InstallHint.jsx'
 
 const MEAL_TYPES = [
@@ -61,8 +62,13 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel, aiContext, in
   const [pasted, setPasted] = useState(initialSource?.text || '')
   const [photos, setPhotos] = useState(() => (initialSource?.files || []).map(photoItem))
   const [grayscale, setGrayscale] = useState(true)
-  const [dish, setDish] = useState(null)          // { file, crop }: the finished dish, kept as the recipe's picture
-  const [dishCropping, setDishCropping] = useState(null)   // { file, crop } being cropped, not yet accepted
+  // The finished dish, kept as the recipe's picture: { file, crop, source, credit },
+  // source 'user' | 'ai' | 'import' (copied from the recipe's web page).
+  const [dish, setDish] = useState(null)
+  const [dishCropping, setDishCropping] = useState(null)   // a dish being cropped, not yet accepted
+  const [photoChoice, setPhotoChoice] = useState(false)    // upload-or-AI sheet
+  const [aiPhotoOpen, setAiPhotoOpen] = useState(false)
+  const [sourceNote, setSourceNote] = useState(null)       // a link gave a photo but no recipe
   const [dishUrl, setDishUrl] = useState(null)    // preview of the cropped result
   useEffect(() => {
     if (!dish) { setDishUrl(null); return undefined }
@@ -105,13 +111,28 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel, aiContext, in
     setAiMode(false)
   }
 
+  // A link brings the page's own photo along. It takes the photo slot unless
+  // the user has already put a picture of their own there.
+  const adoptPageImage = img => {
+    if (!img?.base64) return
+    const file = base64ToFile(img.base64, img.mediaType)
+    const credit = img.from ? `Photo from ${img.from}` : null
+    setDish(d => (d && d.source !== 'import' ? d : { file, crop: null, source: 'import', credit }))
+  }
+
   const runExtract = async kind => {
-    setBusy(kind); setAiError(null)
+    setBusy(kind); setAiError(null); setSourceNote(null)
     try {
       const payload = kind === 'url' ? { url: url.trim() }
         : kind === 'text' ? { text: pasted.trim() }
         : { images: await preparePhotoItems(photos, { grayscale }) }
       const data = await extractRecipe(payload)
+      adoptPageImage(data.image)
+      // Instagram and similar pages show apps the picture but not the caption.
+      if (data.origin === 'image-only') {
+        setSourceNote(`Got the photo from ${data.image?.from || 'that page'}, but the page doesn't share the recipe itself. Copy the caption or recipe text and paste it below.`)
+        return
+      }
       applyResult(data, 'source', data.origin === 'page-data' ? 'page-data' : 'ai')
     } catch (e) {
       fail('source', e)
@@ -230,7 +251,7 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel, aiContext, in
       let image = {}
       if (dish) {
         try {
-          image = await uploadRecipePhoto(newId, await prepareRecipePhoto(dish.file, { crop: dish.crop }))
+          image = await uploadRecipePhoto(newId, await prepareRecipePhoto(dish.file, { crop: dish.crop }), { source: dish.source, credit: dish.credit })
         } catch (e) {
           setSaveError(`${e.message} The recipe itself is saved. Try the photo again, or remove it and save.`)
           return
@@ -255,7 +276,7 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel, aiContext, in
         husband: f.husband_approved,
         imagePath: image.imagePath || null,
         imageUrl: image.imageUrl || null,
-        imageCredit: null,
+        imageCredit: image.imageCredit || null,
       })
     } catch (e) {
       setSaveError(e.message)
@@ -331,6 +352,11 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel, aiContext, in
           <div style={{ background: C.primaryFixed, borderRadius: R.lg, padding: '18px 16px', marginBottom: 20 }}>
             <div style={{ ...mn, fontSize: 12, color: C.onSurface, opacity: 0.75, marginBottom: 14, lineHeight: 1.5 }}>The recipe is read exactly as written, with nothing added. You check it, then the optional AI help can fill gaps or give an expert review.</div>
             {errorNote('source')}
+            {sourceNote && (
+              <div role='status' style={{ ...mn, fontSize: 13, color: C.onSurface, background: C.white, border: `1px solid ${C.primary}40`, padding: '8px 12px', borderRadius: R.sm, marginBottom: 12, lineHeight: 1.5 }}>
+                {sourceNote}
+              </div>
+            )}
 
             <div style={capLabel}>Recipe link</div>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -408,26 +434,31 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel, aiContext, in
         {row('Photo of the dish',
           <div>
             <input ref={dishInput} type='file' accept='image/*' style={{ display: 'none' }}
-              onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; if (file?.type?.startsWith('image/')) setDishCropping({ file, crop: null }) }}/>
+              onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; if (file?.type?.startsWith('image/')) setDishCropping({ file, crop: null, source: 'user', credit: null }) }}/>
             {dish ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <div style={{ width: 96, height: 72, borderRadius: R.md, overflow: 'hidden', background: C.surfaceContainerHigh, flexShrink: 0 }}>
                   {dishUrl && <img src={dishUrl} alt='Dish' style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}/>}
                 </div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <Btn label='Crop' small onClick={() => setDishCropping(dish)} disabled={anyBusy}/>
-                  <button onClick={() => dishInput.current?.click()} disabled={anyBusy} style={{ ...mn, border: `1px solid ${C.outlineVariant}`, background: 'none', borderRadius: R.pill, padding: '5px 14px', fontSize: 12, fontWeight: 700, color: C.primary, cursor: anyBusy ? 'not-allowed' : 'pointer' }}>Change</button>
-                  <button onClick={() => setDish(null)} disabled={anyBusy} style={{ ...mn, border: `1px solid ${C.outlineVariant}`, background: 'none', borderRadius: R.pill, padding: '5px 14px', fontSize: 12, fontWeight: 700, color: C.error, cursor: anyBusy ? 'not-allowed' : 'pointer' }}>Remove</button>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8, minWidth: 0 }}>
+                  {dish.credit && (
+                    <span style={{ ...mn, fontSize: 10, fontWeight: 700, color: PROV_TAG[dish.source === 'ai' ? 'ai' : 'source'].fg, background: PROV_TAG[dish.source === 'ai' ? 'ai' : 'source'].bg, borderRadius: R.pill, padding: '1px 7px' }}>{dish.credit}</span>
+                  )}
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <Btn label='Crop' small onClick={() => setDishCropping(dish)} disabled={anyBusy}/>
+                    <button onClick={() => setPhotoChoice(true)} disabled={anyBusy} style={{ ...mn, border: `1px solid ${C.outlineVariant}`, background: 'none', borderRadius: R.pill, padding: '5px 14px', fontSize: 12, fontWeight: 700, color: C.primary, cursor: anyBusy ? 'not-allowed' : 'pointer' }}>Change</button>
+                    <button onClick={() => setDish(null)} disabled={anyBusy} style={{ ...mn, border: `1px solid ${C.outlineVariant}`, background: 'none', borderRadius: R.pill, padding: '5px 14px', fontSize: 12, fontWeight: 700, color: C.error, cursor: anyBusy ? 'not-allowed' : 'pointer' }}>Remove</button>
+                  </div>
                 </div>
               </div>
             ) : (
               <>
-                <button onClick={() => dishInput.current?.click()} disabled={anyBusy}
+                <button onClick={() => setPhotoChoice(true)} disabled={anyBusy}
                   style={{ ...mn, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, border: `2px dashed ${C.outlineVariant}`, borderRadius: R.md, padding: '14px 16px', background: C.white, fontSize: 13, color: C.onSurfaceVariant, cursor: anyBusy ? 'not-allowed' : 'pointer' }}>
-                  <Icon name='camera' size={16} color={C.onSurfaceVariant}/>Add a photo (optional)
+                  <Icon name='camera' size={16} color={C.onSurfaceVariant}/>Add a photo: upload or create with AI
                 </button>
                 {photos.length > 0 && (
-                  <button onClick={() => setDishCropping({ file: photos[0].file, crop: null })} style={{ ...mn, border: 'none', background: 'none', padding: '8px 0 0', fontSize: 12, fontWeight: 700, color: C.primary, cursor: 'pointer' }}>Use the photo I read the recipe from</button>
+                  <button onClick={() => setDishCropping({ file: photos[0].file, crop: null, source: 'user', credit: null })} style={{ ...mn, border: 'none', background: 'none', padding: '8px 0 0', fontSize: 12, fontWeight: 700, color: C.primary, cursor: 'pointer' }}>Use the photo I read the recipe from</button>
                 )}
               </>
             )}
@@ -438,7 +469,21 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel, aiContext, in
           <ImageCropper file={dishCropping.file} initial={dishCropping.crop} title='Crop the photo'
             hint='Drag the box to frame the dish. The photo is shown wide, so a landscape crop fits best.'
             onCancel={() => setDishCropping(null)}
-            onDone={crop => { setDish({ file: dishCropping.file, crop: isFullFrame(crop) ? null : crop }); setDishCropping(null) }}/>
+            onDone={crop => { setDish({ ...dishCropping, crop: isFullFrame(crop) ? null : crop }); setDishCropping(null) }}/>
+        )}
+
+        {photoChoice && (
+          <PhotoChoiceSheet title={dish ? 'Change the photo' : 'Add a photo'}
+            aiDisabledReason={f.name.trim() ? null : 'Add the recipe name first, so the AI knows what to draw.'}
+            onClose={() => setPhotoChoice(false)}
+            onUpload={() => { setPhotoChoice(false); dishInput.current?.click() }}
+            onGenerate={() => { setPhotoChoice(false); setAiPhotoOpen(true) }}/>
+        )}
+
+        {aiPhotoOpen && (
+          <AiPhotoSheet name={f.name.trim()} ingredients={f.ingredients}
+            onClose={() => setAiPhotoOpen(false)}
+            onUse={file => { setAiPhotoOpen(false); setDish({ file, crop: null, ...AI_PHOTO }) }}/>
         )}
 
         {row('Recipe Name *',

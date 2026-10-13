@@ -21,21 +21,30 @@ export const COMPLETABLE: Record<string, FieldDef> = {
   portion_size:           { kind: 'integer',   guide: 'portions the amounts make' },
   min_portions:           { kind: 'integer',   guide: 'smallest sensible batch, in portions' },
   instructions_standard:  { kind: 'string',    guide: 'method for these ingredients, one step per line: "1. Step name: what to do (amounts, time, heat)"' },
-  instructions_thermomix: { kind: 'string',    guide: 'Thermomix TM6 method, one step per line: "1. Step name: what to do (time / temp / speed)"' },
+  instructions_thermomix: { kind: 'string',    guide: 'Thermomix TM6 method, one step per line: "1. Step name: what to do (time / temp / speed)"; browning, searing or roasting stays in a pan or the oven as its own step; "" if the dish doesn\'t suit the Thermomix' },
   fridge_storage:         { kind: 'string',    guide: 'how long it keeps in the fridge, e.g. "3-4 days"' },
   freezer_storage:        { kind: 'string',    guide: 'how to freeze and for how long, or "Not recommended"' },
-  chef_notes:             { kind: 'string',    guide: '2-3 short practical tips for a home cook' },
+  chef_notes:             { kind: 'string',    guide: '2-3 short chef\'s tips that lift the flavour or make it more reliable at home' },
   husband_variations:     { kind: 'string',    guide: 'a higher-protein variation, towards chicken if possible' },
   toddler_variations:     { kind: 'string',    guide: 'changes for ages 1-3: less salt, safe sizes and textures' },
   side_recommendation:    { kind: 'string',    guide: 'up to 3 sides, comma-separated, no explanations' },
 }
 
-// What step 3 may change (via find/replace on the field's text).
+// What step 3 may change (via find/replace on the field's text). The review
+// is of the recipe itself, so toddler_variations is left out.
 export const REVIEWABLE = [
   'name', 'ingredients', 'instructions_standard', 'instructions_thermomix', 'chef_notes',
-  'fridge_storage', 'freezer_storage', 'toddler_variations', 'husband_variations',
+  'fridge_storage', 'freezer_storage', 'husband_variations',
   'side_recommendation', 'advance_prep_note', 'prep_time_minutes', 'cook_time_minutes', 'portion_size',
 ]
+
+// The voice of every recipe step (generate, complete, review).
+export const CHEF_PERSONA = `You are a Michelin-star chef who specialises in home cooking: restaurant-level flavour and technique, made reliable in an ordinary home kitchen. Write a general recipe for adults, not a children's recipe.`
+
+// Not every dish suits a Thermomix; the method follows the dish.
+export const THERMOMIX_RULES = `Thermomix judgement: the Thermomix is excellent for chopping, sautéing aromatics, sauces, soups, risotto, steaming (Varoma), doughs and emulsions. It is poor at browning: even on its browning setting the bowl stirs and crowds the food, so mince and meat steam in their own juices and never build the deep browned (Maillard) flavour a hot pan gives. The same goes for searing, roasting, deep caramelising and crisping.
+- Write those steps for a hot frying pan or the oven, as their own step in the Thermomix method, then bring the food back to the bowl. Example: brown the mince in batches in a very hot pan, then add it to the sauce in the bowl.
+- If the dish's flavour depends mainly on those steps (steaks, roasts, stir-fries, crispy or fried food), it isn't a Thermomix dish: don't write a Thermomix method for it.`
 
 // Order the recipe is shown to the model in — most important first.
 const PROMPT_ORDER = [
@@ -68,7 +77,8 @@ export function householdLines(ctx: HouseholdContext = {}): string {
   if (ctx.region) lines.push(`Region: ${ctx.region} (use local ingredient names).`)
   if (ctx.units || ctx.measurements) lines.push(`Units: ${ctx.units ?? 'metric'}, ${ctx.measurements === 'cups' ? 'cups' : 'grams & ml'}.`)
   lines.push(`Kitchen equipment: ${ctx.equipment?.length ? ctx.equipment.join(', ') : 'not specified — assume a basic hob and oven'}.`)
-  if (ctx.children?.length) lines.push(`Young children eat this too, aged: ${ctx.children.join(', ')}.`)
+  // Ages only shape toddler_variations; the recipe itself stays general.
+  if (ctx.children?.length) lines.push(`Children in the household, aged: ${ctx.children.join(', ')}. Use this only for toddler_variations; don't adapt the rest of the recipe for them.`)
   return lines.join('\n')
 }
 

@@ -46,17 +46,24 @@ export function recipeImageUrl(path) {
   return supabase.storage.from(RECIPE_IMAGE_BUCKET).getPublicUrl(path).data.publicUrl
 }
 
-// Uploads the user's own photo as a recipe's picture, via the service-role
+// Uploads a picture chosen in the app as a recipe's photo, via the service-role
 // ingest-recipe-image function (it writes the file and the row, and removes
 // the file it replaces). `photo` is the { base64, mediaType } prepareRecipePhoto
-// returns. Resolves to the fields the recipe list holds.
-export async function uploadRecipePhoto(recipeId, photo) {
+// returns. `source` is where it came from: 'user' (their own photo), 'ai' or
+// 'import' (copied from the recipe's web page); `credit` is shown under it.
+// Resolves to the fields the recipe list holds.
+export async function uploadRecipePhoto(recipeId, photo, { source = 'user', credit = null } = {}) {
   const { data, error } = await supabase.functions.invoke('ingest-recipe-image', {
-    body: { recipe_id: recipeId, image_base64: photo.base64, content_type: photo.mediaType, source: 'user' },
+    body: { recipe_id: recipeId, image_base64: photo.base64, content_type: photo.mediaType, source, credit },
   })
-  if (error) throw new Error(`Couldn't save the photo: ${error.message}`)
+  if (error) {
+    // A non-2xx reply surfaces as "Edge Function returned a non-2xx status
+    // code"; the function's own { error } is in the response it carries.
+    const detail = await error.context?.json?.().then(d => d?.error, () => null)
+    throw new Error(`Couldn't save the photo: ${detail || error.message}`)
+  }
   if (data?.error) throw new Error(`Couldn't save the photo: ${data.error}`)
-  return { imagePath: data.path, imageUrl: recipeImageUrl(data.path), imageCredit: null }
+  return { imagePath: data.path, imageUrl: recipeImageUrl(data.path), imageCredit: credit }
 }
 
 // ─── Recipes ───────────────────────────────────────────────────────

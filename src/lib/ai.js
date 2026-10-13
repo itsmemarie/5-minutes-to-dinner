@@ -79,6 +79,11 @@ export const completeRecipe = ({ recipe, missing, context }) => callEdgeFn('comp
 export const reviewRecipe = ({ recipe, context }) => callEdgeFn('review-recipe', { recipe, context })
 export const generateRecipe = ({ description, context }) => callEdgeFn('generate-recipe', { description, context })
 
+// An AI picture from the recipe's name and ingredients → { image: { base64, mediaType } }.
+// Quiet: image providers aren't the text chain, so the "add a Google key" limit
+// sheet wouldn't help — the photo sheet shows its own errors.
+export const generateRecipeImage = ({ name, ingredients }) => callEdgeFn('generate-recipe-image', { name, ingredients }, { quiet: true })
+
 // ─── AI access settings ───────────────────────────────────────────
 export const fetchAiConfig = () => callEdgeFn('ai-config', { action: 'get' }, { quiet: true })
 export const setAiChoice = (step, provider, model) => callEdgeFn('ai-config', { action: 'setChoice', step, provider, model }, { quiet: true })

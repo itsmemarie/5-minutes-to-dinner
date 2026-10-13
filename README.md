@@ -44,7 +44,8 @@ Do these in order: database → secrets → functions → auth settings → fron
    ```bash
    npx supabase functions deploy --project-ref chcjytxvpvhzdgvwllss --no-verify-jwt \
      ai-config extract-recipe complete-recipe review-recipe generate-recipe extract-freezer-items \
-     shopping-list nutrition batch-cooking buyers-eye toddler-cooking recipe-toddler-task
+     shopping-list nutrition batch-cooking buyers-eye toddler-cooking recipe-toddler-task \
+     generate-recipe-image
    ```
    Don't deploy the image functions (`bulk-image-fill`, `ingest-recipe-image`, `cleanup-orphan-images`) with `--no-verify-jwt`: they must keep JWT checks on.
 4. **Auth settings** (Supabase dashboard › Authentication):

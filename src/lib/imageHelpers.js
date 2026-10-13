@@ -85,6 +85,17 @@ export async function prepareRecipePhoto(file, { crop = null } = {}) {
   return { base64: await blobToBase64(blob), mediaType: 'image/jpeg', bytes: blob.size }
 }
 
+// A picture that arrived as base64 (AI-made, or copied from a recipe page) →
+// a File, so it goes through the same preview, crop and upload as a photo the
+// user picked.
+export function base64ToFile(base64, mediaType = 'image/jpeg', name = 'recipe-photo') {
+  const bin = atob(base64)
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  const ext = (mediaType.split('/')[1] || 'jpg').replace('jpeg', 'jpg')
+  return new File([bytes], `${name}.${ext}`, { type: mediaType })
+}
+
 // PhotoPicker items ({ file, crop }) → the { base64, mediaType } list the edge functions take.
 export async function preparePhotoItems(items, { grayscale = true } = {}) {
   const prepared = await Promise.all(items.map(it => prepareImageForAi(it.file, { crop: it.crop, grayscale })))
