@@ -9,7 +9,41 @@
       "PowerShell(try { \\(Get-Command supabase -ErrorAction Stop\\).Source } catch { \"no global supabase cli\" }; Test-Path \"C:\\\\Users\\\\Hanita\\\\Desktop\\\\5 Minutes to Dinner App\\\\node_modules\\\\.bin\\\\supabase\"; Test-Path \"C:\\\\Users\\\\Hanita\\\\Desktop\\\\5 Minutes to Dinner App\\\\supabase\\\\.temp\\\\project-ref\")",
       "PowerShell(npx vitest run supabase/functions/_shared/imageGen.test.ts 2>&1)",
       "PowerShell(npx supabase functions deploy generate-recipe-image --project-ref chcjytxvpvhzdgvwllss --no-verify-jwt 2>&1)",
-      "PowerShell(npx supabase secrets list --project-ref chcjytxvpvhzdgvwllss 2>&1 | Select-String -Pattern 'CLOUDFLARE|GEMINI|NAME' | ForEach-Object { \\($_ -split '\\\\|'\\)[0].Trim\\(\\) })"
+      "PowerShell(npx supabase secrets list --project-ref chcjytxvpvhzdgvwllss 2>&1 | Select-String -Pattern 'CLOUDFLARE|GEMINI|NAME' | ForEach-Object { \\($_ -split '\\\\|'\\)[0].Trim\\(\\) })",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5173/)",
+      "PowerShell($dir = \"C:\\\\Users\\\\Hanita\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\abdc8ed27b9f98a2\\\\f0fc3983-85b6-4d48-8648-5e247006e3c4\\\\scratchpad\\\\pesto-image\"; New-Item -ItemType Directory -Force $dir | Out-Null; $f = Join-Path $dir \"pesto.jpg\"; Invoke-WebRequest -UseBasicParsing -Uri \"https://chcjytxvpvhzdgvwllss.supabase.co/storage/v1/object/public/recipe-images/mp-e8957033-b769-40c5-9338-75b287e5782f-1792488332808.jpg\" -OutFile $f; Add-Type -AssemblyName System.Drawing; $i = [System.Drawing.Image]::FromFile\\($f\\); \"{0} x {1}, {2} bytes\" -f $i.Width, $i.Height, \\(Get-Item $f\\).Length; $i.Dispose\\(\\); $t = [DateTimeOffset]::FromUnixTimeMilliseconds\\(1792488332808\\).ToString\\('u'\\); \"image filename timestamp: $t\")",
+      "mcp__claude_ai_Supabase__list_migrations",
+      "Bash(node \"C:/Users/Hanita/AppData/Local/Temp/claude/abdc8ed27b9f98a2/9af2b4e6-a7f9-40ce-bd57-150dde3c82f8/scratchpad/eval-matcher.mjs\" --verbose)",
+      "Read(//c/Users/Hanita/.claude/projects/**)",
+      "Bash(node \"C:/Users/Hanita/AppData/Local/Temp/claude/abdc8ed27b9f98a2/f0fc3983-85b6-4d48-8648-5e247006e3c4/scratchpad/scripts/prompt-diff.js\" \"C:/Users/Hanita/.claude/projects/c--Users-Hanita-Desktop-5-Minutes-to-Dinner-App-5-minutes-to-dinner-main-5-minutes-to-dinner-main/f0fc3983-85b6-4d48-8648-5e247006e3c4/tool-results/toolu_01BfexHVMaC37uM2ZrBiYCbw.json\" \"c:/Users/Hanita/Desktop/5 Minutes to Dinner App/supabase/functions/extract-recipe/index.ts\")",
+      "Bash(node \"C:/Users/Hanita/AppData/Local/Temp/claude/abdc8ed27b9f98a2/9af2b4e6-a7f9-40ce-bd57-150dde3c82f8/scratchpad/eval-matcher.mjs\")",
+      "Bash(grep -E '~ ')",
+      "Bash(node \"C:/Users/Hanita/AppData/Local/Temp/claude/abdc8ed27b9f98a2/f0fc3983-85b6-4d48-8648-5e247006e3c4/scratchpad/scripts/deployed2.js\" \"C:/Users/Hanita/.claude/projects/c--Users-Hanita-Desktop-5-Minutes-to-Dinner-App-5-minutes-to-dinner-main-5-minutes-to-dinner-main/f0fc3983-85b6-4d48-8648-5e247006e3c4/tool-results/toolu_01BfexHVMaC37uM2ZrBiYCbw.json\")",
+      "Bash(node -p \"JSON.stringify\\(require\\('./node_modules/@vitejs/plugin-react/package.json'\\).exports\\)\")",
+      "Bash(awk '{print $6, $7}')",
+      "Bash(python \"C:/Users/Hanita/AppData/Local/Temp/claude/abdc8ed27b9f98a2/de244769-8fa8-4f62-8f4a-d53395d49090/scratchpad/toddler/edit.py\")",
+      "Bash(node try.mjs medium 2500 0.3 hard run2.json)",
+      "Bash(mkdir -p deployed)",
+      "Bash(node -e ' *)",
+      "Bash(git log *)",
+      "Bash(node \"C:/Users/Hanita/AppData/Local/Temp/claude/abdc8ed27b9f98a2/63372875-d1d7-4bf5-80bc-5e201edee47a/scratchpad/probe.mjs\" \"https://www.tiktok.com/@jose.elcook/video/7448169436764212510\" \"https://www.instagram.com/p/Cs7MUHIJW7w/\")",
+      "Bash(node \"C:/Users/Hanita/AppData/Local/Temp/claude/abdc8ed27b9f98a2/63372875-d1d7-4bf5-80bc-5e201edee47a/scratchpad/probe2.mjs\")",
+      "Bash(DENO_NO_PACKAGE_JSON=1 npx -y deno@2 check --node-modules-dir=none supabase/functions/extract-recipe/index.ts)",
+      "Read(//c/Users/Hanita/.claude/skills/synced/bf8d5b1a-85a7-41b8-afe2-10aa8f796b22_ea3a193a-12d0-4b52-8ab1-90cbb7dd0c3b/5-minutes-to-dinner/**)",
+      "Bash(DENO_NO_PACKAGE_JSON=1 npx -y deno@2 run --allow-net --allow-env --allow-read --node-modules-dir=none supabase/functions/extract-recipe/index.ts)",
+      "Bash(npx -y supabase@latest functions deploy extract-recipe --no-verify-jwt --project-ref chcjytxvpvhzdgvwllss --use-api)",
+      "Bash(npx -y supabase@latest functions deploy extract-recipe --no-verify-jwt --remote=chcjytxvpvhzdgvwllss --use-api --yes)",
+      "PowerShell(foreach \\($port in 8000,5196\\) { $c = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue; foreach \\($x in $c\\) { $p = Get-CimInstance Win32_Process -Filter \"ProcessId=$\\($x.OwningProcess\\)\"; \"port $port pid $\\($x.OwningProcess\\) started $\\($p.CreationDate\\) :: $\\($p.CommandLine\\)\" } })",
+      "PowerShell(Stop-Process -Id 18348,13076 -Force -Confirm:$false; Start-Sleep -Milliseconds 500; foreach \\($port in 8000,5196\\) { $c = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue; if \\($c\\) { \"port $port STILL busy\" } else { \"port $port free\" } })",
+      "PowerShell(foreach \\($port in 8000,5196\\) { $c = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue; foreach \\($x in $c\\) { $p = Get-CimInstance Win32_Process -Filter \"ProcessId=$\\($x.OwningProcess\\)\"; if \\($p.CommandLine -match 'extract-recipe/index.ts|scratchpad/frozen'\\) { Stop-Process -Id $x.OwningProcess -Force -Confirm:$false; \"stopped my server on port $port\" } else { \"port $port is someone else's, left alone\" } } })",
+      "Bash(node \"C:/Users/Hanita/AppData/Local/Temp/claude/abdc8ed27b9f98a2/63372875-d1d7-4bf5-80bc-5e201edee47a/scratchpad/difflive.mjs\" \"C:/Users/Hanita/.claude/projects/c--Users-Hanita-Desktop-5-Minutes-to-Dinner-App-5-minutes-to-dinner-main-5-minutes-to-dinner-main/63372875-d1d7-4bf5-80bc-5e201edee47a/tool-results/mcp-claude_ai_Supabase-get_edge_function-1793968835027.txt\" \"c:/Users/Hanita/Desktop/5 Minutes to Dinner App\")",
+      "Bash(DENO_NO_PACKAGE_JSON=1 npx -y deno@2 check --node-modules-dir=none supabase/functions/*/index.ts)",
+      "Bash(DENO_NO_PACKAGE_JSON=1 npx -y deno@2 test --node-modules-dir=none --allow-all supabase/functions/_shared/)",
+      "Bash(node __TRACKED_VAR__/drift.mjs __TRACKED_VAR__/live/supabase/functions)",
+      "Bash(npx -y supabase@latest functions deploy complete-recipe translate-recipe ai-config review-recipe generate-recipe batch-cooking toddler-cooking recipe-toddler-task --no-verify-jwt --remote=chcjytxvpvhzdgvwllss --use-api --yes)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\Hanita\\.claude\\skills\\synced\\bf8d5b1a-85a7-41b8-afe2-10aa8f796b22_ea3a193a-12d0-4b52-8ab1-90cbb7dd0c3b\\5-minutes-to-dinner"
     ]
   }
 }
