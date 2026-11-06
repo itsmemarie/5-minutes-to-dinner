@@ -2,18 +2,22 @@ import { useEffect, useRef, useState } from 'react'
 import { createRecipe, uploadRecipePhoto } from '../lib/supabase.js'
 import { ImageCropper } from './ui/ImageCropper.jsx'
 import { isFullFrame } from '../lib/imageMath.js'
-import { extractRecipe, completeRecipe, reviewRecipe, generateRecipe, isAiLimit } from '../lib/ai.js'
+import { extractRecipe, fetchLinkPhoto, completeRecipe, reviewRecipe, generateRecipe, translateRecipe, isAiLimit } from '../lib/ai.js'
 import { base64ToFile, preparePhotoItems, prepareRecipePhoto } from '../lib/imageHelpers.js'
 import {
-  EMPTY_RECIPE, FIELD_LABELS, mergeAiFields, missingFields, recipeForAi, recipeForReview, hasRecipeContent,
+  EMPTY_RECIPE, FIELD_LABELS, applyTranslation, mergeAiFields, missingFields, needsTranslating, recipeForAi, recipeForReview,
+  recipeForTranslation, hasRecipeContent,
 } from '../lib/recipeDraft.js'
+import { languageName } from '../lib/preferences.js'
 import { applySuggestion } from '../lib/reviewSuggestions.js'
+import { linkPhotoCredit, linkPhotoMayReplace, normaliseRecipeLink } from '../lib/recipeLink.js'
 import { C, ep, mn, CARD, R } from '../lib/theme.js'
 import { Btn } from './ui/index.js'
 import { Icon } from './ui/Icon.jsx'
 import { PhotoPicker, photoItem } from './PhotoPicker.jsx'
 import { ReviewPanel } from './recipe/ReviewPanel.jsx'
 import { AI_PHOTO, AiPhotoSheet, PhotoChoiceSheet } from './recipe/PhotoSheets.jsx'
+import { TranslateSheet } from './recipe/TranslateSheet.jsx'
 import { InstallHint } from './InstallHint.jsx'
 
 const MEAL_TYPES = [
@@ -31,6 +35,8 @@ const PROV_TAG = {
   source: { label: 'From source',       fg: C.primary,                    bg: C.primaryFixed },
   ai:     { label: 'Added by AI',       fg: C.onSecondaryContainerStrong, bg: C.secondaryContainer },
   review: { label: 'Changed in review', fg: '#0050A0',                    bg: '#EEF4FF' },
+  // Only for a hand-typed field. One with a tag above keeps it, plus " · translated".
+  translated: { label: 'Translated',    fg: C.primary,                    bg: C.primaryFixed },
 }
 const ORIGIN_BANNER = {
   'page-data': "Read word for word from the page's recipe data. No AI was used. Check it, then save, or use the optional AI help below.",
@@ -42,17 +48,22 @@ const ORIGIN_BANNER = {
 //   1. Extract  — reading a link, photo or pasted text runs straight away: a 1:1
 //                 transcription, nothing added.
 //   2. Complete — optional button: fills only empty fields, each marked "Added by AI".
+//                 It also reports the recipe's language; if that isn't the one
+//                 set in Settings, Translate follows, asking first unless
+//                 Settings says otherwise.
 //   3. Review   — optional button: an expert's separate suggestions, each applied
 //                 or skipped by the user.
 // Manual entry is always available and never needs AI.
 //
-// aiContext: { equipment, region, units, measurements, children } — the
-//   household details steps 2 and 3 take into account.
+// aiContext: { equipment, region, units, measurements, children, language,
+//   translate } — the household details steps 2 and 3 take into account, and
+//   the Settings choices for translating (language: target code; translate:
+//   'ask' | 'always' | 'never').
 // initialSource: { url?, text?, files? } — content shared into the app.
 export function NewRecipeForm({ defaultMealType, onSave, onCancel, aiContext, initialSource }) {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
-  const [f, setF] = useState(() => ({ ...EMPTY_RECIPE, meal_type_id: defaultMealType || 'main' }))
+  const [f, setF] = useState(() => ({ ...EMPTY_RECIPE, meal_type_id: defaultMealType || 'main', source_url: initialSource?.url || '' }))
   const [prov, setProv] = useState({})          // field → 'source' | 'ai' | 'review'
   const [touched, setTouched] = useState({})    // fields the user has typed in
   const [origin, setOrigin] = useState(null)    // 'page-data' | 'ai' | 'generated'
@@ -69,6 +80,8 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel, aiContext, in
   const [photoChoice, setPhotoChoice] = useState(false)    // upload-or-AI sheet
   const [aiPhotoOpen, setAiPhotoOpen] = useState(false)
   const [sourceNote, setSourceNote] = useState(null)       // a link gave a photo but no recipe
+  const [linkPhotoState, setLinkPhotoState] = useState(null)   // 'busy' | 'none', for a link added by hand
+  const linkPhoto = useRef({ url: null, pending: null })       // the link last asked for, and its request while it runs
   const [dishUrl, setDishUrl] = useState(null)    // preview of the cropped result
   useEffect(() => {
     if (!dish) { setDishUrl(null); return undefined }
@@ -83,11 +96,14 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel, aiContext, in
   const [aiError, setAiError] = useState(null)  // { where: 'source'|'tools', message, limit }
   const [completed, setCompleted] = useState(null)  // fields step 2 added
   const [review, setReview] = useState(null)        // { suggestions: [{…, status}], warnings }
+  const [foreign, setForeign] = useState(null)      // name of the language still on offer to translate from
+  const [askTranslate, setAskTranslate] = useState(false)
+  const [translated, setTranslated] = useState(null)  // { from, keys, left }: left = fields not translated
 
   // AI calls take seconds and the user can keep typing: results merge into
   // the latest draft, not the one the call started from.
-  const latest = useRef({ f, prov, touched })
-  latest.current = { f, prov, touched }
+  const latest = useRef({ f, prov, touched, dish })
+  latest.current = { f, prov, touched, dish }
 
   const set = (k, v) => { setF(p => ({ ...p, [k]: v })); setTouched(t => (t[k] ? t : { ...t, [k]: true })) }
   const toggleDay = d => set('weekdays', f.weekdays.includes(d) ? f.weekdays.filter(x => x !== d) : [...f.weekdays, d])
@@ -108,27 +124,61 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel, aiContext, in
     setOrigin(originKind)
     setCompleted(null)
     setReview(null)
+    setForeign(null)
+    setAskTranslate(false)
+    setTranslated(null)
     setAiMode(false)
   }
 
   // A link brings the page's own photo along. It takes the photo slot unless
-  // the user has already put a picture of their own there.
+  // the user has already put a picture of their own there. Resolves to the new dish.
   const adoptPageImage = img => {
-    if (!img?.base64) return
-    const file = base64ToFile(img.base64, img.mediaType)
-    const credit = img.from ? `Photo from ${img.from}` : null
-    setDish(d => (d && d.source !== 'import' ? d : { file, crop: null, source: 'import', credit }))
+    const current = latest.current.dish
+    if (!img?.base64 || (current && !linkPhotoMayReplace(current.source))) return null
+    const next = { file: base64ToFile(img.base64, img.mediaType), crop: null, source: 'import', credit: linkPhotoCredit(img) }
+    setDish(next)
+    return next
+  }
+
+  // The same for a link typed or pasted into the form, which isn't read as a
+  // recipe. Each link is asked for once, so removing its photo is final.
+  const takeLinkPhoto = () => {
+    const link = normaliseRecipeLink(latest.current.f.source_url)
+    const asked = linkPhoto.current
+    const current = latest.current.dish
+    if (!link || link === asked.url || (current && !linkPhotoMayReplace(current.source))) return
+    asked.url = link
+    setLinkPhotoState('busy')
+    const run = fetchLinkPhoto(link)
+      .then(({ image }) => {
+        if (asked.url !== link) return null
+        setLinkPhotoState(image ? null : 'none')
+        return adoptPageImage(image)
+      })
+      .catch(() => {
+        if (asked.url === link) setLinkPhotoState('none')
+        return null
+      })
+      .finally(() => { if (asked.pending === run) asked.pending = null })
+    asked.pending = run
   }
 
   const runExtract = async kind => {
-    setBusy(kind); setAiError(null); setSourceNote(null)
+    setBusy(kind); setAiError(null); setSourceNote(null); setLinkPhotoState(null)
+    if (kind === 'url') linkPhoto.current.url = normaliseRecipeLink(url)   // the read brings the photo
+    // Kept before the read: a failed read or a photo-only page is exactly when
+    // the user will want the original to hand. A link they typed themselves stays.
+    if (kind === 'url' && !latest.current.touched.source_url) {
+      setF(p => ({ ...p, source_url: url.trim() }))
+      tagFields(['source_url'], 'source')
+    }
     try {
       const payload = kind === 'url' ? { url: url.trim() }
         : kind === 'text' ? { text: pasted.trim() }
         : { images: await preparePhotoItems(photos, { grayscale }) }
       const data = await extractRecipe(payload)
       adoptPageImage(data.image)
-      // Instagram and similar pages show apps the picture but not the caption.
+      // A TikTok or Instagram post whose recipe is only in the video, say.
       if (data.origin === 'image-only') {
         setSourceNote(`Got the photo from ${data.image?.from || 'that page'}, but the page doesn't share the recipe itself. Copy the caption or recipe text and paste it below.`)
         return
@@ -174,12 +224,42 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel, aiContext, in
     if (!missing.length) { setCompleted([]); return }
     setBusy('complete'); setAiError(null)
     try {
-      const { fields: added } = await completeRecipe({ recipe: recipeForAi(cur, p, t), missing, context: aiContext })
+      const { fields: added, language } = await completeRecipe({ recipe: recipeForAi(cur, p, t), missing, context: aiContext })
       const now = latest.current
       const { fields, changed } = mergeAiFields(now.f, added, { onlyEmpty: true, prov: now.prov, touched: now.touched })
       setF(fields)
       tagFields(changed, 'ai')
       setCompleted(changed)
+      await offerTranslation(language)
+    } catch (e) {
+      fail('tools', e)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  // ── Translate ──────────────────────────────────────────────────
+  // Decided once per draft. After that the AI help card keeps a Translate
+  // button, so keeping the original or a failed translation isn't final.
+  const offerTranslation = async code => {
+    if (foreign || translated || aiContext?.translate === 'never' || !needsTranslating(code, aiContext?.language)) return
+    const from = languageName(code)
+    setForeign(from)
+    if (aiContext.translate === 'always') await runTranslate(from)
+    else setAskTranslate(true)
+  }
+
+  const runTranslate = async from => {
+    setAskTranslate(false); setBusy('translate'); setAiError(null)
+    try {
+      const sent = recipeForTranslation(latest.current.f)
+      const { fields: out, skipped } = await translateRecipe({ recipe: sent, context: aiContext })
+      const { fields, changed, kept } = applyTranslation(latest.current.f, sent, out)
+      const left = [...skipped, ...kept]
+      setF(fields)
+      setReview(null)   // its suggestions quote the old wording
+      setForeign(left.length ? from : null)
+      setTranslated(t => ({ from, keys: [...new Set([...(t?.keys || []), ...changed])], left }))
     } catch (e) {
       fail('tools', e)
     } finally {
@@ -242,16 +322,21 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel, aiContext, in
         husband_variations: f.husband_variations || null,
         toddler_variations: f.toddler_variations || null,
         side_recommendation: f.side_recommendation || null,
+        source_url: normaliseRecipeLink(f.source_url),
         diet: f.diet,
       }
       const newId = savedId.current || await createRecipe(dbFields)
       savedId.current = newId
+      // Save can follow straight after pasting a link, and tapping a button doesn't
+      // blur the field on an iPhone, so a link's photo is picked up here as well.
+      takeLinkPhoto()
+      const photo = (await linkPhoto.current.pending) || latest.current.dish
       // The photo needs the recipe's id, so it goes up after the row exists. If it
       // fails, the recipe is kept and the form stays open for a retry or a skip.
       let image = {}
-      if (dish) {
+      if (photo) {
         try {
-          image = await uploadRecipePhoto(newId, await prepareRecipePhoto(dish.file, { crop: dish.crop }), { source: dish.source, credit: dish.credit })
+          image = await uploadRecipePhoto(newId, await prepareRecipePhoto(photo.file, { crop: photo.crop }), { source: photo.source, credit: photo.credit })
         } catch (e) {
           setSaveError(`${e.message} The recipe itself is saved. Try the photo again, or remove it and save.`)
           return
@@ -293,16 +378,20 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel, aiContext, in
     ...(prov[key] === 'ai' ? { borderColor: C.accent2_300 } : prov[key] === 'review' ? { borderColor: '#90C0F5' } : {}),
     ...extra,
   })
-  const label = (text, key) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
-      <span style={{ ...mn, fontSize: 11, fontWeight: 700, color: C.onSurfaceVariant, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{text}</span>
-      {key && prov[key] && (
-        <span style={{ ...mn, fontSize: 10, fontWeight: 700, color: PROV_TAG[prov[key]].fg, background: PROV_TAG[prov[key]].bg, borderRadius: R.pill, padding: '1px 7px' }}>
-          {PROV_TAG[prov[key]].label}{touched[key] ? ' · edited' : ''}
-        </span>
-      )}
-    </div>
-  )
+  const label = (text, key) => {
+    const isTranslated = !!translated?.keys.includes(key)
+    const tag = PROV_TAG[prov[key]] || (isTranslated && PROV_TAG.translated)
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+        <span style={{ ...mn, fontSize: 11, fontWeight: 700, color: C.onSurfaceVariant, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{text}</span>
+        {key && tag && (
+          <span style={{ ...mn, fontSize: 10, fontWeight: 700, color: tag.fg, background: tag.bg, borderRadius: R.pill, padding: '1px 7px' }}>
+            {tag.label}{prov[key] && isTranslated ? ' · translated' : ''}{touched[key] ? ' · edited' : ''}
+          </span>
+        )}
+      </div>
+    )
+  }
   const row = (text, content, key) => (
     <div style={{ marginBottom: 14 }}>
       {label(text, key)}
@@ -333,13 +422,19 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel, aiContext, in
   const anyBusy = !!busy || saving
   const busyText = { url: 'Reading the page…', text: 'Reading the recipe…', photos: 'Reading your photos…', generate: 'Creating a recipe…' }[busy]
   const showTools = !aiMode && (hasRecipeContent(f) || f.name.trim())
+  const toLanguage = languageName(aiContext?.language)
+  // "Exactly as written" stops being true once a recipe has been translated.
+  const banner = translated
+    ? `Translated from ${translated.from} by AI. Check the amounts against the source.${translated.left.length ? ` Still in ${translated.from}: ${translated.left.map(k => FIELD_LABELS[k]).join(', ')}.` : ''}`
+    : ORIGIN_BANNER[origin]
+  const linkInvalid = !!f.source_url.trim() && !normaliseRecipeLink(f.source_url)
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 100, background: C.white, overflowY: 'auto', maxWidth: 430, margin: '0 auto' }}>
       <div style={{ background: C.white, borderBottom: `1px solid ${C.outlineVariant}25`, padding: '11px 20px', display: 'flex', alignItems: 'center', gap: 10, position: 'sticky', top: 0, zIndex: 10 }}>
         <button onClick={onCancel} aria-label='Close' style={{ border: 'none', background: 'none', color: C.primary, cursor: 'pointer', padding: '2px 8px 2px 0' }}><Icon name='x' size={20} color={C.primary}/></button>
         <span style={{ ...ep, fontSize: 16, color: C.onSurface, flex: 1 }}>New recipe</span>
-        <Btn label={saving ? 'Saving…' : 'Save'} small onClick={handleSave} disabled={saving || !f.name.trim()}/>
+        <Btn label={saving ? 'Saving…' : 'Save'} small onClick={handleSave} disabled={saving || !f.name.trim() || linkInvalid}/>
       </div>
 
       <div style={{ padding: '20px 20px 120px' }}>
@@ -393,9 +488,9 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel, aiContext, in
           </div>
         )}
 
-        {!aiMode && origin && (
+        {!aiMode && banner && (
           <div style={{ ...mn, fontSize: 12, lineHeight: 1.5, color: C.onSurface, background: origin === 'generated' ? C.secondaryContainer : C.primaryFixed, borderRadius: R.md, padding: '10px 12px', marginBottom: 14 }}>
-            {ORIGIN_BANNER[origin]}
+            {banner}
           </div>
         )}
 
@@ -408,7 +503,7 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel, aiContext, in
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               <button onClick={runComplete} disabled={anyBusy || !f.ingredients.trim()} style={toolBtn(anyBusy || !f.ingredients.trim())}>
                 <Icon name='wand' size={16} color={C.primary}/>
-                <span style={{ ...mn, fontSize: 13, fontWeight: 700, color: C.onSurface }}>{busy === 'complete' ? 'Filling in…' : 'Fill in the gaps'}</span>
+                <span style={{ ...mn, fontSize: 13, fontWeight: 700, color: C.onSurface }}>{busy === 'complete' ? 'Filling in…' : busy === 'translate' ? 'Translating…' : 'Fill in the gaps'}</span>
                 <span style={{ ...mn, fontSize: 11, color: C.onSurfaceVariant, lineHeight: 1.4 }}>Adds missing details. Each is marked “Added by AI”.</span>
               </button>
               <button onClick={runReview} disabled={anyBusy || !hasRecipeContent(f)} style={toolBtn(anyBusy || !hasRecipeContent(f))}>
@@ -423,6 +518,12 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel, aiContext, in
                 {completed.length
                   ? <>Added {completed.length} field{completed.length === 1 ? '' : 's'}: {completed.map(k => FIELD_LABELS[k]).join(', ')}. Look for “Added by AI” below.</>
                   : 'Nothing to fill in. Every field already has a value.'}
+              </div>
+            )}
+            {foreign && !askTranslate && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 10 }}>
+                <span style={{ ...mn, fontSize: 12, color: C.onSurface, lineHeight: 1.5 }}>{translated ? `Some of this recipe is still in ${foreign}.` : `This recipe is in ${foreign}.`}</span>
+                <Btn label={`Translate to ${toLanguage}`} small onClick={() => runTranslate(foreign)} disabled={anyBusy}/>
               </div>
             )}
             {review && <ReviewPanel review={review} onDecide={decide} onClose={() => setReview(null)}/>}
@@ -486,8 +587,18 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel, aiContext, in
             onUse={file => { setAiPhotoOpen(false); setDish({ file, crop: null, ...AI_PHOTO }) }}/>
         )}
 
+        {askTranslate && <TranslateSheet from={foreign} to={toLanguage} onTranslate={() => runTranslate(foreign)} onKeep={() => setAskTranslate(false)}/>}
+
         {row('Recipe Name *',
           <input value={f.name} onChange={e => set('name', e.target.value)} placeholder='e.g. Chicken Stir-Fry' style={inp({ border: `1.5px solid ${f.name.trim() ? C.primary : C.outlineVariant}` }, 'name')}/>, 'name'
+        )}
+
+        {row('Original recipe link',
+          <>
+            <input value={f.source_url} onChange={e => { set('source_url', e.target.value); setLinkPhotoState(s => (s === 'none' ? null : s)) }} onBlur={takeLinkPhoto} placeholder='https://...' inputMode='url' style={inp(linkInvalid ? { borderColor: C.error } : undefined, 'source_url')}/>
+            {linkInvalid && <div role='alert' style={{ ...mn, fontSize: 12, color: C.error, marginTop: 6, lineHeight: 1.5 }}>That doesn't look like a web link. Check it, or clear it to save without one.</div>}
+            {linkPhotoState && !linkInvalid && <div role='status' style={{ ...mn, fontSize: 11, color: C.onSurfaceVariant, marginTop: 6 }}>{linkPhotoState === 'busy' ? 'Getting the photo from this link…' : "Couldn't get a photo from this link."}</div>}
+          </>, 'source_url'
         )}
 
         {row('Category',

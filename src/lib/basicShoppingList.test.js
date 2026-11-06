@@ -1,5 +1,37 @@
 import { describe, expect, it } from 'vitest'
-import { buildBasicShoppingList, guessAisle } from './basicShoppingList.js'
+import { buildBasicShoppingList, guessAisle, recipeShoppingLines } from './basicShoppingList.js'
+
+const lines = (text, scale = 1) => recipeShoppingLines({ ingredients: text }, scale)
+
+describe('recipeShoppingLines', () => {
+  it('reads the name-first format most saved recipes use', () => {
+    expect(lines('- Cherry tomatoes: 200g (halved)', 2)).toEqual([{ name: 'Cherry tomatoes', qty: '400g' }])
+    expect(lines('- Beef mince (20% fat — important for juicy burgers): 500g')).toEqual([{ name: 'Beef mince', qty: '500g' }])
+    expect(lines('- Iceberg lettuce: 3 large leaves', 2)).toEqual([{ name: 'Iceberg lettuce', qty: '6 large leaves' }])
+  })
+  it('keeps an amount it cannot scale as written', () => {
+    expect(lines('- Olive oil: a drizzle', 2)).toEqual([{ name: 'Olive oil', qty: 'a drizzle' }])
+  })
+  it('keeps only the line\'s own amount when it offers an alternative', () => {
+    expect(lines('- Baby spinach: 80 g / broccoli tiny florets: 60g', 0.5)).toEqual([{ name: 'Baby spinach', qty: '40 g' }])
+  })
+  it('skips lines that only point at other lines', () => {
+    expect(lines('- Honey-Dijon dressing: (see Dressing below)')).toEqual([])
+  })
+  it('reads ranges and the egg forms', () => {
+    expect(lines('- 40–60g Emmental, Gouda, or cheddar, grated (optional)', 2)).toEqual([{ name: 'Emmental', qty: '80–120g' }])
+    expect(lines('- 4 eggs, beaten')).toEqual([{ name: 'egg', qty: '4' }])
+    expect(lines('- 1 egg yolk')).toEqual([{ name: 'egg yolk', qty: '1' }])
+  })
+  it('drops the "of" after a unit', () => {
+    expect(lines('- 1 tin of chopped tomatoes')).toEqual([{ name: 'chopped tomatoes', qty: '1 tin' }])
+  })
+  it('leaves out basics however they are worded, but not the vegetable', () => {
+    const basics = ['Salt: 1 pinch', 'Black pepper: 1 pinch', 'Boiling water: 240g', '1 pinch fine sea salt', 'Flaky sea salt and cracked black pepper', 'Salt and white pepper', 'Black pepper to taste']
+    expect(lines(basics.map(b => `- ${b}`).join('\n'))).toEqual([])
+    expect(lines('- 1 pepper\n- Pepper')).toEqual([{ name: 'pepper', qty: '1' }])
+  })
+})
 
 describe('buildBasicShoppingList', () => {
   const recipes = [

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { normalisePreferences, migrateLegacyToddlerDob, activeToddlerDob, normaliseChildren } from './preferences.js'
+import { normalisePreferences, migrateLegacyToddlerDob, activeToddlerDob, normaliseChildren, languageName } from './preferences.js'
 import { normaliseMealSections, enabledSectionIds, dayMeals, emptyDay, ALL_SECTION_IDS, sectionInfo } from './mealSections.js'
-import { weekBounds, ageInMonths, formatAge, emptyWeek } from './dateHelpers.js'
+import { weekBounds, addWeeks, dayDateLabel, weekStripItems, ageInMonths, formatAge, emptyWeek } from './dateHelpers.js'
 
 describe('normaliseMealSections', () => {
   it('returns the shipped defaults for nothing saved', () => {
@@ -56,6 +56,17 @@ describe('normalisePreferences', () => {
     const p = normalisePreferences({ weekStartsOn: 'someday', country: 'XX', recipeUnits: 'stone', measurements: 'handfuls' })
     expect(p).toMatchObject({ weekStartsOn: 'mon', country: 'GB', recipeUnits: 'metric', measurements: 'weight' })
   })
+  it('defaults recipes to English, asking before translating', () => {
+    expect(normalisePreferences()).toMatchObject({ recipeLanguage: 'en', recipeTranslate: 'ask' })
+  })
+  it('keeps a valid recipe language and translate mode, and rejects bad ones', () => {
+    expect(normalisePreferences({ recipeLanguage: 'de', recipeTranslate: 'never' })).toMatchObject({ recipeLanguage: 'de', recipeTranslate: 'never' })
+    expect(normalisePreferences({ recipeLanguage: 'klingon', recipeTranslate: 'sometimes' })).toMatchObject({ recipeLanguage: 'en', recipeTranslate: 'ask' })
+  })
+  it('names a language from its code, and falls back to the code', () => {
+    expect(languageName('de')).toBe('German')
+    expect(languageName('not a code')).toBe('not a code')
+  })
   it('repairs a selected child id that no longer exists', () => {
     const p = normalisePreferences({ children: [{ id: 'a', name: 'Mabel', dob: '2024-09-27' }], selectedChildId: 'gone' })
     expect(p.selectedChildId).toBe('a')
@@ -103,6 +114,82 @@ describe('weekBounds', () => {
     expect(weekBounds('wed', wed).weekOf).toBe('2026-09-09')
     expect(weekBounds('thu', wed).weekOf).toBe('2026-09-03')
     expect(weekBounds('sat', wed).days[0]).toBe('saturday')
+  })
+  it('gives a compact label, spelling out both months only when it has to', () => {
+    expect(weekBounds('mon', new Date(2026, 10, 4)).shortLabel).toBe('2–8 Nov')
+    expect(weekBounds('mon', new Date(2026, 9, 28)).shortLabel).toBe('26 Oct – 1 Nov')
+  })
+})
+
+describe('addWeeks', () => {
+  it('moves forward and back by whole weeks', () => {
+    const wed = new Date(2026, 8, 9, 12)
+    expect(addWeeks(wed, 1).getDate()).toBe(16)
+    expect(addWeeks(wed, -2).getDate()).toBe(26)
+    expect(addWeeks(wed, -2).getMonth()).toBe(7)
+  })
+  it('does not change the date it was given', () => {
+    const wed = new Date(2026, 8, 9, 12)
+    addWeeks(wed, 3)
+    expect(wed.getDate()).toBe(9)
+  })
+  it('lands on the same weekday across a clock change', () => {
+    // UK clocks go back on 25 Oct 2026 and forward on 28 Mar 2027.
+    const monday = new Date(2026, 9, 19)
+    expect(weekBounds('mon', addWeeks(monday, 1)).weekOf).toBe('2026-10-26')
+    expect(weekBounds('mon', addWeeks(new Date(2027, 2, 22), 1)).weekOf).toBe('2027-03-29')
+  })
+})
+
+describe('dayDateLabel', () => {
+  it('finds the date of a day within the week', () => {
+    const week = weekBounds('mon', new Date(2026, 9, 21))
+    expect(dayDateLabel(week, 'monday')).toBe('19 Oct')
+    expect(dayDateLabel(week, 'sunday')).toBe('25 Oct')
+  })
+  it('follows the week start', () => {
+    expect(dayDateLabel(weekBounds('sun', new Date(2026, 9, 21)), 'sunday')).toBe('18 Oct')
+  })
+})
+
+describe('weekStripItems', () => {
+  const now = new Date(2026, 10, 4, 12) // Wednesday 4 Nov 2026
+  const counts = { '2026-10-12': 9, '2026-10-19': 0, '2026-11-02': 2 }
+
+  it('runs from the earliest week with meals to the weeks ahead', () => {
+    const items = weekStripItems('mon', counts, { ahead: 2, now })
+    expect(items.map(i => i.weekOf)).toEqual(['2026-10-12', '2026-10-19', '2026-10-26', '2026-11-02', '2026-11-09', '2026-11-16'])
+    expect(items.map(i => i.offset)).toEqual([-3, -2, -1, 0, 1, 2])
+  })
+  it('includes weeks that were never opened', () => {
+    expect(weekStripItems('mon', { '2026-10-12': 1 }, { ahead: 0, now }).map(i => i.weekOf)).toContain('2026-10-26')
+  })
+  it('marks this week and which weeks have meals', () => {
+    const items = weekStripItems('mon', counts, { ahead: 0, now })
+    expect(items.filter(i => i.isThisWeek).map(i => i.weekOf)).toEqual(['2026-11-02'])
+    expect(items.filter(i => i.hasMeals).map(i => i.weekOf)).toEqual(['2026-10-12', '2026-11-02'])
+  })
+  it('ignores empty stored weeks when finding where to start', () => {
+    expect(weekStripItems('mon', { '2026-05-04': 0, '2026-10-26': 3 }, { ahead: 0, now })[0].weekOf).toBe('2026-10-26')
+  })
+  it('starts at this week when nothing is planned', () => {
+    expect(weekStripItems('mon', {}, { ahead: 1, now }).map(i => i.offset)).toEqual([0, 1])
+  })
+  it('stops at this week for a future-only plan rather than going past it', () => {
+    expect(weekStripItems('mon', { '2026-12-07': 4 }, { ahead: 1, now })[0].offset).toBe(0)
+  })
+  it('follows a non-Monday week start', () => {
+    const items = weekStripItems('sun', { '2026-10-25': 1 }, { ahead: 0, now })
+    expect(items.map(i => i.weekOf)).toEqual(['2026-10-25', '2026-11-01'])
+  })
+  it('crosses a clock change without repeating or skipping a week', () => {
+    const items = weekStripItems('mon', { '2026-10-19': 1 }, { ahead: 0, now })
+    expect(items.map(i => i.weekOf)).toEqual(['2026-10-19', '2026-10-26', '2026-11-02'])
+  })
+  it('reaches a stored week that does not line up with the week start', () => {
+    // A Monday-keyed plan viewed with a Sunday start: the walk must still stop.
+    const items = weekStripItems('sun', { '2026-10-19': 1 }, { ahead: 0, now })
+    expect(items[0].weekOf).toBe('2026-10-18')
   })
 })
 

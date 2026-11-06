@@ -13,6 +13,8 @@ export const DEFAULT_PREFERENCES = {
   country: 'GB',                // ISO-3166 alpha-2, see COUNTRIES
   recipeUnits: 'metric',        // 'metric' | 'imperial'
   measurements: 'weight',       // 'weight' (grams & ml) | 'cups'
+  recipeLanguage: 'en',         // ISO 639-1, see RECIPE_LANGUAGES
+  recipeTranslate: 'ask',       // 'ask' | 'always' | 'never'
   toddlerModeEnabled: false,    // master switch for every piece of toddler content
   children: [],                 // [{ id, name, dob }]
   selectedChildId: null,        // the child activities and safety notes follow
@@ -44,6 +46,29 @@ export const countryName = code => COUNTRIES.find(c => c.code === code)?.name ||
 
 export const RECIPE_UNIT_OPTIONS  = [{ value:'metric', label:'METRIC' }, { value:'imperial', label:'IMPERIAL' }]
 export const MEASUREMENT_OPTIONS  = [{ value:'weight', label:'GRAMS & ML' }, { value:'cups', label:'CUPS' }]
+
+// The languages recipes can be translated into. Left-to-right only: the app has
+// no right-to-left layout. A recipe can still be translated from any language.
+export const RECIPE_LANGUAGES = [
+  { code:'en', name:'English' },
+  { code:'fr', name:'French' },
+  { code:'de', name:'German' },
+  { code:'it', name:'Italian' },
+  { code:'es', name:'Spanish' },
+  { code:'pt', name:'Portuguese' },
+  { code:'nl', name:'Dutch' },
+  { code:'pl', name:'Polish' },
+  { code:'sv', name:'Swedish' },
+  { code:'da', name:'Danish' },
+  { code:'no', name:'Norwegian' },
+]
+export const RECIPE_TRANSLATE_OPTIONS = [{ value:'ask', label:'ASK' }, { value:'always', label:'ALWAYS' }, { value:'never', label:'NEVER' }]
+
+// Any language the AI reports, not only the list above. Falls back to the code
+// on a browser that can't name it.
+export function languageName(code) {
+  try { return new Intl.DisplayNames(['en'], { type:'language' }).of(code) || code } catch { return code }
+}
 
 // What the household cooks with. The expert recipe review warns when a recipe
 // needs something missing from here, and the batch planner only plans with it.
@@ -96,6 +121,8 @@ export function normalisePreferences(raw = {}) {
     country: COUNTRIES.some(c => c.code === r.country) ? r.country : DEFAULT_PREFERENCES.country,
     recipeUnits: oneOf(r.recipeUnits, ['metric','imperial'], DEFAULT_PREFERENCES.recipeUnits),
     measurements: oneOf(r.measurements, ['weight','cups'], DEFAULT_PREFERENCES.measurements),
+    recipeLanguage: oneOf(r.recipeLanguage, RECIPE_LANGUAGES.map(l => l.code), DEFAULT_PREFERENCES.recipeLanguage),
+    recipeTranslate: oneOf(r.recipeTranslate, RECIPE_TRANSLATE_OPTIONS.map(o => o.value), DEFAULT_PREFERENCES.recipeTranslate),
     toddlerModeEnabled: !!(r.toddlerModeEnabled ?? DEFAULT_PREFERENCES.toddlerModeEnabled),
     children,
     selectedChildId,

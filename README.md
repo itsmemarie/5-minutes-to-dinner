@@ -14,7 +14,7 @@ A meal-planning PWA: plan the week, generate a shopping list, batch-cook, and im
 - A user's Google key stays in their browser. It's sent with each request and never stored on the server.
 - Recipes are imported in three steps:
   1. **Extract**: a 1:1 transcription. For links, the page's own recipe data is read first, with no AI at all.
-  2. **Fill in the gaps**: an optional button. Every added field is marked "Added by AI".
+  2. **Fill in the gaps**: an optional button. Every added field is marked "Added by AI". It also reports the recipe's language: if that isn't the one in **Settings › Recipe language**, the app offers to translate the recipe, fill-ins included. **Settings › Translate recipes** sets whether it asks, always translates or never does. Translation is its own step (`translate-recipe`), and a field that loses a line or an amount stays untranslated and is named on the form.
   3. **Expert review**: an optional button. Each suggestion is applied or skipped on its own, and warnings take account of the household's kitchen equipment and children.
 - To keep costs down, photos are cropped, resized to 1024px, made grayscale and saved as JPEG at quality 70 on the device before upload. Prompts are kept small.
 
@@ -43,7 +43,7 @@ Do these in order: database → secrets → functions → auth settings → fron
 3. **Edge Functions.** These check the caller themselves, so they're deployed without gateway JWT checks, as before:
    ```bash
    npx supabase functions deploy --project-ref chcjytxvpvhzdgvwllss --no-verify-jwt \
-     ai-config extract-recipe complete-recipe review-recipe generate-recipe extract-freezer-items \
+     ai-config extract-recipe complete-recipe translate-recipe review-recipe generate-recipe extract-freezer-items \
      shopping-list nutrition batch-cooking buyers-eye toddler-cooking recipe-toddler-task \
      generate-recipe-image
    ```

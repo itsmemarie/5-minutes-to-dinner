@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { aiHandler, aiResponse, runAiStep } from '../_shared/router.ts'
+import { TODDLER_JOB_RULES, TODDLER_TOOL_RULE } from '../_shared/toddlerHelpers.ts'
 
 // Before kitchen equipment was a setting, every plan assumed this kitchen.
 const DEFAULT_EQUIPMENT = ['Thermomix TM6', 'Oven', 'Hob']
@@ -44,10 +45,11 @@ Food safety (non-negotiable):
 Appliance tags: TM6, HOB, OVEN, KNIFE, NO_COOK, DONE
 
 Toddler helpers (non-negotiable):
-- After the sessions, also return one top-level "toddlerActivities" array of 3-6 items: safe, concrete jobs a toddler can do DURING these batch sessions, each referencing actual prep that appears in the steps above (e.g. "wash the potatoes you diced in the Monday session", "tear the basil for the sauce", "stir the cold marinade", "spoon the cooled stew into storage tubs", "press the labels onto the containers").
-- Age-appropriate for the toddler age band given in the user message — simpler and more supervised for younger bands, more independent for older bands.
-- Never involve hot surfaces, the hob, ovens, boiling liquids, raw meat, raw fish, or adult knives.
-- "title" is a short 2-4 word label; "task" is one concrete sentence. If an activity needs a tool, set "needsTool" to ONLY one of: "Kids' safety knife (nylon, crinkle edge)", "Learning tower or sturdy step stool", "Suction-base mixing bowl", "Kid-size whisk & spatula", "Y-peeler with safety guard". Otherwise null. Pick a fitting emoji for "icon".
+After the sessions, also return one top-level "toddlerActivities" array of 3-6 items: jobs a toddler does DURING these batch sessions, each one a step in the plan above and matched to the toddler age band given in the user message (e.g. "tip the washed potatoes into the pot before it goes on", "tear the basil for the sauce", "stir the cold marinade", "spoon the cooled stew into storage tubs", "press the labels onto the containers").
+
+${TODDLER_JOB_RULES}
+
+"title" is a short 2-4 word label; "task" is one concrete sentence. ${TODDLER_TOOL_RULE} Pick a fitting emoji for "icon".
 
 Return ONLY a raw JSON object — no markdown, no backticks, no preamble. Must be parseable by JSON.parse().`
 

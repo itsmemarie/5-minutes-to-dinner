@@ -30,13 +30,52 @@ export function getWeekStart(startsOn = 'mon', d = new Date()) {
   return x
 }
 const fmtShort = d => d.toLocaleDateString('en-GB', { day:'numeric', month:'short' })
+const fmtMonth = d => d.toLocaleDateString('en-GB', { month:'short' })
 
 export function weekBounds(startsOn = 'mon', now = new Date()) {
   const start = getWeekStart(startsOn, now)
   const end = new Date(start); end.setDate(end.getDate() + 6)
   const first = weekStartIndex(startsOn)
   const days = Array.from({ length: 7 }, (_, i) => WD[(first + i) % 7])
-  return { start, end, weekOf: toISO(start), label: `${fmtShort(start)} – ${fmtShort(end)}`, days }
+  // "2–8 Nov", or "26 Oct – 1 Nov" when the week crosses a month.
+  const shortLabel = start.getMonth() === end.getMonth()
+    ? `${start.getDate()}–${end.getDate()} ${fmtMonth(end)}`
+    : `${fmtShort(start)} – ${fmtShort(end)}`
+  return { start, end, weekOf: toISO(start), label: `${fmtShort(start)} – ${fmtShort(end)}`, shortLabel, days }
+}
+
+// `n` calendar weeks after `d` (negative for before). Goes through setDate so a
+// clock change can't push the result onto the neighbouring day.
+export function addWeeks(d, n) {
+  const x = new Date(d)
+  x.setDate(x.getDate() + n * 7)
+  return x
+}
+
+// The date of one day in a week, e.g. "20 Oct". `week` comes from weekBounds.
+export function dayDateLabel(week, day) {
+  const d = new Date(week.start)
+  d.setDate(d.getDate() + week.days.indexOf(day))
+  return fmtShort(d)
+}
+
+// The Planner's week strip, oldest first: from the earliest week with meals
+// (this week if there are none) to `ahead` weeks after this one. It's built
+// from the calendar rather than from stored plans, so weeks that were never
+// opened still appear and can be planned. `mealCounts` is { 'YYYY-MM-DD': n },
+// keyed by the week's start date. `offset` is whole weeks from this week.
+export function weekStripItems(startsOn = 'mon', mealCounts = {}, { ahead = 8, now = new Date() } = {}) {
+  const thisWeekOf = weekBounds(startsOn, now).weekOf
+  const earliest = Object.keys(mealCounts).filter(w => mealCounts[w] > 0).sort()[0]
+  let back = 0
+  // ISO dates sort as text, so this walks back until it reaches that week.
+  while (earliest && earliest < weekBounds(startsOn, addWeeks(now, -back)).weekOf) back++
+  const items = []
+  for (let offset = 0 - back; offset <= ahead; offset++) { // 0 - back, as -0 isn't 0 to React
+    const { weekOf, shortLabel, label } = weekBounds(startsOn, addWeeks(now, offset))
+    items.push({ offset, weekOf, shortLabel, label, isThisWeek: weekOf === thisWeekOf, hasMeals: (mealCounts[weekOf] ?? 0) > 0 })
+  }
+  return items
 }
 
 // Backwards-compatible Monday-start defaults.

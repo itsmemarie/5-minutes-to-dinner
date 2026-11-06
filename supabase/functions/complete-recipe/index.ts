@@ -2,11 +2,11 @@
 // Fills only the fields the client lists as empty; the response holds exactly
 // those keys, so the form can mark each one "Added by AI".
 // Input: { recipe: {field: value}, missing: [field], context: HouseholdContext }
-// Output: { fields: { field: value } }
+// Output: { fields: { field: value }, language: ISO 639 code | null }
 import { aiHandler, aiResponse, badInput, runAiStep } from '../_shared/router.ts'
 import {
   CHEF_PERSONA, COMPLETABLE, type HouseholdContext, THERMOMIX_RULES, completableRequest, completionSchema,
-  householdLines, recipeForPrompt, sanitiseCompletion,
+  householdLines, recipeForPrompt, sanitiseCompletion, sanitiseLanguage,
 } from '../_shared/recipeFields.ts'
 import { json } from '../_shared/http.ts'
 
@@ -17,10 +17,11 @@ Deno.serve(aiHandler(async (req, body) => {
   const fields = completableRequest(body.missing, recipe, ctx)
   if (!fields.length) return json({ fields: {} })
 
-  const system = `${CHEF_PERSONA} You are completing a recipe for a meal-planning app. Fill in ONLY the fields listed below, based on the recipe as given. Never change the recipe itself. Be concise and practical.
+  const system = `${CHEF_PERSONA} You are completing a recipe for a meal-planning app. Fill in ONLY the fields listed below, based on the recipe as given. Never change the recipe itself. Be concise and practical. Write every text value in the language the recipe is written in.
 ${householdLines(ctx)}${fields.includes('instructions_thermomix') ? `\n${THERMOMIX_RULES}` : ''}
 Fields to fill:
 ${fields.map(f => `- ${f}: ${COMPLETABLE[f].guide}`).join('\n')}
+- language: the ISO 639-1 code of the language the recipe is written in, e.g. "de"
 Return a JSON object with exactly these keys.`
 
   const { data, meta } = await runAiStep(req, 'recipe_complete', {
@@ -28,5 +29,5 @@ Return a JSON object with exactly these keys.`
     user: recipeForPrompt(recipe),
     schema: completionSchema(fields),
   })
-  return aiResponse({ fields: sanitiseCompletion(data, fields) }, meta)
+  return aiResponse({ fields: sanitiseCompletion(data, fields), language: sanitiseLanguage((data as Record<string, unknown>)?.language) }, meta)
 }))

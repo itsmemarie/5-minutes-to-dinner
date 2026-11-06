@@ -1,15 +1,19 @@
 // Recipe workflow, step 1 — Extract.
 // A 1:1 transcription of the source: nothing added, corrected or guessed.
-// Input: { url } | { text } | { images: [{ base64, mediaType }] }
+// Input: { url, photoOnly? } | { text } | { images: [{ base64, mediaType }] }
+// With photoOnly the output is just { image } (null when there isn't one), and no
+// AI runs: for a link added to a recipe rather than read into one.
 // Output: NewRecipeForm fields present in the source, plus `origin`:
 //   'page-data'  — read from the page's schema.org Recipe data, no AI used
 //   'ai'         — transcribed by the model
-//   'image-only' — a link with a photo but no readable recipe (Instagram shows
-//                  apps the picture, not the caption); only `image` is set
+//   'social'     — transcribed by the model from a TikTok / Instagram caption
+//   'image-only' — a link with a photo but no readable recipe, like a post whose
+//                  recipe is only in the video; only `image` is set
 // and, for a link, `image: { base64, mediaType, from }` — the page's own photo.
 import { aiHandler, aiResponse, badInput, runAiStep, StepError } from '../_shared/router.ts'
-import { type Transcript, findJsonLdRecipe, findPageImageUrls, pageTextForAi, transcriptToFields } from '../_shared/recipeSource.ts'
-import { fetchRemoteImage, isPrivateHost } from '../_shared/remoteImage.ts'
+import { type Transcript, cleanText, findJsonLdRecipe, findPageImageUrls, pageTextForAi, transcriptToFields } from '../_shared/recipeSource.ts'
+import { APP_UA, fetchRemoteImage, isPrivateHost } from '../_shared/remoteImage.ts'
+import { type Social, readSocialPost, socialKind } from '../_shared/socialPost.ts'
 import { json } from '../_shared/http.ts'
 
 const SYSTEM = `You transcribe recipes into JSON exactly as they appear in the source.
@@ -48,7 +52,7 @@ async function fetchPage(u: URL): Promise<string> {
   let res: Response
   try {
     res = await fetch(u, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; 5MinutesToDinner/1.0; recipe import)', Accept: 'text/html,application/xhtml+xml' },
+      headers: { 'User-Agent': APP_UA, Accept: 'text/html,application/xhtml+xml' },
       redirect: 'follow',
       signal: AbortSignal.timeout(15_000),
     })
@@ -62,13 +66,13 @@ async function fetchPage(u: URL): Promise<string> {
 interface SourceImage { base64: string; mediaType: string; from: string }
 
 // The page's photo, fetched while the recipe is read. Never fails the import:
-// no picture (or a slow one) just means no picture.
-async function pageImage(html: string, page: URL): Promise<SourceImage | null> {
+// no picture (or a slow one) just means no picture. `urls` are tried in order.
+async function pageImage(urls: string[], from: string): Promise<SourceImage | null> {
   const signal = AbortSignal.timeout(10_000)
-  for (const url of findPageImageUrls(html, page.href).slice(0, 3)) {
+  for (const url of urls) {
     try {
       const img = await fetchRemoteImage(url, { signal })
-      if (img) return { base64: img.base64, mediaType: img.mediaType, from: page.hostname.replace(/^(www|m)\./, '') }
+      if (img) return { base64: img.base64, mediaType: img.mediaType, from }
     } catch {
       if (signal.aborted) break
     }
@@ -76,7 +80,17 @@ async function pageImage(html: string, page: URL): Promise<SourceImage | null> {
   return null
 }
 
+const siteName = (u: URL) => u.hostname.replace(/^(www|m)\./, '')
+const readPost = (page: URL, kind: Social) => readSocialPost(page, kind, Deno.env.get('INSTAGRAM_OEMBED_TOKEN')?.trim())
+
+async function linkPhoto(page: URL, kind: Social | null): Promise<SourceImage | null> {
+  if (kind) return pageImage((await readPost(page, kind)).imageUrls, `${kind}.com`)
+  return pageImage(findPageImageUrls(await fetchPage(page), page.href).slice(0, 3), siteName(page))
+}
+
 const NOTHING_FOUND = "Couldn't find a recipe there. Try a clearer photo or crop, or paste the text."
+const CAPTION_NOT_FOUND = "Couldn't read that post's caption. Paste the caption text, or add a screenshot of the recipe instead."
+const NO_RECIPE_IN_CAPTION = "That post's caption doesn't include the recipe — it's probably only spoken or shown in the video. Paste the recipe text or add screenshots instead."
 
 async function done(fields: Record<string, unknown>, origin: string, image: Promise<SourceImage | null> | null, notFound = NOTHING_FOUND) {
   const img = image ? await image : null
@@ -86,8 +100,31 @@ async function done(fields: Record<string, unknown>, origin: string, image: Prom
   return img ? { ...fields, origin, image: img } : { ...fields, origin }
 }
 
+// The photo is what matters most here, so nothing about the caption can lose it:
+// no recipe in it, or the AI failing, still brings the picture across.
+async function importSocialPost(req: Request, page: URL, kind: Social) {
+  const post = await readPost(page, kind)
+  const image = pageImage(post.imageUrls, `${kind}.com`)
+  const caption = cleanText(post.caption)
+  if (!caption) return json(await done({}, 'social', image, CAPTION_NOT_FOUND))
+  // A caption with no list or quantities is a description, not a recipe.
+  if (caption.length < 60 || !/\d|\n|ingredient/i.test(caption)) return json(await done({}, 'social', image, NO_RECIPE_IN_CAPTION))
+
+  const user = `Transcribe the recipe in this ${kind === 'tiktok' ? 'TikTok' : 'Instagram'} post caption. Ignore hashtags, @mentions and calls to follow or like:\n\n${caption.slice(0, MAX_TEXT)}`
+  let ai: Awaited<ReturnType<typeof runAiStep>>
+  try {
+    ai = await runAiStep(req, 'recipe_extract', { system: SYSTEM, user, schema: SCHEMA })
+  } catch (e) {
+    if (await image) return json(await done({}, 'social', image))
+    throw e
+  }
+  const fields = transcriptToFields((ai.data ?? {}) as Transcript)
+  const isRecipe = fields.ingredients || fields.instructions_standard
+  return aiResponse(await done(isRecipe ? fields : {}, 'social', image, NO_RECIPE_IN_CAPTION), ai.meta)
+}
+
 Deno.serve(aiHandler(async (req, body) => {
-  const { url, text, images } = body
+  const { url, text, images, photoOnly } = body
 
   let user: string
   let image: Promise<SourceImage | null> | null = null
@@ -103,8 +140,11 @@ Deno.serve(aiHandler(async (req, body) => {
       : 'Transcribe the recipe in this photo.'
   } else if (url) {
     const page = checkUrl(url)
+    const social = socialKind(page)
+    if (photoOnly) return json({ image: await linkPhoto(page, social) })
+    if (social) return await importSocialPost(req, page, social)
     const html = await fetchPage(page)
-    image = pageImage(html, page)
+    image = pageImage(findPageImageUrls(html, page.href).slice(0, 3), siteName(page))
     // Structured page data is already a transcription — no AI needed.
     const fromPage = findJsonLdRecipe(html)
     if (fromPage) return json(await done(transcriptToFields(fromPage), 'page-data', image))

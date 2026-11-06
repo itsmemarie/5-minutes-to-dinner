@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { C, ep, mn } from '../lib/theme.js'
 import { WEEK_START_OPTIONS } from '../lib/dateHelpers.js'
-import { countryName, RECIPE_UNIT_OPTIONS, MEASUREMENT_OPTIONS } from '../lib/preferences.js'
+import { countryName, languageName, RECIPE_UNIT_OPTIONS, MEASUREMENT_OPTIONS, RECIPE_TRANSLATE_OPTIONS } from '../lib/preferences.js'
 import { APP_VERSION_LABEL } from '../lib/appVersion.js'
 import { useGeminiKey } from '../lib/geminiKey.js'
 import { useInstallState } from '../lib/install.js'
@@ -82,6 +82,12 @@ export function SettingsScreen({
         </Row>
         <Row divider title='Measurements'>
           <SegPill compact options={MEASUREMENT_OPTIONS} value={prefs.measurements} onChange={measurements => setPrefs({ measurements })}/>
+        </Row>
+        <Row divider title='Recipe language' sub='Recipes in another language can be translated into this.' titleWeight={400} onClick={() => onOpen({ kind:'recipeLanguage' })}>
+          <RowValue>{languageName(prefs.recipeLanguage)}</RowValue>
+        </Row>
+        <Row divider title='Translate recipes'>
+          <SegPill compact options={RECIPE_TRANSLATE_OPTIONS} value={prefs.recipeTranslate} onChange={recipeTranslate => setPrefs({ recipeTranslate })}/>
         </Row>
       </RowCard>
 

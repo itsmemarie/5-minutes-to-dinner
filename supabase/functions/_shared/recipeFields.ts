@@ -70,6 +70,7 @@ export interface HouseholdContext {
   units?: string
   measurements?: string
   children?: string[]          // ages, e.g. "2 yrs 3 mo"
+  language?: string            // ISO 639-1 code recipes are translated into
 }
 
 export function householdLines(ctx: HouseholdContext = {}): string {
@@ -104,13 +105,26 @@ const jsonType = (kind: Kind) =>
   : kind === 'diet' ? { type: 'string', enum: DIETS }
   : { type: 'string' }
 
+// `language` isn't a recipe field: step 2 reads the whole recipe anyway, so it
+// also reports what the recipe is written in, and the client decides from that
+// whether to offer a translation.
 export function completionSchema(fields: string[]) {
   return {
     type: 'object',
     additionalProperties: false,
-    required: fields,
-    properties: Object.fromEntries(fields.map(f => [f, jsonType(COMPLETABLE[f].kind)])),
+    required: [...fields, 'language'],
+    properties: {
+      ...Object.fromEntries(fields.map(f => [f, jsonType(COMPLETABLE[f].kind)])),
+      language: { type: 'string' },
+    },
   }
+}
+
+// An ISO 639 code, lower-cased with any region dropped ("zh-CN" → "zh"), or
+// null for anything else. Null means "don't know", so nothing is offered.
+export function sanitiseLanguage(raw: unknown): string | null {
+  const code = typeof raw === 'string' ? raw.trim().toLowerCase().split(/[-_]/)[0] : ''
+  return /^[a-z]{2,3}$/.test(code) ? code : null
 }
 
 // Keeps only requested keys with values of the right type. Anything the model
@@ -134,6 +148,56 @@ export function sanitiseCompletion(raw: unknown, fields: string[]): Record<strin
     }
   }
   return out
+}
+
+// ── Translate ─────────────────────────────────────────────────────
+// Every text field, and only those: numbers and enums mean the same in any
+// language, so they are never sent.
+const TRANSLATABLE = ['ingredients', ...Object.keys(COMPLETABLE).filter(k => COMPLETABLE[k].kind === 'string')]
+
+export const translatableFields = (recipe: Record<string, unknown>) =>
+  TRANSLATABLE.filter(k => typeof recipe?.[k] === 'string' && present(recipe[k]))
+
+export function translationSchema(fields: string[]) {
+  return {
+    type: 'object',
+    additionalProperties: false,
+    required: fields,
+    properties: Object.fromEntries(fields.map(f => [f, { type: 'string' }])),
+  }
+}
+
+// Each line's leading "- ", "[" or "1." — what the recipe view parses. A line
+// that loses its marker disappears from the recipe without any error.
+const lineShape = (text: string) =>
+  text.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(l => l.match(/^(-(?=\s)|\[|\d+\.(?=\s))/)?.[1] ?? '').join('|')
+
+// Every number in the source must survive. Extra ones are fine: "Ein Ei" can
+// fairly become "1 egg".
+function keepsNumbers(source: string, translated: string) {
+  const left: string[] = [...(translated.match(/\d+/g) ?? [])]
+  return (source.match(/\d+/g) ?? []).every(n => {
+    const i = left.indexOf(n)
+    if (i < 0) return false
+    left.splice(i, 1)
+    return true
+  })
+}
+
+// A translation that lost a line or changed an amount is worse than none, so
+// that field stays as it was and is reported in `skipped`. Anything the model
+// added beyond the request is dropped.
+export function sanitiseTranslation(raw: unknown, recipe: Record<string, unknown>, fields: string[]) {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+  const out: Record<string, string> = {}
+  const skipped: string[] = []
+  for (const f of fields) {
+    const v = typeof r[f] === 'string' ? (r[f] as string).trim() : ''
+    const source = String(recipe[f])
+    if (v && lineShape(source) === lineShape(v) && keepsNumbers(source, v)) out[f] = v
+    else skipped.push(f)
+  }
+  return { fields: out, skipped }
 }
 
 // ── Step 3 ────────────────────────────────────────────────────────

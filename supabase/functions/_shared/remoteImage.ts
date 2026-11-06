@@ -3,6 +3,8 @@
 // file's first bytes, not the server's Content-Type (CDNs often send
 // application/octet-stream), and anything that isn't a photo is dropped.
 
+export const APP_UA = 'Mozilla/5.0 (compatible; 5MinutesToDinner/1.0; recipe import)'
+
 // Only public http(s) addresses — not this server's own network.
 export const isPrivateHost = (hostname: string) => {
   const h = hostname.toLowerCase()
@@ -40,7 +42,7 @@ export async function fetchRemoteImage(
   if (!/^https?:$/.test(u.protocol) || isPrivateHost(u.hostname)) return null
 
   const res = await fetch(u, {
-    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; 5MinutesToDinner/1.0; recipe import)', Accept: 'image/avif,image/webp,image/*;q=0.9' },
+    headers: { 'User-Agent': APP_UA, Accept: 'image/avif,image/webp,image/*;q=0.9' },
     redirect: 'follow',
     signal: signal ?? AbortSignal.timeout(10_000),
   })

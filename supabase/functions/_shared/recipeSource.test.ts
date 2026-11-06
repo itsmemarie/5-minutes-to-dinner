@@ -111,7 +111,7 @@ describe("the page's picture of the dish", () => {
     expect(findPageImageUrls(html, PAGE)).toEqual(['https://www.example-food.com/img/dish.jpg?w=1&h=2'])
   })
 
-  it("falls back to the share image — all an Instagram post gives out", () => {
+  it("falls back to the share image, as on an Instagram post", () => {
     const html = `<html><head>
       <meta name="twitter:image" content="https://scontent-ham3-1.cdninstagram.com/v/t51/502_n.jpg?stp=dst-jpg&amp;_nc_cat=109" />
       <meta property="og:image" content="https://scontent-ham3-1.cdninstagram.com/v/t51/502_n.jpg?stp=dst-jpg&amp;_nc_cat=109" />
@@ -125,6 +125,11 @@ describe("the page's picture of the dish", () => {
   it('handles attributes in any order and skips logos', () => {
     const html = `<meta content='https://x.com/site-logo.png' property='og:image'><meta content="https://x.com/dish.webp" name="twitter:image">`
     expect(findPageImageUrls(html, PAGE)).toEqual(['https://x.com/dish.webp'])
+  })
+
+  it("skips the logo on Instagram's login wall", () => {
+    const html = `<meta property="og:image" content="https://static.cdninstagram.com/rsrc.php/v4/yD/r/R0fBIMurK8v.png" />`
+    expect(findPageImageUrls(html, 'https://www.instagram.com/accounts/login/')).toEqual([])
   })
 
   it('is empty when the page has no picture', () => {

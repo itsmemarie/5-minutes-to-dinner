@@ -181,10 +181,10 @@ export function findJsonLdRecipe(html: string): Transcript | null {
 // ── The page's picture of the dish ────────────────────────────────
 // Copied across with an imported recipe. Candidates, best first:
 //   1. the schema.org Recipe's own `image` — the recipe card photo
-//   2. og:image / twitter:image — the share picture; the only one social
-//      pages like Instagram give out
+//   2. og:image / twitter:image — the share picture
 // Recipe plugins list several renditions; the ones wide enough for the photo
 // strip but short of a multi-megabyte original go first.
+// TikTok and Instagram posts add their own sources: see socialPost.ts.
 interface ImageCandidate { url: string; width?: number }
 
 const sizeFromFileName = (url: string) => {
@@ -205,14 +205,25 @@ function ldImages(x: unknown, depth = 0): ImageCandidate[] {
 }
 
 const META_IMAGE_KEYS = ['og:image:secure_url', 'og:image', 'og:image:url', 'twitter:image', 'twitter:image:src']
+// Quoted values are skipped whole: a caption can hold a ">" or run over several lines.
+const META_TAG = /<meta\b(?:[^>"']|"[^"]*"|'[^']*')*>/gi
 const attr = (tag: string, name: string) =>
   tag.match(new RegExp(`\\s${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i'))?.slice(1).find(v => v != null)
+const metaKey = (tag: string) => (attr(tag, 'property') ?? attr(tag, 'name') ?? '').toLowerCase()
+
+export function metaContent(html: string, key: string): string | null {
+  for (const [tag] of html.matchAll(META_TAG)) {
+    if (metaKey(tag) !== key) continue
+    const value = decodeEntities(attr(tag, 'content') ?? '').trim()
+    if (value) return value
+  }
+  return null
+}
 
 function metaImages(html: string): ImageCandidate[] {
   const found: { rank: number; url: string }[] = []
-  for (const [tag] of html.matchAll(/<meta\b[^>]*>/gi)) {
-    const key = (attr(tag, 'property') ?? attr(tag, 'name') ?? '').toLowerCase()
-    const rank = META_IMAGE_KEYS.indexOf(key)
+  for (const [tag] of html.matchAll(META_TAG)) {
+    const rank = META_IMAGE_KEYS.indexOf(metaKey(tag))
     const content = attr(tag, 'content')
     if (rank !== -1 && content) found.push({ rank, url: content })
   }
@@ -232,8 +243,9 @@ export function findPageImageUrls(html: string, pageUrl: string): string[] {
     let u: URL
     try { u = new URL(decodeEntities(c.url.trim()), pageUrl) } catch { continue }
     if (!/^https?:$/.test(u.protocol)) continue
-    // Sites with no picture of their own fall back to their logo.
-    if (/\.(svg|ico)$/i.test(u.pathname) || /logo|favicon|sprite|placeholder/i.test(u.pathname)) continue
+    // Sites with no picture of their own fall back to their logo. Instagram's
+    // login wall does too, under a static asset path (rsrc.php) that doesn't say so.
+    if (/\.(svg|ico)$/i.test(u.pathname) || /logo|favicon|sprite|placeholder|rsrc\.php/i.test(u.pathname)) continue
     if (!out.includes(u.href)) out.push(u.href)
   }
   return out

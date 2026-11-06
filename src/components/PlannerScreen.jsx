@@ -1,12 +1,21 @@
 import { useState } from 'react'
 import { C, ep, mn, CARD, screenTitle, R } from '../lib/theme.js'
-import { DAYS, DAY_LBL, TODAY, WEEK_LBL } from '../lib/dateHelpers.js'
-import { ALL_SECTION_IDS, dayMeals, sectionShort } from '../lib/mealSections.js'
+import { DAY_LBL, TODAY, dayDateLabel } from '../lib/dateHelpers.js'
+import { dayMeals, sectionShort } from '../lib/mealSections.js'
 import { Btn, Icon } from './ui/index.js'
 import { dayNutritionTotals, dayRemainingLine, rowFigure, mealNutrition } from '../lib/goalMaths.js'
+import { WeekStrip } from './WeekStrip.jsx'
+import { SaveWeekSheet, FillWeekSheet } from './SavedWeekSheets.jsx'
 
-export function PlannerScreen({plan,days=DAYS,sectionIds=ALL_SECTION_IDS,weekLabel=WEEK_LBL,removeMeal,moveMeal,duplicateMeal,updatePortion,onDayOpen,onRecipeOpen,onNutrition,goalProfile,goalTargets,nutritionByRecipe={}}){
+// `week` is the week on screen (dateHelpers.weekBounds) and `weekOffset` how far
+// it is from this one. `loadState` is what to show instead of the days while the
+// week loads or if it couldn't, so a week that isn't there yet can't be edited.
+export function PlannerScreen({plan,week,weekOffset=0,weekStrip=[],onSelectWeek,onSaveWeek,onFillWeek,notice,onDismissNotice,loadState,sectionIds,removeMeal,moveMeal,duplicateMeal,updatePortion,onDayOpen,onRecipeOpen,onNutrition,goalProfile,goalTargets,nutritionByRecipe={}}){
   const goalMode = !!goalProfile?.goalModeEnabled && !!goalTargets
+  const days=week.days
+  const isThisWeek=weekOffset===0
+  const mealCount=days.flatMap(day=>dayMeals(plan[day],sectionIds)).length
+  const [sheet,setSheet]=useState(null)   // 'save' | 'fill' | null
   const [drag,setDrag]=useState(null)   // {mealId,fromDay,section}
   const [over,setOver]=useState(null)   // day string being hovered
   const [servingsOpenId,setServingsOpenId]=useState(null)   // meal id whose servings panel is expanded
@@ -17,10 +26,26 @@ export function PlannerScreen({plan,days=DAYS,sectionIds=ALL_SECTION_IDS,weekLab
   const onDrop=(e,day)=>{e.preventDefault();if(!drag)return;const{mealId,fromDay,section}=drag;setDrag(null);setOver(null);moveMeal(fromDay,day,mealId,section)}
   return(
     <div style={{padding:'16px 20px 20px'}}>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:18}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
         <div style={{...screenTitle,color:C.onSurface}}>Weekly planner</div>
-        <span style={{...mn,fontSize:12,color:C.onSurfaceVariant,background:C.surfaceContainerHigh,padding:'5px 12px',borderRadius:R.pill,whiteSpace:'nowrap'}}>{weekLabel}</span>
+        {isThisWeek
+          ?<span style={{...mn,fontSize:12,color:C.onSurfaceVariant,background:C.surfaceContainerHigh,padding:'5px 12px',borderRadius:R.pill,whiteSpace:'nowrap'}}>{week.label}</span>
+          :<button onClick={()=>onSelectWeek(0)} style={{...mn,fontSize:12,fontWeight:700,color:C.onPrimary,background:C.primary,border:'none',padding:'5px 12px',borderRadius:R.pill,whiteSpace:'nowrap',cursor:'pointer'}}>This week</button>}
       </div>
+      <WeekStrip weeks={weekStrip} selectedOffset={weekOffset} onSelect={onSelectWeek}/>
+      {!loadState&&(
+        <div style={{display:'flex',gap:8,marginBottom:16}}>
+          <div style={{flex:1}}><Btn label={<><Icon name='bookmark' size={14}/><span>Save week</span></>} secondary small full disabled={mealCount===0} onClick={()=>setSheet('save')}/></div>
+          {weekOffset>=0&&<div style={{flex:1}}><Btn label={<><Icon name='copy' size={14}/><span>Fill from saved</span></>} secondary small full onClick={()=>setSheet('fill')}/></div>}
+        </div>
+      )}
+      {notice&&!loadState&&(
+        <div role='status' style={{...mn,display:'flex',alignItems:'flex-start',gap:8,fontSize:12,lineHeight:1.5,color:C.onSurface,background:C.surfaceContainerHigh,borderRadius:R.md,padding:'10px 12px',marginBottom:14}}>
+          <span style={{flex:1}}>{notice}</span>
+          <button onClick={onDismissNotice} aria-label='Dismiss' style={{border:'none',background:'none',padding:0,cursor:'pointer',display:'flex'}}><Icon name='x' size={14} color={C.onSurfaceVariant}/></button>
+        </div>
+      )}
+      {loadState||<>
       {goalMode&&(
         <div style={{...mn,fontSize:12,color:C.onSurfaceVariant,lineHeight:1.5,margin:'-10px 0 16px'}}>Nutritional figures assume one portion per person, per planned meal.</div>
       )}
@@ -29,12 +54,13 @@ export function PlannerScreen({plan,days=DAYS,sectionIds=ALL_SECTION_IDS,weekLab
       </button>
       {days.map(day=>{
         const meals=dayMeals(plan[day],sectionIds)
-        const isToday=day===TODAY
+        const isToday=isThisWeek&&day===TODAY
         const dayTotals=goalMode?dayNutritionTotals(meals,nutritionByRecipe):null
         return(
           <div key={day} style={{marginBottom:16}}>
             <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
               <span style={{...ep,fontSize:16,color:isToday?C.primary:C.onSurface}}>{DAY_LBL[day]}</span>
+              {!isThisWeek&&<span style={{...mn,fontSize:12,color:C.onSurfaceVariant}}>{dayDateLabel(week,day)}</span>}
               {isToday&&(
                 <span style={{...mn,fontSize:11,fontWeight:700,letterSpacing:'0.05em',textTransform:'uppercase',display:'inline-flex',alignItems:'center',gap:6,color:C.tertiary}}>
                   <span style={{width:6,height:6,borderRadius:R.pill,background:C.tertiary,display:'inline-block'}}/>Today
@@ -93,6 +119,9 @@ export function PlannerScreen({plan,days=DAYS,sectionIds=ALL_SECTION_IDS,weekLab
       {goalMode&&(
         <div style={{...mn,fontSize:11,color:C.onSurfaceVariant,lineHeight:1.6}}>A ~ marks a recipe where some ingredients are not matched to reference data yet.</div>
       )}
+      </>}
+      {sheet==='save'&&<SaveWeekSheet week={week} mealCount={mealCount} onSave={onSaveWeek} onClose={()=>setSheet(null)}/>}
+      {sheet==='fill'&&<FillWeekSheet week={week} mealCount={mealCount} onFill={onFillWeek} onClose={()=>setSheet(null)}/>}
     </div>
   )
 }

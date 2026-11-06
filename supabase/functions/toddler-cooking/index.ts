@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { aiHandler, aiResponse, runAiStep } from '../_shared/router.ts'
+import { TODDLER_JOB_RULES } from '../_shared/toddlerHelpers.ts'
 
 const SYSTEM_PROMPT = `You are a paediatric-informed toddler cooking educator helping a parent involve their toddler in home cooking every day, matched to their skill level.
 
@@ -9,9 +10,12 @@ Part 1 — "Tools worth having": exactly 5 safe, commonly available kitchen tool
 
 Part 2 — age-appropriate kitchen tasks for EACH of these 4 fixed age bands, covering the full range regardless of the toddler's current age (this is a forward-looking reference, not just for today): "18-24m" (18-24 months), "2-3y" (2-3 years), "3-4y" (3-4 years), "4-5y" (4-5 years). For each band, generate 4-6 tasks.
 
+${TODDLER_JOB_RULES}
+
 Rules for tasks (non-negotiable):
-- Every task must be concrete and specific — never vague. "Pour water or milk into a small jug" not "Help in kitchen".
-- Every task must be safe for that age: no hot surfaces, no boiling liquids, no ovens/hobs, no adult knives, no unsupervised tool use, nothing that could choke or burn.
+- Every task must be concrete and specific — never vague. "Tip the measured rice into the pot before it goes on the hob" not "Help in kitchen".
+- Every task must be a job on real food for a real meal, including in the youngest band. No toys, no playdough, no flowers.
+- No unsupervised tool use.
 - Tasks must be developmentally graded — later bands should involve more independence, finer motor skill, and more tool use than earlier bands.
 - If a task requires one of the 5 tools from Part 1, set needsTool to that tool's exact name (as written in Part 1); otherwise null.
 - Each task needs a single representative emoji icon, a short title, and a one-sentence description.

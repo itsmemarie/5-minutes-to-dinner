@@ -63,7 +63,7 @@ export async function uploadRecipePhoto(recipeId, photo, { source = 'user', cred
     throw new Error(`Couldn't save the photo: ${detail || error.message}`)
   }
   if (data?.error) throw new Error(`Couldn't save the photo: ${data.error}`)
-  return { imagePath: data.path, imageUrl: recipeImageUrl(data.path), imageCredit: credit }
+  return { imagePath: data.path, imageUrl: recipeImageUrl(data.path), imageCredit: credit, imageSource: source }
 }
 
 // ─── Recipes ───────────────────────────────────────────────────────
@@ -151,6 +151,8 @@ const PREFERENCE_FIELD_MAP = {
   country:            'country',
   recipeUnits:        'recipe_units',
   measurements:       'measurements',
+  recipeLanguage:     'recipe_language',
+  recipeTranslate:    'recipe_translate',
   toddlerModeEnabled: 'toddler_mode_enabled',
   children:           'children',
   selectedChildId:    'selected_child_id',
@@ -325,6 +327,7 @@ export async function fetchWeekPlan(planId) {
         prep_time_snapshot,
         cook_time_snapshot,
         portion,
+        base_portion_snapshot,
         advance_prep_hours_snapshot,
         advance_prep_note_snapshot,
         position
@@ -337,33 +340,92 @@ export async function fetchWeekPlan(planId) {
   return data
 }
 
+// How many meals each stored week holds, as { 'YYYY-MM-DD': n }, for the
+// Planner's week strip.
+export async function fetchWeekMealCounts() {
+  const { data, error } = await supabase
+    .from('meal_plans')
+    .select('week_of, day_entries ( planned_meals ( count ) )')
+  if (error) throw error
+  return Object.fromEntries((data || []).map(p => [
+    p.week_of,
+    (p.day_entries || []).reduce((sum, de) => sum + (de.planned_meals?.[0]?.count ?? 0), 0),
+  ]))
+}
+
 // ─── Add meals ────────────────────────────────────────────────────
+const plannedMealRow = (dayEntryId, m, position) => ({
+  day_entry_id:          dayEntryId,
+  section:               m.section,
+  recipe_id:             m.recipeId ?? null,
+  freezer_item_id:       m.freezerItemId ?? null,
+  name_snapshot:         m.name,
+  prep_time_snapshot:    m.prep,
+  cook_time_snapshot:    m.active,
+  portion:               m.portion,
+  base_portion_snapshot: m.base,
+  advance_prep_hours_snapshot: m.advancePrepHours ?? null,
+  advance_prep_note_snapshot:  m.advancePrepNote ?? null,
+  position,
+})
+
 export async function addPlannedMeals(dayEntryId, meals) {
   const { data, error } = await supabase
     .from('planned_meals')
-    .insert(meals.map((m, i) => ({
-      day_entry_id:          dayEntryId,
-      section:               m.section,
-      recipe_id:             m.recipeId ?? null,
-      freezer_item_id:       m.freezerItemId ?? null,
-      name_snapshot:         m.name,
-      prep_time_snapshot:    m.prep,
-      cook_time_snapshot:    m.active,
-      portion:               m.portion,
-      base_portion_snapshot: m.base,
-      advance_prep_hours_snapshot: m.advancePrepHours ?? null,
-      advance_prep_note_snapshot:  m.advancePrepNote ?? null,
-      position:              m.position + i,
-    })))
+    .insert(meals.map((m, i) => plannedMealRow(dayEntryId, m, m.position + i)))
     .select('id')
 
   if (error) throw error
   return data
 }
 
+// A whole week at once, each meal carrying its own `dayEntryId` and `position`.
+// One statement, so either every meal goes in or none does.
+export async function insertWeekMeals(meals) {
+  if (!meals.length) return
+  const { error } = await supabase
+    .from('planned_meals')
+    .insert(meals.map(m => plannedMealRow(m.dayEntryId, m, m.position)))
+  if (error) throw error
+}
+
 // ─── Remove meal ──────────────────────────────────────────────────
 export async function removePlannedMeal(id) {
   await supabase.from('planned_meals').delete().eq('id', id)
+}
+
+export async function removePlannedMeals(ids) {
+  if (!ids.length) return
+  const { error } = await supabase.from('planned_meals').delete().in('id', ids)
+  if (error) throw error
+}
+
+// ─── Saved weeks (see savedWeeks.js) ──────────────────────────────
+export async function fetchSavedWeeks() {
+  const { data, error } = await supabase
+    .from('saved_weeks')
+    .select('id, name, meals, created_at')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function saveWeek(name, meals) {
+  const { error } = await supabase.from('saved_weeks').insert({ name, meals })
+  if (error) throw error
+}
+
+export async function deleteSavedWeek(id) {
+  const { error } = await supabase.from('saved_weeks').delete().eq('id', id)
+  if (error) throw error
+}
+
+// Which of these recipes still exist, so a fill can't fail on a deleted one.
+export async function fetchExistingRecipeIds(ids) {
+  if (!ids.length) return new Set()
+  const { data, error } = await supabase.from('recipes').select('id').in('id', ids)
+  if (error) throw error
+  return new Set((data || []).map(r => r.id))
 }
 
 // ─── Reset a week (Settings › Your data) ──────────────────────────
@@ -519,11 +581,20 @@ export async function removeFreezerItem(id) {
 export async function fetchRecipeDetails(id) {
   const { data, error } = await supabase
     .from('recipes')
-    .select('id, name, image_path, image_credit, prep_time_raw, cook_time_raw, prep_time_minutes, cook_time_minutes, portion_size, min_portions, fridge_storage, freezer_storage, has_thermomix_version, ingredients, instructions_standard, instructions_thermomix, chef_notes, toddler_variations, husband_variations, side_recommendation')
+    .select('id, name, image_path, image_credit, image_source, source_url, prep_time_raw, cook_time_raw, prep_time_minutes, cook_time_minutes, portion_size, min_portions, fridge_storage, freezer_storage, has_thermomix_version, ingredients, instructions_standard, instructions_thermomix, chef_notes, toddler_variations, husband_variations, side_recommendation')
     .eq('id', id)
     .single()
   if (error) throw error
   return data
+}
+
+// sourceUrl comes from normaliseRecipeLink; null removes the link.
+export async function saveRecipeSourceUrl(id, sourceUrl) {
+  const { error } = await supabase
+    .from('recipes')
+    .update({ source_url: sourceUrl, updated_at: new Date().toISOString() })
+    .eq('id', id)
+  if (error) throw error
 }
 
 // ─── Toddler cooking guide (cached AI content, singleton) ──────────

@@ -74,10 +74,14 @@ export async function callEdgeFn(name, body, { quiet = false, geminiKey } = {}) 
 
 // ─── Recipe workflow ──────────────────────────────────────────────
 // Step 1 runs as soon as there's a source; 2 and 3 are buttons the user presses.
+// Translate follows step 2, when step 2 finds the recipe in another language.
 export const extractRecipe = ({ url, text, images }) => callEdgeFn('extract-recipe', { url, text, images })
+// Only the picture at a link → { image } (null if there isn't one). No AI runs.
+export const fetchLinkPhoto = url => callEdgeFn('extract-recipe', { url, photoOnly: true }, { quiet: true })
 export const completeRecipe = ({ recipe, missing, context }) => callEdgeFn('complete-recipe', { recipe, missing, context })
 export const reviewRecipe = ({ recipe, context }) => callEdgeFn('review-recipe', { recipe, context })
 export const generateRecipe = ({ description, context }) => callEdgeFn('generate-recipe', { description, context })
+export const translateRecipe = ({ recipe, context }) => callEdgeFn('translate-recipe', { recipe, context })
 
 // An AI picture from the recipe's name and ingredients → { image: { base64, mediaType } }.
 // Quiet: image providers aren't the text chain, so the "add a Google key" limit

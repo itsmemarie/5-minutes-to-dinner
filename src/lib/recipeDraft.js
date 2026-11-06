@@ -17,7 +17,7 @@ export const EMPTY_RECIPE = {
   advance_prep_note: '',
   portion_size: 4,
   min_portions: 1,
-  try_out: false,
+  try_out: true,
   order_out: false,
   fun_recipe: false,
   husband_approved: false,
@@ -32,10 +32,11 @@ export const EMPTY_RECIPE = {
   husband_variations: '',
   toddler_variations: '',
   side_recommendation: '',
+  source_url: '',
 }
 
-// The text/number fields AI steps may write. Toggles and default days are
-// the user's call and never set by AI.
+// The text/number fields AI steps may write. Toggles, default days and the
+// link to the original are the user's call and never set by AI.
 export const AI_FIELDS = [
   'name', 'meal_type_id', 'diet', 'prep_time_minutes', 'cook_time_minutes', 'advance_prep_hours',
   'advance_prep_note', 'portion_size', 'min_portions', 'ingredients', 'instructions_standard',
@@ -46,6 +47,8 @@ const NUMERIC = new Set(['prep_time_minutes', 'cook_time_minutes', 'advance_prep
 // Fields that always hold a value: they only count as "known" once a source,
 // the user or an AI step has actually set them.
 const HAS_DEFAULT = new Set(['meal_type_id', 'diet', 'portion_size', 'min_portions'])
+// The fields that hold wording: all a translation may change.
+const TEXT_FIELDS = AI_FIELDS.filter(k => !NUMERIC.has(k) && !HAS_DEFAULT.has(k))
 
 const hasValue = v => v != null && String(v).trim() !== ''
 
@@ -90,6 +93,38 @@ export function recipeForReview(fields) {
   for (const k of AI_FIELDS) if (hasValue(fields[k])) out[k] = fields[k]
   return out
 }
+
+// The wording of the draft, whoever wrote it: translating covers fill-ins and
+// the user's own edits as well as the source.
+export function recipeForTranslation(fields) {
+  const out = {}
+  for (const k of TEXT_FIELDS) if (hasValue(fields[k])) out[k] = fields[k]
+  return out
+}
+
+// A translation takes seconds and the user can keep typing, so a field that
+// changed after it was sent keeps the newer text and comes back in `kept`.
+// Provenance is untouched: "Added by AI" stays true after translating.
+export function applyTranslation(fields, sent, translated) {
+  const next = { ...fields }
+  const changed = []
+  const kept = []
+  for (const k of TEXT_FIELDS) {
+    if (!translated || !hasValue(translated[k])) continue
+    if (fields[k] !== sent[k]) { kept.push(k); continue }
+    if (translated[k] === sent[k]) continue   // already in the target language
+    next[k] = translated[k]
+    changed.push(k)
+  }
+  return { fields: next, changed, kept }
+}
+
+// Norwegian has two written forms with their own codes; both count as 'no'.
+const baseLanguage = code => (code === 'nb' || code === 'nn' ? 'no' : code)
+
+// Is a recipe in `code` worth translating into `target`? An unknown language on
+// either side means no: better to offer nothing than to offer it wrongly.
+export const needsTranslating = (code, target) => !!code && !!target && baseLanguage(code) !== baseLanguage(target)
 
 export const hasRecipeContent = f => hasValue(f.ingredients) || hasValue(f.instructions_standard)
 

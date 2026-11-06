@@ -1,17 +1,27 @@
 import { useEffect, useState } from 'react'
 import { C, ep, mn, CARD, screenTitle, R } from '../lib/theme.js'
-import { WEEK_LBL } from '../lib/dateHelpers.js'
 import { Spinner, HDivider, Btn, Icon } from './ui/index.js'
 import { BuyersEyeSheet } from './BuyersEyeSheet.jsx'
+import { ShoppingByRecipe, Tick } from './ShoppingByRecipe.jsx'
+import { Switch } from './settings/primitives.jsx'
 import { matchProduceGuide } from '../lib/supabase.js'
 
 const PRODUCE_AISLES=['FRUIT','VEGETABLES']
 const NO_TIPS_KEY='buyersEyeNoTips'
+const BY_RECIPE_KEY='shoppingByRecipe'
+const readByRecipe=()=>{try{return localStorage.getItem(BY_RECIPE_KEY)==='1'}catch{return false}}
 
 // Manual mode needs no AI: onBuildBasic makes a plain list from the planned
 // recipes' ingredients, onAddItem / onRemoveItem edit it by hand. `notice`
 // explains what a basic list is (or which recipes had no ingredients).
-export function ShoppingListScreen({shopping,onToggle,loading,loadingMsg,error,notice,onRegenerate,onBuildBasic,onAddItem,onRemoveItem}){
+// plannedPortions: Map recipeId → portions this week, for the by-recipe view.
+export function ShoppingListScreen({shopping,weekLabel,onToggle,loading,loadingMsg,error,notice,onRegenerate,onBuildBasic,onAddItem,onRemoveItem,plannedPortions}){
+  const [byRecipe,setByRecipeSt]=useState(readByRecipe)
+  const toggleByRecipe=()=>{
+    const on=!byRecipe
+    setByRecipeSt(on)
+    try{localStorage.setItem(BY_RECIPE_KEY,on?'1':'0')}catch{}
+  }
   const [copied,setCopied]=useState(false)
   const [newItem,setNewItem]=useState('')
   const [adding,setAdding]=useState(false)
@@ -60,18 +70,51 @@ export function ShoppingListScreen({shopping,onToggle,loading,loadingMsg,error,n
     navigator.clipboard.writeText(text)
     setCopied(true);setTimeout(()=>setCopied(false),2000)
   }
+  const itemRow=(item,divider)=>(
+    <div key={item.id} onClick={()=>onToggle(item.id)} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 14px',borderBottom:divider?`1px solid ${C.outlineVariant}25`:undefined,cursor:'pointer'}}>
+      <Tick checked={item.checked}/>
+      <span style={{...mn,fontSize:14,flex:1,opacity:item.checked?0.45:1,textDecoration:item.checked?'line-through':'none',color:C.onSurface}}>{item.name}</span>
+      {(item.amount||item.unit)&&<span style={{...mn,fontSize:12,fontWeight:700,opacity:item.checked?0.45:0.6,textDecoration:item.checked?'line-through':'none',color:C.onSurface}}>{item.amount}{item.unit?' '+item.unit:''}</span>}
+      {PRODUCE_AISLES.includes(item.aisle)&&(()=>{
+        const g=guideMap[item.id]
+        if(g===undefined||g==='checking')return null
+        if(g) return(
+          <button onClick={e=>{e.stopPropagation();setSheetItem({id:item.id,name:item.name,guideId:g})}} title="Buyer's Eye" style={{border:'none',background:'transparent',padding:4,display:'flex',cursor:'pointer',flexShrink:0}}>
+            <Icon name='info' size={15} color={C.onSurfaceVariant}/>
+          </button>
+        )
+        if(noTipsNames.has(item.name.trim().toLowerCase()))return null
+        return(
+          <button onClick={e=>{e.stopPropagation();setSheetItem({id:item.id,name:item.name,guideId:null})}} title="Get expert tips" style={{border:'none',background:'transparent',padding:4,display:'flex',cursor:'pointer',flexShrink:0,opacity:0.55}}>
+            <Icon name='sparkles' size={14} color={C.tertiary}/>
+          </button>
+        )
+      })()}
+      <button onClick={e=>{e.stopPropagation();onRemoveItem(item.id)}} aria-label={`Remove ${item.name}`} title='Remove' style={{border:'none',background:'transparent',padding:4,display:'flex',cursor:'pointer',flexShrink:0,opacity:0.5}}>
+        <Icon name='x' size={14} color={C.onSurfaceVariant}/>
+      </button>
+    </div>
+  )
   return(
     <div style={{padding:'16px 20px 90px'}}>
       <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:4}}>
         <div>
           <div style={{...screenTitle,color:C.onSurface}}>Shopping list</div>
-          <div style={{...mn,fontSize:12,color:C.onSurfaceVariant,marginTop:2}}>{WEEK_LBL}</div>
+          <div style={{...mn,fontSize:12,color:C.onSurfaceVariant,marginTop:2}}>{weekLabel}</div>
           {!loading&&shopping.length>0&&<div style={{...mn,fontSize:12,color:C.primary,marginTop:2,fontWeight:600}}>{unc} item{unc!==1?'s':''} remaining</div>}
         </div>
         {shopping.length>0&&!loading&&(
-          <button onClick={onRegenerate} title='Regenerate' style={{display:'flex',alignItems:'center',gap:8,border:'none',background:C.secondaryContainer,color:C.onSecondaryContainerStrong,borderRadius:R.pill,padding:'7px 14px',...mn,fontWeight:700,fontSize:12,whiteSpace:'nowrap',cursor:'pointer',flexShrink:0}}>
-            <Icon name='refreshCw' size={14}/>Generate
-          </button>
+          <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:10,flexShrink:0}}>
+            <button onClick={onRegenerate} title='Regenerate' style={{display:'flex',alignItems:'center',gap:8,border:'none',background:C.secondaryContainer,color:C.onSecondaryContainerStrong,borderRadius:R.pill,padding:'7px 14px',...mn,fontWeight:700,fontSize:12,whiteSpace:'nowrap',cursor:'pointer',flexShrink:0}}>
+              <Icon name='refreshCw' size={14}/>Generate
+            </button>
+            {!error&&(
+              <div style={{display:'flex',alignItems:'center',gap:6}}>
+                <span onClick={toggleByRecipe} style={{...mn,fontSize:11,color:C.onSurfaceVariant,cursor:'pointer'}}>By recipe</span>
+                <Switch size='xs' on={byRecipe} onClick={toggleByRecipe} label='Show the list by recipe'/>
+              </div>
+            )}
+          </div>
         )}
       </div>
       <HDivider/>
@@ -93,6 +136,8 @@ export function ShoppingListScreen({shopping,onToggle,loading,loadingMsg,error,n
           <Btn label='✨ Generate Shopping List' onClick={onRegenerate} small/>
           <Btn label='Make a basic list (no AI)' onClick={onBuildBasic} secondary small/>
         </div>
+      ):byRecipe?(
+        <ShoppingByRecipe portions={plannedPortions} shopping={shopping} onToggle={onToggle} renderItem={itemRow}/>
       ):(
         orderedAisles.map(aisle=>{
           const items=shopping.filter(s=>s.aisle===aisle)
@@ -101,33 +146,7 @@ export function ShoppingListScreen({shopping,onToggle,loading,loadingMsg,error,n
             <div key={aisle} style={{marginBottom:18}}>
               <div style={{...ep,fontSize:16,letterSpacing:'0.06em',color:C.onSurface,marginBottom:8}}>{aisle.charAt(0)+aisle.slice(1).toLowerCase()}</div>
               <div style={{...CARD,padding:0,overflow:'hidden'}}>
-                {items.map((item,i)=>(
-                  <div key={item.id} onClick={()=>onToggle(item.id)} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 14px',borderBottom:i<items.length-1?`1px solid ${C.outlineVariant}25`:undefined,cursor:'pointer'}}>
-                    <div style={{width:22,height:22,borderRadius:R.pill,border:`2px solid ${item.checked?C.tertiary:C.outlineVariant}`,background:item.checked?C.tertiary:'transparent',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-                      {item.checked&&<Icon name='check' size={13} color={C.onPrimary}/>}
-                    </div>
-                    <span style={{...mn,fontSize:14,flex:1,opacity:item.checked?0.45:1,textDecoration:item.checked?'line-through':'none',color:C.onSurface}}>{item.name}</span>
-                    {(item.amount||item.unit)&&<span style={{...mn,fontSize:12,fontWeight:700,opacity:item.checked?0.45:0.6,textDecoration:item.checked?'line-through':'none',color:C.onSurface}}>{item.amount}{item.unit?' '+item.unit:''}</span>}
-                    {PRODUCE_AISLES.includes(item.aisle)&&(()=>{
-                      const g=guideMap[item.id]
-                      if(g===undefined||g==='checking')return null
-                      if(g) return(
-                        <button onClick={e=>{e.stopPropagation();setSheetItem({id:item.id,name:item.name,guideId:g})}} title="Buyer's Eye" style={{border:'none',background:'transparent',padding:4,display:'flex',cursor:'pointer',flexShrink:0}}>
-                          <Icon name='info' size={15} color={C.onSurfaceVariant}/>
-                        </button>
-                      )
-                      if(noTipsNames.has(item.name.trim().toLowerCase()))return null
-                      return(
-                        <button onClick={e=>{e.stopPropagation();setSheetItem({id:item.id,name:item.name,guideId:null})}} title="Get expert tips" style={{border:'none',background:'transparent',padding:4,display:'flex',cursor:'pointer',flexShrink:0,opacity:0.55}}>
-                          <Icon name='sparkles' size={14} color={C.tertiary}/>
-                        </button>
-                      )
-                    })()}
-                    <button onClick={e=>{e.stopPropagation();onRemoveItem(item.id)}} aria-label={`Remove ${item.name}`} title='Remove' style={{border:'none',background:'transparent',padding:4,display:'flex',cursor:'pointer',flexShrink:0,opacity:0.5}}>
-                      <Icon name='x' size={14} color={C.onSurfaceVariant}/>
-                    </button>
-                  </div>
-                ))}
+                {items.map((item,i)=>itemRow(item,i<items.length-1))}
               </div>
             </div>
           )

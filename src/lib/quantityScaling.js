@@ -40,6 +40,7 @@ const FOOD_UNITS = {
   bunch: 'bunch', bunches: 'bunch',
   handful: 'handful', handfuls: 'handful',
   drop: 'drop', drops: 'drop',
+  pinch: 'pinch', pinches: 'pinch',
   bag: 'bag', bags: 'bag',
   punnet: 'punnet', punnets: 'punnet',
   fillet: 'fillet', fillets: 'fillet',
@@ -53,12 +54,13 @@ const NON_PLURAL = new Set(['g', 'kg', 'ml', 'l', 'cl', 'dl', 'tsp', 'tbsp', 'oz
 const pluralOf = u => /(?:ch|sh|s|x)$/.test(u) ? u + 'es' : u + 's'
 
 // "3 cloves" halved should read "1½ cloves", and doubled from "1 clove" should
-// read "2 cloves". Unusual wordings ("tablespoons") are left exactly as written.
+// read "2 cloves". A lone fraction is singular: "⅓ bunch", not "⅓ bunches".
+// Unusual wordings ("tablespoons") are left exactly as written.
 function renderUnit(unitRaw, canon, valueStr) {
   if (!canon || NON_PLURAL.has(canon)) return unitRaw
   const lower = unitRaw.toLowerCase()
   if (lower !== canon && lower !== pluralOf(canon)) return unitRaw
-  return valueStr === '1' ? canon : pluralOf(canon)
+  return valueStr === '1' || VULGAR[valueStr] != null ? canon : pluralOf(canon)
 }
 
 // Alternation for the regexes below, longest-first so "tablespoons" wins over "tbsp".
@@ -122,9 +124,10 @@ export function formatNumber(n, unit) {
   const whole = Math.floor(n + 1e-9)
   const frac = n - whole
   if (frac < 0.06) return String(whole)
-  for (const [v, glyph] of FRACTION_STEPS) {
-    if (Math.abs(frac - v) < 0.042) return whole ? `${whole}${glyph}` : glyph
-  }
+  // Nearest, not first within tolerance: ⅝ and ⅔ are close enough that the first
+  // match would read two-thirds as ⅝.
+  const [nearest, glyph] = FRACTION_STEPS.reduce((a, b) => Math.abs(frac - b[0]) < Math.abs(frac - a[0]) ? b : a)
+  if (Math.abs(frac - nearest) < 0.042) return whole ? `${whole}${glyph}` : glyph
   if (1 - frac < 0.06) return String(whole + 1)
   return String(Math.round(n * 100) / 100)
 }
@@ -275,19 +278,40 @@ export function scaleTextPlain(text, scale, knownQtys) {
 // ── Ingredient lines ──────────────────────────────────────────────
 // Replaces the old parseIngredientParts. Same {qty, name} shape, but fractions
 // parse correctly and output is cook-friendly.
-// Group 2 captures the gap so "24 sticks" doesn't come back as "12sticks".
-const ING_RE = new RegExp(`^(${NUM_SRC})(\\s*)(?:(${UNIT_ALT})\\b)?\\.?\\s*(.+)$`, 'i')
+// A number or a range ("40–60g"), plus the gap after it so "24 sticks" doesn't
+// come back as "12sticks".
+const QTY_SRC = `(${NUM_SRC})(?:\\s*[–—-]\\s*(${NUM_SRC}))?(\\s*)`
+const ING_RE = new RegExp(`^${QTY_SRC}(?:(${UNIT_ALT})\\b)?\\.?\\s*(.+)$`, 'i')
+const QTY_RE = new RegExp(`^${QTY_SRC}(.*)$`, 'i')
+
+function renderQty(lowRaw, highRaw, gap, unitRaw, scale) {
+  const low = parseNumber(lowRaw)
+  if (low == null) return null
+  const unit = normalizeUnit(unitRaw)
+  const high = parseNumber(highRaw)
+  const a = formatNumber(low * (scale || 1), unit)
+  const b = high == null ? null : formatNumber(high * (scale || 1), unit)
+  if (a == null) return null
+  const shown = b ? `${a}–${b}` : a
+  return unitRaw ? `${shown}${gap}${renderUnit(unitRaw, unit, b ? null : a)}` : shown
+}
 
 export function scaleIngredientLine(text, scale) {
   if (!text) return { qty: null, name: text }
   const m = String(text).match(ING_RE)
-  if (!m) return { qty: null, name: text }
-  const value = parseNumber(m[1])
-  if (value == null) return { qty: null, name: text }
-  const gap = m[2] || ''
-  const unitRaw = m[3] || ''
-  const unit = normalizeUnit(unitRaw)
-  const d = formatNumber(value * (scale || 1), unit)
-  if (d == null) return { qty: null, name: text }
-  return { qty: unitRaw ? `${d}${gap}${renderUnit(unitRaw, unit, d)}` : d, name: m[4] }
+  const qty = m && renderQty(m[1], m[2], m[3], m[4] || '', scale)
+  return qty ? { qty, name: m[5] } : { qty: null, name: text }
+}
+
+/**
+ * The amount half of a "Cherry tomatoes: 200g" line. Words that aren't units
+ * ("3 large leaves") are kept as written; null when it doesn't start with a number.
+ */
+export function scaleQuantity(text, scale) {
+  const m = String(text || '').trim().match(QTY_RE)
+  if (!m) return null
+  const rest = m[4].trim()
+  const unitRaw = normalizeUnit(rest) ? rest : ''
+  const qty = renderQty(m[1], m[2], m[3], unitRaw, scale)
+  return qty && rest && !unitRaw ? `${qty} ${rest}` : qty
 }

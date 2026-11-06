@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
-import { fetchRecipeDetails, fetchRecipeNotes, saveRecipeNotes, fetchRecipeToddlerTask, saveRecipeToddlerTask, uploadRecipePhoto, recipeImageUrl } from '../lib/supabase.js'
-import { prepareRecipePhoto } from '../lib/imageHelpers.js'
+import { fetchRecipeDetails, fetchRecipeNotes, saveRecipeNotes, fetchRecipeToddlerTask, saveRecipeToddlerTask, uploadRecipePhoto, recipeImageUrl, saveRecipeSourceUrl } from '../lib/supabase.js'
+import { base64ToFile, prepareRecipePhoto } from '../lib/imageHelpers.js'
+import { linkPhotoCredit, linkPhotoMayReplace } from '../lib/recipeLink.js'
 import { ImageCropper } from './ui/ImageCropper.jsx'
 import { isFullFrame } from '../lib/imageMath.js'
 import { RecipePhotoStrip } from './recipe/RecipePhotoStrip.jsx'
+import { RecipeSourceLink } from './recipe/RecipeSourceLink.jsx'
 import { AI_PHOTO, AiPhotoSheet } from './recipe/PhotoSheets.jsx'
-import { callEdgeFn } from '../lib/ai.js'
+import { callEdgeFn, fetchLinkPhoto } from '../lib/ai.js'
 import { C, ep, mn, CARD, R } from '../lib/theme.js'
 import { ageBandFromDob, TODDLER_AGE_BANDS } from '../lib/dateHelpers.js'
 import { ALL_SECTION_IDS, dayMeals } from '../lib/mealSections.js'
@@ -70,6 +72,7 @@ export function RecipeScreen({ recipeId, portion, onPortionChange, onAddMeal, to
           recipeName: recipe.name,
           ingredients: recipe.ingredients,
           instructions: recipe.instructions_standard || recipe.instructions_thermomix,
+          instructionsThermomix: recipe.instructions_thermomix,
           toddlerVariations: recipe.toddler_variations,
         }, { quiet: true })
         const list = Array.isArray(result.activities) && result.activities.length
@@ -96,6 +99,31 @@ export function RecipeScreen({ recipeId, portion, onPortionChange, onAddMeal, to
       onPhotoChange?.(recipeId, img)
     } catch (e) {
       setPhotoError(e.message)
+    } finally {
+      setPhotoBusy(false)
+    }
+  }
+
+  async function handleSourceLinkSave(sourceUrl) {
+    await saveRecipeSourceUrl(recipeId, sourceUrl)
+    setData(d => ({ ...d, source_url: sourceUrl }))
+    const currentSource = photo ? photo.imageSource : data.image_source
+    if (sourceUrl && sourceUrl !== data.source_url && linkPhotoMayReplace(currentSource)) takeLinkPhoto(sourceUrl)
+  }
+
+  // A new link brings its photo along. The link is already saved by now, so
+  // this runs on its own and a failure only means no picture.
+  async function takeLinkPhoto(url) {
+    setPhotoBusy(true); setPhotoError(null)
+    try {
+      const { image } = await fetchLinkPhoto(url)
+      if (!image) throw new Error('no photo')
+      const file = base64ToFile(image.base64, image.mediaType)
+      const img = await uploadRecipePhoto(recipeId, await prepareRecipePhoto(file), { source: 'import', credit: linkPhotoCredit(image) })
+      setPhoto(img)
+      onPhotoChange?.(recipeId, img)
+    } catch {
+      setPhotoError("Couldn't get a photo from that link.")
     } finally {
       setPhotoBusy(false)
     }
@@ -149,6 +177,7 @@ export function RecipeScreen({ recipeId, portion, onPortionChange, onAddMeal, to
       )}
       <div style={{marginBottom:20}}>
         <div style={{...ep,fontSize:24,color:C.onSurface,lineHeight:1.2}}>{data.name}</div>
+        <RecipeSourceLink key={recipeId} url={data.source_url} onSave={handleSourceLinkSave}/>
       </div>
 
       {/* Prep / Cook */}

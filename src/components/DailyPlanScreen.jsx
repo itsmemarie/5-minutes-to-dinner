@@ -7,7 +7,9 @@ import { Icon } from './ui/Icon.jsx'
 import { parseSideNames, formatSideNames } from '../lib/sidePairing.js'
 import { dayNutritionTotals, dayRemainingLine } from '../lib/goalMaths.js'
 
-export function DailyPlanScreen({day,plan,recipes,updatePortion,removeMeal,onAddToSection,onRecipeOpen,onSave,goalProfile,goalTargets,nutritionByRecipe={},sectionIds=ALL_SECTION_IDS}){
+// dateLabel: the day's date, passed on a week other than this one so it's clear
+// which Tuesday this is.
+export function DailyPlanScreen({day,dateLabel,plan,recipes,updatePortion,removeMeal,onAddToSection,onRecipeOpen,onSave,goalProfile,goalTargets,nutritionByRecipe={},sectionIds=ALL_SECTION_IDS}){
   const [saved,setSaved]=useState(false)
   // The day's rows, in the order and set the user chose in Settings › Meal sections.
   const secs=sectionIds.map(id=>({key:id,label:sectionLabel(id)}))
@@ -23,6 +25,7 @@ export function DailyPlanScreen({day,plan,recipes,updatePortion,removeMeal,onAdd
     <div style={{padding:'0 20px'}}>
       {goalMode&&<BudgetStrip dayTotals={dayTotals} targets={goalTargets}/>}
       <div style={{...ep,fontSize:24,color:C.onSurface,padding:'16px 0 2px'}}>{DAY_LBL[day]}</div>
+      {dateLabel&&<div style={{...mn,fontSize:13,color:C.onSurfaceVariant,paddingBottom:4}}>{dateLabel}</div>}
       {goalMode&&(
         <div style={{...mn,fontSize:12,color:C.onSurfaceVariant,lineHeight:1.5,paddingBottom:4}}>{mealsToday.length===0?'Nothing planned yet':dayRemainingLine(dayTotals,goalTargets)}</div>
       )}

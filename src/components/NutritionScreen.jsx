@@ -39,7 +39,7 @@ const NUTRI = {
 }
 
 // toddlerEnabled hides the toddler tab when toddler content is off in Settings.
-export function NutritionScreen({profile,setProfile,nutriData,nutriLoading,nutriError,onAnalyse,goalProfile,goalTargets,plan,nutritionByRecipe={},days=DAYS,sectionIds=ALL_SECTION_IDS,toddlerEnabled=true}){
+export function NutritionScreen({profile,setProfile,nutriData,nutriLoading,nutriError,onAnalyse,goalProfile,goalTargets,plan,nutritionByRecipe={},days=DAYS,sectionIds=ALL_SECTION_IDS,toddlerEnabled=true,otherWeekLabel=null}){
   const [showInfo,setShowInfo] = useState(false)
   const goalMode = !!goalProfile?.goalModeEnabled && !!goalTargets
   const [seg,setSeg] = useState(goalMode?'goal':'profile')
@@ -68,7 +68,7 @@ export function NutritionScreen({profile,setProfile,nutriData,nutriLoading,nutri
       {!nutriData&&!nutriLoading&&<div style={{...CARD,padding:20,marginBottom:16,textAlign:'center'}}>
         <p style={{...mn,fontSize:13,color:C.onSurfaceVariant,marginBottom:14,lineHeight:1.6}}>Get AI-powered nutritional insights for your week's meal plan.</p>
         <button onClick={onAnalyse} style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:8,border:'none',background:C.secondaryContainer,color:'#924b1a',borderRadius:R.pill,padding:'7px 14px',...mn,fontWeight:700,fontSize:12,whiteSpace:'nowrap',cursor:'pointer'}}>
-          <Icon name='sparkles' size={14}/>Analyse This Week
+          <Icon name='sparkles' size={14}/>{otherWeekLabel?`Analyse ${otherWeekLabel}`:'Analyse This Week'}
         </button>
       </div>}
       <div style={{background:C.primary,borderRadius:R.md,padding:'24px 20px',textAlign:'center',marginBottom:16}}>

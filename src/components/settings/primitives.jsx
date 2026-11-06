@@ -57,16 +57,22 @@ export function RowValue({ children }) {
   )
 }
 
-// `sm` (40×22) for list rows; `md` (46×27) for the two section-opening master toggles.
+// `sm` (40×22) for list rows; `md` (46×27) for the two section-opening master
+// toggles; `xs` (30×17) tucked into a header, with an invisible margin (`slop`)
+// so it's still a comfortable tap.
 const SWITCH_SIZES = {
+  xs: { w:30, h:17, knob:13, inset:2, slop:8 },
   sm: { w:40, h:22, knob:16, inset:3 },
   md: { w:46, h:27, knob:21, inset:3 },
 }
-export function Switch({ on, onClick, size = 'sm', disabled }) {
+export function Switch({ on, onClick, size = 'sm', disabled, label }) {
   const s = SWITCH_SIZES[size]
+  const press = disabled ? undefined : onClick
   return (
-    <div role='switch' aria-checked={!!on} aria-disabled={disabled || undefined} onClick={disabled ? undefined : onClick}
+    <div role='switch' aria-checked={!!on} aria-disabled={disabled || undefined} aria-label={label} tabIndex={disabled ? undefined : 0} onClick={press}
+      onKeyDown={e => { if (press && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); press() } }}
       style={{ width:s.w, height:s.h, borderRadius:R.pill, background: on ? C.primary : C.outlineVariant, position:'relative', flexShrink:0, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1, transition:'background 0.15s' }}>
+      {s.slop && <div style={{ position:'absolute', inset:-s.slop }}/>}
       <div style={{ position:'absolute', top:s.inset, left: on ? s.w - s.knob - s.inset : s.inset, width:s.knob, height:s.knob, borderRadius:R.pill, background:'#fff', transition:'left 0.15s' }}/>
     </div>
   )

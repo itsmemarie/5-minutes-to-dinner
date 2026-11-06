@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseNumber, formatNumber, collectQuantities, scaleText, scaleTextPlain, scaleIngredientLine } from './quantityScaling.js'
+import { parseNumber, formatNumber, collectQuantities, scaleText, scaleTextPlain, scaleIngredientLine, scaleQuantity } from './quantityScaling.js'
 import { parseSteps } from './recipeParsing.js'
 
 // All fixtures below are real strings from the recipes table.
@@ -200,6 +200,48 @@ describe('scaleIngredientLine', () => {
   })
   it('leaves unquantified ingredients alone', () => {
     expect(scaleIngredientLine('Salt and pepper', 2)).toEqual({ qty: null, name: 'Salt and pepper' })
+  })
+  it('scales both ends of a range', () => {
+    expect(scaleIngredientLine('40–60g Emmental, grated', 2)).toEqual({ qty: '80–120g', name: 'Emmental, grated' })
+    expect(scaleIngredientLine('4-6 cherry tomatoes', 0.5)).toEqual({ qty: '2–3', name: 'cherry tomatoes' })
+    expect(scaleIngredientLine('1–2 tbsp cold water', 1).qty).toBe('1–2 tbsp')
+  })
+  it('does not read a hyphenated name as a range', () => {
+    expect(scaleIngredientLine('1 x 5-spice powder', 1).name).toBe('x 5-spice powder')
+  })
+  it('counts pinches as a unit', () => {
+    expect(scaleIngredientLine('1 pinch sugar', 2)).toEqual({ qty: '2 pinches', name: 'sugar' })
+  })
+  it('keeps a lone fraction singular', () => {
+    expect(scaleIngredientLine('1 bunch mint', 0.5).qty).toBe('½ bunch')
+    expect(scaleIngredientLine('3 cloves garlic', 0.5).qty).toBe('1½ cloves')
+  })
+})
+
+describe('formatNumber fractions', () => {
+  it('picks the nearest fraction, not the first close one', () => {
+    expect(formatNumber(2 / 3)).toBe('⅔')
+    expect(formatNumber(0.625)).toBe('⅝')
+    expect(formatNumber(1 / 3)).toBe('⅓')
+    expect(formatNumber(0.375)).toBe('⅜')
+    expect(formatNumber(1 + 2 / 3)).toBe('1⅔')
+  })
+})
+
+describe('scaleQuantity', () => {
+  it('scales the amount of a name-first line', () => {
+    expect(scaleQuantity('200g', 2)).toBe('400g')
+    expect(scaleQuantity('15 g', 2)).toBe('30 g')
+    expect(scaleQuantity('2 pieces', 0.5)).toBe('1 piece')
+    expect(scaleQuantity('½ bunch', 2)).toBe('1 bunch')
+    expect(scaleQuantity('40–60g', 0.5)).toBe('20–30g')
+  })
+  it('keeps words that are not units', () => {
+    expect(scaleQuantity('3 large leaves', 2)).toBe('6 large leaves')
+  })
+  it('returns null without a leading number', () => {
+    expect(scaleQuantity('a drizzle', 2)).toBeNull()
+    expect(scaleQuantity('', 2)).toBeNull()
   })
 })
 

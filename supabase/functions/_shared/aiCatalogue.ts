@@ -35,13 +35,16 @@ export const STEPS: Record<string, StepDef> = {
   recipe_complete: step({ id: 'recipe_complete', label: 'Fill in missing details (step 2)',  group: 'Recipes',  maxTokens: 2500, temperature: 0.3, groqModel: GROQ_TEXT_MODEL, groqReasoning: 'low',    claudeEffort: 'medium' }),
   recipe_review:   step({ id: 'recipe_review',   label: 'Expert review (step 3)',            group: 'Recipes',  maxTokens: 2500, temperature: 0.2, groqModel: GROQ_TEXT_MODEL, groqReasoning: 'medium', claudeEffort: 'high' }),
   recipe_generate: step({ id: 'recipe_generate', label: 'Create a recipe from a description', group: 'Recipes', maxTokens: 4096, temperature: 0.7, groqModel: GROQ_TEXT_MODEL, groqReasoning: 'medium', claudeEffort: 'medium' }),
+  // Writes out the whole recipe plus step 2's additions, so it needs a bigger cap than step 2.
+  recipe_translate: step({ id: 'recipe_translate', label: 'Translate a recipe',              group: 'Recipes',  maxTokens: 6000, temperature: 0.1, groqModel: GROQ_TEXT_MODEL, groqReasoning: 'low',    claudeEffort: 'low' }),
   freezer_extract: step({ id: 'freezer_extract', label: 'Read a freezer list photo',         group: 'Freezer',  vision: true, maxTokens: 1500, temperature: 0,   groqModel: GROQ_VISION_MODEL,                       claudeEffort: 'low' }),
   shopping_list:   step({ id: 'shopping_list',   label: 'Shopping list',                     group: 'Shopping', maxTokens: 4096, temperature: 0.2, groqModel: GROQ_TEXT_MODEL, groqReasoning: 'low',    claudeEffort: 'low' }),
   buyers_eye:      step({ id: 'buyers_eye',      label: "Buyer's Eye produce tips",          group: 'Shopping', maxTokens: 700,  temperature: 0.3, groqModel: GROQ_TEXT_MODEL, groqReasoning: 'low',    claudeEffort: 'low' }),
   nutrition:       step({ id: 'nutrition',       label: 'Nutrition insights',                group: 'Planning', maxTokens: 2048, temperature: 0.2, groqModel: GROQ_TEXT_MODEL, groqReasoning: 'medium', claudeEffort: 'medium' }),
   batch_cooking:   step({ id: 'batch_cooking',   label: 'Batch cooking plan',                group: 'Planning', maxTokens: 8192, temperature: 0.2, groqModel: GROQ_TEXT_MODEL, groqReasoning: 'medium', claudeEffort: 'medium' }),
   toddler_guide:   step({ id: 'toddler_guide',   label: 'Toddler cooking guide',             group: 'Toddler',  maxTokens: 4096, temperature: 0.4, groqModel: GROQ_TEXT_MODEL, groqReasoning: 'low',    claudeEffort: 'low' }),
-  recipe_toddler:  step({ id: 'recipe_toddler',  label: 'Toddler activities for a recipe',   group: 'Toddler',  maxTokens: 900,  temperature: 0.5, groqModel: GROQ_TEXT_MODEL, groqReasoning: 'low',    claudeEffort: 'low' }),
+  // Medium effort because the job has to track what's hot at each recipe step: low let burns and raw meat through.
+  recipe_toddler:  step({ id: 'recipe_toddler',  label: 'Toddler activities for a recipe',   group: 'Toddler',  maxTokens: 2500, temperature: 0.3, groqModel: GROQ_TEXT_MODEL, groqReasoning: 'medium', claudeEffort: 'medium' }),
 }
 
 export interface ModelPreset { id: string; label: string; vision?: boolean }
