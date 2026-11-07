@@ -462,19 +462,29 @@ export async function fetchShoppingList(planId) {
 }
 
 export async function saveShoppingList(planId, items) {
-  // Upsert the list
-  const { data: list } = await supabase
+  const { data: list, error: listErr } = await supabase
     .from('shopping_lists')
     .upsert({ meal_plan_id: planId }, { onConflict: 'meal_plan_id' })
     .select('id')
     .single()
+  if (listErr) throw listErr
 
-  // Clear old items and insert new
-  await supabase.from('shopping_list_items').delete().eq('shopping_list_id', list.id)
+  // New items go in before the old ones come out. This isn't a transaction, so
+  // a rejected insert has to leave the existing list as it was.
+  const { data: old, error: oldErr } = await supabase
+    .from('shopping_list_items')
+    .select('id')
+    .eq('shopping_list_id', list.id)
+  if (oldErr) throw oldErr
   if (items.length) {
-    await supabase.from('shopping_list_items').insert(
+    const { error } = await supabase.from('shopping_list_items').insert(
       items.map(it => ({ ...it, shopping_list_id: list.id }))
     )
+    if (error) throw error
+  }
+  if (old.length) {
+    const { error } = await supabase.from('shopping_list_items').delete().in('id', old.map(it => it.id))
+    if (error) throw error
   }
   return list.id
 }

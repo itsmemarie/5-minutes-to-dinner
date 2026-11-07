@@ -533,6 +533,7 @@ export default function App() {
     setShoppingLoading(true); setShoppingError(null); setShoppingNotice(null)
     // The list is saved to the week it was made for; it's only shown if that's
     // still the week on screen.
+    const before = shopping
     const forWeek = week.weekOf
     const stillOnWeek = () => loadedWeekOf.current === forWeek
 
@@ -554,7 +555,7 @@ export default function App() {
       const sl = await fetchShoppingList(planId)
       if (sl && stillOnWeek()) setShopping(sl.shopping_list_items || [])
     } catch (e) {
-      if (stillOnWeek()) setShoppingError(e.message)
+      if (stillOnWeek()) { setShopping(before); setShoppingError(e.message) }
     } finally {
       setShoppingLoading(false)
     }
@@ -567,6 +568,7 @@ export default function App() {
     if (!portions.size) { alert('Add some meals to the planner first.'); return }
     setTab('list'); setScreen(null)
     setShoppingLoading(true); setShoppingLoadingMsg('Making a basic list from your recipes…'); setShoppingError(null); setShoppingNotice(null)
+    const before = shopping
     const forWeek = week.weekOf
     const stillOnWeek = () => loadedWeekOf.current === forWeek
     try {
@@ -580,7 +582,7 @@ export default function App() {
       if (sl && stillOnWeek()) setShopping(sl.shopping_list_items || [])
       if (stillOnWeek()) setShoppingNotice(`Basic list, made without AI. Amounts from different recipes are listed side by side rather than added up, and aisles are a best guess.${missing.length ? ` No ingredients saved for: ${missing.join(', ')}.` : ''}`)
     } catch (e) {
-      if (stillOnWeek()) setShoppingError(e.message)
+      if (stillOnWeek()) { setShopping(before); setShoppingError(e.message) }
     } finally {
       setShoppingLoading(false); setShoppingLoadingMsg(null)
     }
