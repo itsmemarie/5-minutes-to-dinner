@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  completableRequest, completionSchema, householdLines, recipeForPrompt, sanitiseCompletion, sanitiseLanguage, sanitiseReview,
+  completableRequest, completionSchema, flattenLists, householdLines, recipeForPrompt, sanitiseCompletion, sanitiseLanguage, sanitiseReview,
   sanitiseTranslation, translatableFields, translationSchema,
 } from './recipeFields.ts'
 
@@ -27,6 +27,59 @@ describe('step 2: complete', () => {
   })
   it('never treats the reported language as a recipe field', () => {
     expect(sanitiseCompletion({ chef_notes: 'Toast the spices.', language: 'de' }, ['chef_notes'])).toEqual({ chef_notes: 'Toast the spices.' })
+  })
+})
+
+describe('text fields answered with a list', () => {
+  const tips = ['Toast the rice first.', 'Keep the stock hot.']
+
+  it('joins chef notes into one paragraph', () => {
+    expect(sanitiseCompletion({ chef_notes: tips }, ['chef_notes'])).toEqual({ chef_notes: 'Toast the rice first. Keep the stock hot.' })
+  })
+  it('keeps a method on separate lines', () => {
+    expect(sanitiseCompletion({ instructions_standard: ['1. Chop.', '2. Fry.'] }, ['instructions_standard']))
+      .toEqual({ instructions_standard: '1. Chop.\n2. Fry.' })
+  })
+  it('separates sides with commas', () => {
+    expect(sanitiseCompletion({ side_recommendation: ['Rice', 'Green salad'] }, ['side_recommendation']))
+      .toEqual({ side_recommendation: 'Rice, Green salad' })
+  })
+  it('keeps only the text in a list', () => {
+    expect(sanitiseCompletion({ chef_notes: ['Rest it.', 7, null, '  '] }, ['chef_notes'])).toEqual({ chef_notes: 'Rest it.' })
+  })
+  it('leaves a field out when the list has nothing in it', () => {
+    expect(sanitiseCompletion({ chef_notes: [] }, ['chef_notes'])).toEqual({})
+  })
+  it('still drops other wrong types', () => {
+    expect(sanitiseCompletion({ chef_notes: 12, fridge_storage: { days: 3 } }, ['chef_notes', 'fridge_storage'])).toEqual({})
+  })
+  it('still lets advance_prep_note be empty', () => {
+    expect(sanitiseCompletion({ advance_prep_note: '' }, ['advance_prep_note'])).toEqual({ advance_prep_note: '' })
+  })
+
+  it('flattens a generated recipe into the lines the app parses', () => {
+    const out = flattenLists({
+      name: 'Risotto',
+      portion_size: 4,
+      ingredients: ['[Rice]', '- 300g Arborio rice', '[Mushrooms]', '- 300g mushrooms'],
+      instructions_standard: ['1. Toast the rice.', '2. Add the stock.'],
+      chef_notes: tips,
+    })
+    expect(out).toEqual({
+      name: 'Risotto',
+      portion_size: 4,
+      ingredients: '[Rice]\n- 300g Arborio rice\n[Mushrooms]\n- 300g mushrooms',
+      instructions_standard: '1. Toast the rice.\n2. Add the stock.',
+      chef_notes: 'Toast the rice first. Keep the stock hot.',
+    })
+  })
+  it('leaves a recipe with no lists as it was', () => {
+    const recipe = { name: 'Dal', portion_size: 4, has_thermomix_version: false, chef_notes: 'Toast the spices.' }
+    expect(flattenLists(recipe)).toEqual(recipe)
+  })
+  it('passes through an answer that is not a recipe', () => {
+    expect(flattenLists(null)).toBeNull()
+    expect(flattenLists('nope')).toBe('nope')
   })
 })
 

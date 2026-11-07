@@ -24,7 +24,7 @@ export const COMPLETABLE: Record<string, FieldDef> = {
   instructions_thermomix: { kind: 'string',    guide: 'Thermomix TM6 method, one step per line: "1. Step name: what to do (time / temp / speed)"; browning, searing or roasting stays in a pan or the oven as its own step; "" if the dish doesn\'t suit the Thermomix' },
   fridge_storage:         { kind: 'string',    guide: 'how long it keeps in the fridge, e.g. "3-4 days"' },
   freezer_storage:        { kind: 'string',    guide: 'how to freeze and for how long, or "Not recommended"' },
-  chef_notes:             { kind: 'string',    guide: '2-3 short chef\'s tips that lift the flavour or make it more reliable at home' },
+  chef_notes:             { kind: 'string',    guide: 'one short paragraph of 2-3 chef\'s tips that lift the flavour or make it more reliable at home' },
   husband_variations:     { kind: 'string',    guide: 'a higher-protein variation, towards chicken if possible' },
   toddler_variations:     { kind: 'string',    guide: 'changes for ages 1-3: less salt, safe sizes and textures' },
   side_recommendation:    { kind: 'string',    guide: 'up to 3 sides, comma-separated, no explanations' },
@@ -127,6 +127,21 @@ export function sanitiseLanguage(raw: unknown): string | null {
   return /^[a-z]{2,3}$/.test(code) ? code : null
 }
 
+// Without a schema a model sometimes answers a text field with a list, one string
+// per tip or step. The app works in plain text, so each field goes back to the way
+// it's stored: lines where it's parsed line by line, otherwise a paragraph.
+const LIST_JOINS: Record<string, string> = {
+  ingredients: '\n', instructions_standard: '\n', instructions_thermomix: '\n', side_recommendation: ', ',
+}
+const listToText = (field: string, list: unknown[]) =>
+  list.filter((x): x is string => typeof x === 'string').map(x => x.trim()).filter(Boolean).join(LIST_JOINS[field] ?? ' ')
+
+// For a whole recipe, where every value should be a string or a number.
+export function flattenLists(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw
+  return Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, Array.isArray(v) ? listToText(k, v) : v]))
+}
+
 // Keeps only requested keys with values of the right type. Anything the model
 // added beyond the request is dropped, so step 2 can't overwrite the source.
 export function sanitiseCompletion(raw: unknown, fields: string[]): Record<string, string | number> {
@@ -143,8 +158,9 @@ export function sanitiseCompletion(raw: unknown, fields: string[]): Record<strin
       if (MEAL_TYPES.includes(String(v))) out[f] = String(v)
     } else if (kind === 'diet') {
       if (DIETS.includes(String(v))) out[f] = String(v)
-    } else if (typeof v === 'string' && (v.trim() || f === 'advance_prep_note')) {
-      out[f] = v.trim()
+    } else {
+      const text = typeof v === 'string' ? v.trim() : Array.isArray(v) ? listToText(f, v) : null
+      if (text || (text === '' && f === 'advance_prep_note')) out[f] = text
     }
   }
   return out
