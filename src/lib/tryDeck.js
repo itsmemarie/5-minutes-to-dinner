@@ -42,7 +42,7 @@ const savedTime = r => new Date(r.savedAt ?? r.createdAt ?? 0).getTime()
 // taken out of the tray. That also stops one recipe filling two tray cards.
 function candidates(recipes, picks) {
   const picked = new Set(picks.map(p => p.recipe_id))
-  return recipes.filter(r => r.tryOut && isDeckType(r) && !r.archivedAt && !picked.has(r.id))
+  return recipes.filter(r => r.tryOut && isDeckType(r) && !r.archivedAt && r.status !== 'retired' && !picked.has(r.id))
 }
 
 // Everything waiting to be looked at, mains and sides together.

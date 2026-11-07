@@ -6,6 +6,7 @@ import { ImageCropper } from './ui/ImageCropper.jsx'
 import { isFullFrame } from '../lib/imageMath.js'
 import { RecipePhotoStrip } from './recipe/RecipePhotoStrip.jsx'
 import { RecipeSourceLink } from './recipe/RecipeSourceLink.jsx'
+import { RotationNote } from './recipe/RotationNote.jsx'
 import { AI_PHOTO, AiPhotoSheet } from './recipe/PhotoSheets.jsx'
 import { callEdgeFn, fetchLinkPhoto } from '../lib/ai.js'
 import { C, ep, mn, CARD, R } from '../lib/theme.js'
@@ -19,7 +20,7 @@ import { dayNutritionTotals, rowFigure } from '../lib/goalMaths.js'
 // toddlerDob is null when toddler activities are off in Settings; that hides the
 // activities card and the ideas button. showToddlerVariations gates the recipe's
 // own toddler variation notes separately.
-export function RecipeScreen({ recipeId, portion, onPortionChange, onAddMeal, toddlerDob, showToddlerVariations = true, onOpenToddlerCooking, goalProfile, goalTargets, nutritionByRecipe={}, day, plan, sectionIds = ALL_SECTION_IDS, onPhotoChange, onLinkChange }) {
+export function RecipeScreen({ recipeId, rotation, onBringBack, portion, onPortionChange, onAddMeal, toddlerDob, showToddlerVariations = true, onOpenToddlerCooking, goalProfile, goalTargets, nutritionByRecipe={}, day, plan, sectionIds = ALL_SECTION_IDS, onPhotoChange, onLinkChange }) {
   const goalMode = !!goalProfile?.goalModeEnabled && !!goalTargets
   const recipeNutrition = nutritionByRecipe[recipeId]
   const [showGoalSheet, setShowGoalSheet] = useState(false)
@@ -170,6 +171,7 @@ export function RecipeScreen({ recipeId, portion, onPortionChange, onAddMeal, to
     {aiPhotoOpen&&<AiPhotoSheet name={data.name} ingredients={data.ingredients}
       onClose={()=>setAiPhotoOpen(false)} onUse={file=>{setAiPhotoOpen(false);handlePhotoCropped(file,null,AI_PHOTO)}}/>}
     <div style={{padding:'18px 20px 40px'}}>
+      <RotationNote status={rotation?.status} fixNote={rotation?.fixNote} onBringBack={onBringBack}/>
       {data.has_thermomix_version&&(
         <div style={{display:'inline-flex',alignItems:'center',gap:6,background:C.primary,borderRadius:R.pill,padding:'5px 12px',marginBottom:12}}>
           <span style={{fontSize:12}}>⚡</span>

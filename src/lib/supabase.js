@@ -92,6 +92,9 @@ const RECIPE_LIST_COLUMNS = `
       video_thumb_path,
       skip_count,
       snoozed_until,
+      status,
+      fix_note,
+      second_chance_since,
       recipe_dietary_tags ( dietary_tag_id )
     `
 
@@ -134,6 +137,10 @@ function toRecipe(r) {
     videoThumbUrl:  recipeImageUrl(r.video_thumb_path),
     skipCount:      r.skip_count ?? 0,
     snoozedUntil:   r.snoozed_until || null,
+    // Where it stands after being rated (see mealRating.js).
+    status:            r.status || 'active',
+    fixNote:           r.fix_note || null,
+    secondChanceSince: r.second_chance_since || null,
   }
 }
 
@@ -187,6 +194,41 @@ export async function saveRecipeDeckState(id, patch) {
     .from('recipes')
     .update({ ...columns, updated_at: new Date().toISOString() })
     .eq('id', id)
+  if (error) throw error
+}
+
+// ─── Ratings (see mealRating.js) ──────────────────────────────────
+const ROTATION_FIELD_MAP = { status:'status', fixNote:'fix_note', secondChanceSince:'second_chance_since' }
+
+// patch: any subset of the fields above.
+export async function saveRecipeRotation(id, patch) {
+  const columns = {}
+  for (const [k, v] of Object.entries(patch)) {
+    if (k in ROTATION_FIELD_MAP) columns[ROTATION_FIELD_MAP[k]] = v
+  }
+  const { error } = await supabase
+    .from('recipes')
+    .update({ ...columns, updated_at: new Date().toISOString() })
+    .eq('id', id)
+  if (error) throw error
+}
+
+// One row per planned meal. Each writer sends only its own fields, so the others
+// survive: an upsert leaves columns it wasn't given as they are.
+async function saveMealRatingFields(plannedMealId, fields) {
+  const { error } = await supabase
+    .from('meal_ratings')
+    .upsert({ planned_meal_id: plannedMealId, ...fields }, { onConflict: 'planned_meal_id' })
+  if (error) throw error
+}
+export const upsertMealRating = (plannedMealId, rating) => saveMealRatingFields(plannedMealId, { rating, rated_at: new Date().toISOString() })
+export const setMealAte = (plannedMealId, ate) => saveMealRatingFields(plannedMealId, { ate })
+export const setMealComment = (plannedMealId, comment) => saveMealRatingFields(plannedMealId, { comment })
+
+// Undo of a cleared week: the meals are new rows, so their ratings go back in too.
+export async function insertMealRatings(rows) {
+  if (!rows.length) return
+  const { error } = await supabase.from('meal_ratings').insert(rows)
   if (error) throw error
 }
 
@@ -428,7 +470,8 @@ export async function fetchWeekPlan(planId) {
         base_portion_snapshot,
         advance_prep_hours_snapshot,
         advance_prep_note_snapshot,
-        position
+        position,
+        meal_ratings ( rating, comment, ate )
       )
     `)
     .eq('meal_plan_id', planId)
@@ -493,6 +536,13 @@ export async function insertWeekMeals(meals) {
 export async function removePlannedMeal(id) {
   await supabase.from('planned_meals').delete().eq('id', id)
 }
+
+// For when the app is closing: an ordinary request can be dropped with the page.
+// Uses the public key, as RLS is off on planned_meals.
+export const removePlannedMealOnExit = id =>
+  fetch(`${url}/rest/v1/planned_meals?id=eq.${encodeURIComponent(id)}`, {
+    method: 'DELETE', keepalive: true, headers: { apikey: key, Authorization: `Bearer ${key}` },
+  })
 
 export async function removePlannedMeals(ids) {
   if (!ids.length) return

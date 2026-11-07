@@ -3,10 +3,10 @@ import { autoScrollStep } from './tryDeck.js'
 
 const START_SLOP = 4   // px before a press on a tray card counts as a drag
 
-const dayAt = (x, y) => document.elementFromPoint(x, y)?.closest('[data-day]')?.dataset.day ?? null
+export const dayAt = (x, y) => document.elementFromPoint(x, y)?.closest('[data-day]')?.dataset.day ?? null
 
 // The part of the window the list is visible in, between the app's sticky bars.
-function visibleEdges() {
+export function visibleEdges() {
   const top = document.querySelector('[data-top-bar]')?.getBoundingClientRect().bottom ?? 0
   const bottom = document.querySelector('[data-bottom-bar]')?.getBoundingClientRect().top ?? window.innerHeight
   return { top, bottom }
