@@ -40,6 +40,8 @@ export interface BtnProps {
   secondary?: boolean;
   /** Compact sizing (smaller padding/font). */
   small?: boolean;
+  /** With `secondary`: use the darker, accessible text colour. */
+  strong?: boolean;
 }
 export declare function Btn(props: BtnProps): JSX.Element;
 

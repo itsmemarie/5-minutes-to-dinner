@@ -96,17 +96,19 @@ export function SegPill({ options, value, onChange, upper, compact }) {
   )
 }
 
-// Compact stepper for the default-portion row.
-export function InlineStepper({ value, min = 1, onChange }) {
+// Compact stepper for a settings row. `unit` names what's being counted, for
+// screen readers.
+export function InlineStepper({ value, min = 1, max = Infinity, unit = 'portions', onChange }) {
   const atMin = value <= min
-  const btn = { width:30, height:30, borderRadius:R.pill, border:'none', fontSize:17, lineHeight:1, display:'flex', alignItems:'center', justifyContent:'center', padding:0, flexShrink:0 }
+  const atMax = value >= max
+  const btn ={ width:30, height:30, borderRadius:R.pill, border:'none', fontSize:17, lineHeight:1, display:'flex', alignItems:'center', justifyContent:'center', padding:0, flexShrink:0 }
   return (
     <div style={{ display:'flex', alignItems:'center', gap:8, background:ROW_DIVIDER, borderRadius:R.pill, padding:3, flexShrink:0 }}>
-      <button onClick={() => !atMin && onChange(value - 1)} disabled={atMin} aria-label='Fewer portions'
+      <button onClick={() => !atMin && onChange(value - 1)} disabled={atMin} aria-label={`Fewer ${unit}`}
         style={{ ...btn, background:'#fff', color: atMin ? C.outlineVariant : C.onSurface, boxShadow:'0 1px 4px rgba(0,0,0,0.1)', cursor: atMin ? 'default' : 'pointer' }}>−</button>
       <span style={{ ...mn, fontSize:15, fontWeight:700, color:C.onSurface, minWidth:16, textAlign:'center', fontVariantNumeric:'tabular-nums' }}>{value}</span>
-      <button onClick={() => onChange(value + 1)} aria-label='More portions'
-        style={{ ...btn, background:C.primary, color:'#fff', cursor:'pointer' }}>+</button>
+      <button onClick={() => !atMax && onChange(value + 1)} disabled={atMax} aria-label={`More ${unit}`}
+        style={{ ...btn, background: atMax ? '#fff' : C.primary, color: atMax ? C.outlineVariant : '#fff', cursor: atMax ? 'default' : 'pointer' }}>+</button>
     </div>
   )
 }

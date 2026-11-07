@@ -22,7 +22,12 @@ export const DEFAULT_PREFERENCES = {
   toddlerVariations: true,
   toddlerPortion: false,
   kitchenEquipment: ['thermomix', 'oven', 'hob', 'microwave'],  // EQUIPMENT_OPTIONS ids
+  tryoutWeeklyTarget: 2,        // swipe deck goal, 0 turns it off; see TRYOUT_TARGET_*
 }
+
+// The same limits as the app_settings.tryout_weekly_target check.
+export const TRYOUT_TARGET_MIN = 0
+export const TRYOUT_TARGET_MAX = 7
 
 // ── Catalogues ────────────────────────────────────────────────────
 // Only the UK is specified by the design; the others are the English-speaking
@@ -134,6 +139,10 @@ export function normalisePreferences(raw = {}) {
     kitchenEquipment: Array.isArray(r.kitchenEquipment)
       ? EQUIPMENT_OPTIONS.map(o => o.id).filter(id => r.kitchenEquipment.includes(id))
       : DEFAULT_PREFERENCES.kitchenEquipment,
+    // 0 is a real answer (no goal), so this can't be a falsy check.
+    tryoutWeeklyTarget: Number.isInteger(r.tryoutWeeklyTarget)
+      ? Math.min(TRYOUT_TARGET_MAX, Math.max(TRYOUT_TARGET_MIN, r.tryoutWeeklyTarget))
+      : DEFAULT_PREFERENCES.tryoutWeeklyTarget,
   }
 }
 
