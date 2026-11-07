@@ -90,6 +90,43 @@ export const keepPatch = (now = new Date()) => ({ skipCount:0, snoozedUntil:snoo
 export const removePatch = (now = new Date()) => ({ archivedAt:now.toISOString() })
 export const undoPatch = recipe => ({ skipCount:recipe.skipCount ?? 0, snoozedUntil:recipe.snoozedUntil ?? null, archivedAt:null })
 
+// ── The tray ──────────────────────────────────────────────────────
+// Unscheduled picks from any week, oldest first. A pick stays here until it's
+// dropped on a day, and comes back if that meal is later deleted.
+export function trayItems(picks, recipes) {
+  const byId = new Map(recipes.map(r => [r.id, r]))
+  return picks
+    .filter(p => !p.planned_meal_id && byId.has(p.recipe_id))
+    .map(pick => ({ pick, recipe:byId.get(pick.recipe_id) }))
+}
+
+// The meals that came from the deck, which wear the "New" chip.
+export const pickedMealIds = picks => new Set(picks.map(p => p.planned_meal_id).filter(Boolean))
+
+// A side goes with the sides. Everything else goes in the day's main meal, using
+// whichever of those sections the user has on.
+export function dropSection(recipe, sectionIds) {
+  const wanted = recipe.mealTypeId === DECK_MEAL_TYPES.on ? ['side', 'main', 'dinner', 'lunch'] : ['main', 'dinner', 'lunch']
+  return wanted.find(s => sectionIds.includes(s)) ?? sectionIds[0]
+}
+
+export const plannedMealFrom = (recipe, section, position, portion) => ({
+  recipeId: recipe.id, section, name: recipe.name, prep: recipe.prep, active: recipe.active, min: recipe.min, portion, base: recipe.base,
+  advancePrepHours: recipe.advancePrepHours ?? null, advancePrepNote: recipe.advancePrepNote ?? null, position,
+})
+
+// Dragging near the top or bottom of the visible list scrolls it, faster the
+// closer the finger gets. `top` and `bottom` are that list's edges on screen.
+export const SCROLL_ZONE = { top:50, bottom:70 }
+const MAX_SCROLL_STEP = 14
+export function autoScrollStep(y, top, bottom) {
+  const intoBottom = y - (bottom - SCROLL_ZONE.bottom)
+  if (intoBottom > 0) return Math.ceil(MAX_SCROLL_STEP * Math.min(1, intoBottom / SCROLL_ZONE.bottom))
+  const intoTop = top + SCROLL_ZONE.top - y
+  if (intoTop > 0) return -Math.ceil(MAX_SCROLL_STEP * Math.min(1, intoTop / SCROLL_ZONE.top))
+  return 0
+}
+
 // ── Words ─────────────────────────────────────────────────────────
 export const deckName = r => splitRecipeName(r.name).title
 export const totalMinutes = r => (r.prep ?? 0) + (r.active ?? 0)
@@ -100,6 +137,7 @@ export const savedLabel = r =>
 export const progressLabel = (picked, target) => (target > 0 ? `${picked}/${target} this week` : `${picked} this week`)
 // The shorter form in the deck's header, where the full one wraps the title at 360px.
 export const deckProgressLabel = (picked, target) => (target > 0 ? `${picked}/${target}` : `${picked} added`)
+export const waitingLabel = n => `${n} try-out${n === 1 ? '' : 's'} waiting`
 
 export function deckCaption(n, { sides, recent }) {
   const kind = sides ? 'side' : 'main'
