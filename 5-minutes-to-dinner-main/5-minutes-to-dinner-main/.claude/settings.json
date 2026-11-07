@@ -40,7 +40,10 @@
       "Bash(DENO_NO_PACKAGE_JSON=1 npx -y deno@2 check --node-modules-dir=none supabase/functions/*/index.ts)",
       "Bash(DENO_NO_PACKAGE_JSON=1 npx -y deno@2 test --node-modules-dir=none --allow-all supabase/functions/_shared/)",
       "Bash(node __TRACKED_VAR__/drift.mjs __TRACKED_VAR__/live/supabase/functions)",
-      "Bash(npx -y supabase@latest functions deploy complete-recipe translate-recipe ai-config review-recipe generate-recipe batch-cooking toddler-cooking recipe-toddler-task --no-verify-jwt --remote=chcjytxvpvhzdgvwllss --use-api --yes)"
+      "Bash(npx -y supabase@latest functions deploy complete-recipe translate-recipe ai-config review-recipe generate-recipe batch-cooking toddler-cooking recipe-toddler-task --no-verify-jwt --remote=chcjytxvpvhzdgvwllss --use-api --yes)",
+      "Bash(node __TRACKED_VAR__/watch.mjs)",
+      "Bash(node __TRACKED_VAR__/prodcheck.mjs)",
+      "Bash(grep -oE '.{0,120}amount.{0,160}')"
     ],
     "additionalDirectories": [
       "C:\\Users\\Hanita\\.claude\\skills\\synced\\bf8d5b1a-85a7-41b8-afe2-10aa8f796b22_ea3a193a-12d0-4b52-8ab1-90cbb7dd0c3b\\5-minutes-to-dinner"
