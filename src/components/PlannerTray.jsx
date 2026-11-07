@@ -6,7 +6,7 @@ import { CapLabel, Icon } from './ui/index.js'
 
 const TYPE_LABEL = { main:'Main', side:'Side' }
 
-// The way into the swipe deck, under the planner's title.
+// The way into the swipe deck, under the planner's nutrition card.
 export function TryEntryCard({ waiting, pill, onOpen }) {
   return (
     <button onClick={onOpen} style={{ width:'100%', display:'flex', alignItems:'center', gap:12, background:C.primary, color:C.onPrimary, border:'none', borderRadius:R.lg, padding:'14px 16px', marginBottom:14, cursor:'pointer', textAlign:'left' }}>

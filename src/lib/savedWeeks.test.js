@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { snapshotWeek, defaultWeekName, mealsByDay, savedRecipeIds, buildFill, fillNotice } from './savedWeeks.js'
+import { snapshotWeek, weekMealRows, defaultWeekName, mealsByDay, savedRecipeIds, buildFill, fillNotice } from './savedWeeks.js'
 import { emptyWeek, weekBounds } from './dateHelpers.js'
 
 const DAYS = weekBounds('mon', new Date(2026, 10, 4)).days
@@ -32,6 +32,22 @@ describe('snapshotWeek', () => {
   it('keeps a name-only meal', () => {
     const [m] = snapshotWeek(planWith(['monday', meal({ recipeId: null })]), DAYS, ON)
     expect(m).toMatchObject({ recipeId: null, name: 'Fish pie' })
+  })
+})
+
+describe('weekMealRows', () => {
+  const entries = Object.fromEntries(DAYS.map(d => [d, `entry-${d}`]))
+  it('keeps each meal in its place, on its own day entry', () => {
+    const rows = weekMealRows(planWith(['monday', meal({ id:'a' })], ['monday', meal({ id:'b' })], ['friday', meal({ id:'c', section:'side' })]), DAYS, entries)
+    expect(rows.map(r => [r.id, r.dayEntryId, r.section, r.position])).toEqual([
+      ['a', 'entry-monday', 'main', 0], ['b', 'entry-monday', 'main', 1], ['c', 'entry-friday', 'side', 0],
+    ])
+  })
+  it('includes sections that are turned off, as a clear removes those too', () => {
+    expect(weekMealRows(planWith(['tuesday', meal({ section:'dessert' })]), DAYS, entries).map(r => r.section)).toEqual(['dessert'])
+  })
+  it('is empty for an empty week', () => {
+    expect(weekMealRows(emptyWeek(), DAYS, entries)).toEqual([])
   })
 })
 

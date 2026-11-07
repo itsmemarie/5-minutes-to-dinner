@@ -438,8 +438,8 @@ export async function fetchWeekPlan(planId) {
   return data
 }
 
-// How many meals each stored week holds, as { 'YYYY-MM-DD': n }, for the
-// Planner's week strip.
+// How many meals each stored week holds, as { 'YYYY-MM-DD': n }, for the dots
+// in the Planner's week stepper and picker.
 export async function fetchWeekMealCounts() {
   const { data, error } = await supabase
     .from('meal_plans')
@@ -480,11 +480,13 @@ export async function addPlannedMeals(dayEntryId, meals) {
 // A whole week at once, each meal carrying its own `dayEntryId` and `position`.
 // One statement, so either every meal goes in or none does.
 export async function insertWeekMeals(meals) {
-  if (!meals.length) return
-  const { error } = await supabase
+  if (!meals.length) return []
+  const { data, error } = await supabase
     .from('planned_meals')
     .insert(meals.map(m => plannedMealRow(m.dayEntryId, m, m.position)))
+    .select('id, day_entry_id, section, position')
   if (error) throw error
+  return data
 }
 
 // ─── Remove meal ──────────────────────────────────────────────────

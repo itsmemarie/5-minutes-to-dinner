@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { normalisePreferences, migrateLegacyToddlerDob, activeToddlerDob, normaliseChildren, languageName } from './preferences.js'
 import { normaliseMealSections, enabledSectionIds, dayMeals, emptyDay, ALL_SECTION_IDS, sectionInfo } from './mealSections.js'
-import { weekBounds, addWeeks, dayDateLabel, weekStripItems, ageInMonths, formatAge, emptyWeek } from './dateHelpers.js'
+import { weekBounds, addWeeks, dayDateLabel, formatWeekRange, weekLabel, isoWeekNumber, monthWeeks, ageInMonths, formatAge, emptyWeek } from './dateHelpers.js'
 
 describe('normaliseMealSections', () => {
   it('returns the shipped defaults for nothing saved', () => {
@@ -166,44 +166,70 @@ describe('dayDateLabel', () => {
   })
 })
 
-describe('weekStripItems', () => {
-  const now = new Date(2026, 10, 4, 12) // Wednesday 4 Nov 2026
-  const counts = { '2026-10-12': 9, '2026-10-19': 0, '2026-11-02': 2 }
+describe('formatWeekRange', () => {
+  const now = new Date(2026, 10, 4)
+  const range = (a, b) => formatWeekRange(a, b, now)
+  it('shortens a week inside one month', () => {
+    expect(range(new Date(2026, 10, 2), new Date(2026, 10, 8))).toBe('2 – 8 Nov')
+  })
+  it('names both months across a month end', () => {
+    expect(range(new Date(2026, 9, 26), new Date(2026, 10, 1))).toBe('26 Oct – 1 Nov')
+  })
+  it('adds the year only when it is not this one', () => {
+    expect(range(new Date(2025, 10, 3), new Date(2025, 10, 9))).toBe('3 – 9 Nov 2025')
+    expect(range(new Date(2025, 9, 27), new Date(2025, 10, 2))).toBe('27 Oct – 2 Nov 2025')
+  })
+  it('shows both years across New Year', () => {
+    expect(range(new Date(2025, 11, 29), new Date(2026, 0, 4))).toBe('29 Dec 2025 – 4 Jan 2026')
+  })
+})
 
-  it('runs from the earliest week with meals to the weeks ahead', () => {
-    const items = weekStripItems('mon', counts, { ahead: 2, now })
-    expect(items.map(i => i.weekOf)).toEqual(['2026-10-12', '2026-10-19', '2026-10-26', '2026-11-02', '2026-11-09', '2026-11-16'])
-    expect(items.map(i => i.offset)).toEqual([-3, -2, -1, 0, 1, 2])
+describe('weekLabel', () => {
+  it('names the weeks around this one', () => {
+    expect([0, 1, -1, 3, -3].map(weekLabel)).toEqual(['This week', 'Next week', 'Last week', 'In 3 weeks', '3 weeks ago'])
   })
-  it('includes weeks that were never opened', () => {
-    expect(weekStripItems('mon', { '2026-10-12': 1 }, { ahead: 0, now }).map(i => i.weekOf)).toContain('2026-10-26')
+})
+
+describe('isoWeekNumber', () => {
+  it('matches the ISO calendar, including around New Year', () => {
+    expect(isoWeekNumber(new Date(2026, 10, 2))).toBe(45)
+    expect(isoWeekNumber(new Date(2026, 0, 1))).toBe(1)
+    expect(isoWeekNumber(new Date(2025, 11, 29))).toBe(1)
+    expect(isoWeekNumber(new Date(2027, 0, 1))).toBe(53)
   })
-  it('marks this week and which weeks have meals', () => {
-    const items = weekStripItems('mon', counts, { ahead: 0, now })
-    expect(items.filter(i => i.isThisWeek).map(i => i.weekOf)).toEqual(['2026-11-02'])
-    expect(items.filter(i => i.hasMeals).map(i => i.weekOf)).toEqual(['2026-10-12', '2026-11-02'])
+  it('gives every day of a week the same number', () => {
+    expect(isoWeekNumber(new Date(2026, 10, 8))).toBe(isoWeekNumber(new Date(2026, 10, 2)))
   })
-  it('ignores empty stored weeks when finding where to start', () => {
-    expect(weekStripItems('mon', { '2026-05-04': 0, '2026-10-26': 3 }, { ahead: 0, now })[0].weekOf).toBe('2026-10-26')
+})
+
+describe('monthWeeks', () => {
+  const now = new Date(2026, 10, 7, 12) // Saturday 7 Nov 2026
+  it('lists every week touching the month', () => {
+    const rows = monthWeeks('mon', 2026, 10, now)
+    expect(rows.map(r => r.weekOf)).toEqual(['2026-10-26', '2026-11-02', '2026-11-09', '2026-11-16', '2026-11-23', '2026-11-30'])
+    expect(rows.map(r => r.number)).toEqual([44, 45, 46, 47, 48, 49])
   })
-  it('starts at this week when nothing is planned', () => {
-    expect(weekStripItems('mon', {}, { ahead: 1, now }).map(i => i.offset)).toEqual([0, 1])
+  it('counts each week towards one month only', () => {
+    const inNov = monthWeeks('mon', 2026, 10, now).filter(r => r.inMonth).map(r => r.weekOf)
+    const inDec = monthWeeks('mon', 2026, 11, now).filter(r => r.inMonth).map(r => r.weekOf)
+    expect(inNov.filter(w => inDec.includes(w))).toEqual([])
+    expect([...inNov, ...inDec]).toContain('2026-11-30')
   })
-  it('stops at this week for a future-only plan rather than going past it', () => {
-    expect(weekStripItems('mon', { '2026-12-07': 4 }, { ahead: 1, now })[0].offset).toBe(0)
+  it('gives offsets from this week across the clock change', () => {
+    expect(monthWeeks('mon', 2026, 9, now).map(r => r.offset)).toEqual([-5, -4, -3, -2, -1])
+  })
+  it('agrees with weekBounds on what each offset means', () => {
+    monthWeeks('mon', 2026, 9, now).forEach(r => {
+      expect(weekBounds('mon', addWeeks(now, r.offset)).weekOf).toBe(r.weekOf)
+    })
+  })
+  it('marks today and the days outside the month', () => {
+    const row = monthWeeks('mon', 2026, 10, now).find(r => r.weekOf === '2026-11-02')
+    expect(row.dates.filter(d => d.isToday).map(d => d.day)).toEqual([7])
+    expect(monthWeeks('mon', 2026, 10, now)[0].dates.map(d => d.inMonth)).toEqual([false, false, false, false, false, false, true])
   })
   it('follows a non-Monday week start', () => {
-    const items = weekStripItems('sun', { '2026-10-25': 1 }, { ahead: 0, now })
-    expect(items.map(i => i.weekOf)).toEqual(['2026-10-25', '2026-11-01'])
-  })
-  it('crosses a clock change without repeating or skipping a week', () => {
-    const items = weekStripItems('mon', { '2026-10-19': 1 }, { ahead: 0, now })
-    expect(items.map(i => i.weekOf)).toEqual(['2026-10-19', '2026-10-26', '2026-11-02'])
-  })
-  it('reaches a stored week that does not line up with the week start', () => {
-    // A Monday-keyed plan viewed with a Sunday start: the walk must still stop.
-    const items = weekStripItems('sun', { '2026-10-19': 1 }, { ahead: 0, now })
-    expect(items[0].weekOf).toBe('2026-10-18')
+    expect(monthWeeks('sun', 2026, 10, now)[0].weekOf).toBe('2026-11-01')
   })
 })
 

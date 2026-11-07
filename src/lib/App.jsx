@@ -14,11 +14,11 @@ import {
 import { callEdgeFn, fetchAiConfig, onAiLimit } from './ai.js'
 import { computeTargets } from './goalMaths.js'
 import { C, ep, mn, R } from './theme.js'
-import { TODAY, DAY_LBL, WEEK_START_OPTIONS, weekBounds, addWeeks, dayDateLabel, weekStripItems, uid, emptyWeek, ageBandFromDob, ageBandLabel, formatAge } from './dateHelpers.js'
+import { TODAY, DAY_LBL, WEEK_START_OPTIONS, weekBounds, addWeeks, dayDateLabel, uid, emptyWeek, ageBandFromDob, ageBandLabel, formatAge } from './dateHelpers.js'
 import { ALL_SECTION_IDS, enabledSectionIds, sectionLabel, sectionShort, dayMeals } from './mealSections.js'
 import { normalisePreferences, migrateLegacyToddlerDob, activeToddlerDob, newChild, COUNTRIES, RECIPE_LANGUAGES, countryName, equipmentLabels } from './preferences.js'
 import { buildBasicShoppingList, guessAisle } from './basicShoppingList.js'
-import { snapshotWeek, buildFill, fillNotice, savedRecipeIds } from './savedWeeks.js'
+import { snapshotWeek, weekMealRows, buildFill, fillNotice, savedRecipeIds } from './savedWeeks.js'
 import { deckProgressLabel, dropSection, pickWeek, pickedMealIds, picksInWeek, plannedMealFrom, progressLabel, trayItems, waitingRecipes } from './tryDeck.js'
 import { reelPlatform } from './reels.js'
 import { consumePwaShare } from './share/pwaShareInbox.js'
@@ -66,6 +66,31 @@ const writeStoredRecipeView = v => { try { localStorage.setItem(RECIPE_VIEW_KEY,
 
 const byName = (a, b) => a.name.localeCompare(b.name)
 const TOAST_MS = 2400
+const UNDO_TOAST_MS = 8000
+
+// A stored week's day entries as the app's plan, and which entry each day is.
+const planFromRows = deRows => {
+  const entryMap = {}, plan = emptyWeek()
+  deRows.forEach(de => {
+    entryMap[de.day_of_week] = de.id
+    ;(de.planned_meals || []).forEach(pm => {
+      const sec = pm.section
+      if (plan[de.day_of_week]?.[sec] !== undefined) {
+        plan[de.day_of_week][sec].push({
+          id: pm.id, recipeId: pm.recipe_id, freezerItemId: pm.freezer_item_id, section: sec,
+          portion: pm.portion, name: pm.name_snapshot,
+          base: pm.base_portion_snapshot ?? undefined,
+          prep: pm.prep_time_snapshot || 0,
+          active: pm.cook_time_snapshot || 0,
+          min: 1,
+          advancePrepHours: pm.advance_prep_hours_snapshot != null ? Number(pm.advance_prep_hours_snapshot) : null,
+          advancePrepNote:  pm.advance_prep_note_snapshot || null,
+        })
+      }
+    })
+  })
+  return { entryMap, plan }
+}
 
 // ─── Root App ──────────────────────────────────────────────────────────
 export default function App() {
@@ -123,8 +148,9 @@ export default function App() {
   // AI results are kept per week (weekOf → result), or one week's analysis would
   // show on another.
   const [nutriByWeek, setNutriByWeek] = useState({})
-  const [nutriLoading,setNutriLoading]= useState(false)
-  const [nutriError,  setNutriError]  = useState(null)
+  // Both remember their week, as the planner can move on while one is running.
+  const [nutriLoadingWeek,setNutriLoadingWeek]= useState(null)
+  const [nutriFailure,setNutriFailure]= useState(null)   // { weekOf, message }
   const [batchByWeek, setBatchByWeek] = useState({})
   const [batchLoading,setBatchLoading]= useState(false)
   const [batchError,  setBatchError]  = useState(null)
@@ -152,7 +178,7 @@ export default function App() {
   const [plannerNotice, setPlannerNotice] = useState(null)
   // Every swipe-deck pick from every week (see tryDeck.js).
   const [tryoutPicks,   setTryoutPicks]   = useState([])
-  const [toast,         setToast]         = useState(null)
+  const [toast,         setToast]         = useState(null)   // { message, action }
   const toastTimer = useRef(null)
   const stillsAsked = useRef(new Set())   // recipes reel-thumbnail has been asked about
 
@@ -165,8 +191,9 @@ export default function App() {
   const isPastWeek = weekOffset < 0
   const sectionIds = useMemo(() => enabledSectionIds(prefs.mealSections), [prefs.mealSections])
   const nutriData  = nutriByWeek[week.weekOf] ?? null
+  const nutriLoading = nutriLoadingWeek === week.weekOf
+  const nutriError = nutriFailure?.weekOf === week.weekOf ? nutriFailure.message : null
   const batchData  = batchByWeek[week.weekOf] ?? null
-  const stripWeeks = useMemo(() => weekStripItems(prefs.weekStartsOn, weekMealCounts), [prefs.weekStartsOn, weekMealCounts])
   const toddlerDob = activeToddlerDob(prefs)
   const toddlerActivitiesOn = !!toddlerDob && prefs.toddlerActivities
   const toddlerVariationsOn = prefs.toddlerModeEnabled && prefs.toddlerVariations
@@ -195,25 +222,7 @@ export default function App() {
     try {
       const pid = await getOrCreatePlan(weekOf, days)
       const deRows = await fetchWeekPlan(pid)
-      const entryMap = {}, newPlan = emptyWeek()
-      deRows.forEach(de => {
-        entryMap[de.day_of_week] = de.id
-        ;(de.planned_meals || []).forEach(pm => {
-          const sec = pm.section
-          if (newPlan[de.day_of_week]?.[sec] !== undefined) {
-            newPlan[de.day_of_week][sec].push({
-              id: pm.id, recipeId: pm.recipe_id, freezerItemId: pm.freezer_item_id, section: sec,
-              portion: pm.portion, name: pm.name_snapshot,
-              base: pm.base_portion_snapshot ?? undefined,
-              prep: pm.prep_time_snapshot || 0,
-              active: pm.cook_time_snapshot || 0,
-              min: 1,
-              advancePrepHours: pm.advance_prep_hours_snapshot != null ? Number(pm.advance_prep_hours_snapshot) : null,
-              advancePrepNote:  pm.advance_prep_note_snapshot || null,
-            })
-          }
-        })
-      })
+      const { entryMap, plan: newPlan } = planFromRows(deRows)
       const sl = await fetchShoppingList(pid)
       if (superseded()) return false
       setPlanId(pid)
@@ -334,11 +343,11 @@ export default function App() {
   useEffect(() => {
     if (loading || loadedWeekOf.current === week.weekOf) return
     loadedWeekOf.current = week.weekOf
-    setNutriError(null); setBatchError(null); setShoppingError(null); setShoppingNotice(null); setPlannerNotice(null)
+    setNutriFailure(null); setBatchError(null); setShoppingError(null); setShoppingNotice(null); setPlannerNotice(null)
     showWeek(week)
   }, [week, loading])
 
-  // The week strip's dots. Read again as the week changes, so edits to the week
+  // The dots in the week stepper and picker. Read again as the week changes, so edits to the week
   // just left are picked up; the week on screen is worked out live below.
   useEffect(() => {
     if (loading) return
@@ -655,10 +664,10 @@ export default function App() {
   // Planner › Save week. Keeps a copy of the week on screen as it looks now.
   const saveCurrentWeek = async name => {
     await saveWeek(name, snapshotWeek(plan, week.days, sectionIds))
-    setPlannerNotice(`Saved “${name}”. It'll be under Fill from saved, ready for any week.`)
+    setPlannerNotice(`Saved “${name}”. It'll be under Fill from a saved week, ready for any week.`)
   }
 
-  // Planner › Fill from saved. New meals go in before old ones come out, so a
+  // Planner › Fill from a saved week. New meals go in before old ones come out, so a
   // failure can leave a week with too many meals but never with none. The insert
   // is one statement, so it either all happens or none of it does.
   const fillWeek = async (saved, mode) => {
@@ -694,6 +703,85 @@ export default function App() {
     setPlannerNotice(fillNotice(fill))
   }
 
+  // Planner › Copy to this week / next week. Adds the week on screen to `offset`
+  // weeks from now, keeping what's there, and works like a fill for freezer meals
+  // and deleted recipes. The other week is read directly, as it isn't on screen.
+  const copyWeek = async offset => {
+    try {
+      const target = weekBounds(prefs.weekStartsOn, addWeeks(new Date(), offset))
+      const saved = { meals: snapshotWeek(plan, week.days, sectionIds) }
+      const { entryMap, plan: targetPlan } = planFromRows(await fetchWeekPlan(await getOrCreatePlan(target.weekOf, target.days)))
+      const existingRecipeIds = await fetchExistingRecipeIds(savedRecipeIds(saved))
+      const fill = buildFill(saved, { plan: targetPlan, days: target.days, sectionIds, mode: 'add', recipes, freezerItems, existingRecipeIds, defPort })
+      const created = await insertWeekMeals(fill.meals.map(m => ({ ...m, dayEntryId: entryMap[m.day] })))
+      const taken = fill.takenFreezerIds
+      if (taken.length) {
+        setFreezerItems(items => items.map(it => taken.includes(it.id) ? { ...it, in_stock: false } : it))
+        updateFreezerStock(taken, false)
+      }
+      setBatchByWeek(({ [target.weekOf]: _, ...rest }) => rest)
+      fetchWeekMealCounts().then(setWeekMealCounts).catch(e => console.error('week counts failed', e))
+      setPlannerNotice(fillNotice(fill))
+      if (!created.length) { showToast('Nothing could be copied.'); return }
+      const count = `${created.length} meal${created.length === 1 ? '' : 's'}`
+      showToast(`Copied ${count} to ${target.range}`, { ms: UNDO_TOAST_MS, action: { label: 'Undo', onClick: () => undoCopyWeek(target, created.map(c => c.id), taken) } })
+    } catch (e) {
+      console.error('copy week failed', e)
+      showToast("Couldn't copy that week. Try again.")
+    }
+  }
+
+  const undoCopyWeek = async (target, mealIds, freezerIds) => {
+    showToast(null)
+    try {
+      await removePlannedMeals(mealIds)
+      if (freezerIds.length) {
+        setFreezerItems(items => items.map(it => freezerIds.includes(it.id) ? { ...it, in_stock: true } : it))
+        await updateFreezerStock(freezerIds, true)
+      }
+      fetchWeekMealCounts().then(setWeekMealCounts).catch(e => console.error('week counts failed', e))
+      if (loadedWeekOf.current === target.weekOf) await showWeek(target)
+    } catch (e) {
+      console.error('undo copy failed', e)
+      showToast("Couldn't undo that. Try again.")
+    }
+  }
+
+  // Planner › Clear week. Keeps what was there, so Undo can put it back.
+  const clearWeek = async () => {
+    const cleared = week
+    const rows = weekMealRows(plan, week.days, dayEntryMap)
+    const picks = tryoutPicks.filter(p => rows.some(r => r.id === p.planned_meal_id))
+    try { await resetWeekPlan() }
+    catch (e) { console.error('clear week failed', e); showToast("Couldn't clear that week. Try again."); return }
+    showToast(`Cleared ${cleared.range}`, { ms: UNDO_TOAST_MS, action: { label: 'Undo', onClick: () => undoClearWeek(cleared, rows, picks) } })
+  }
+
+  // Works from what clearWeek kept, as another week may be on screen by now. The
+  // meals come back as new rows, so any swipe-deck picks are linked to them again.
+  const undoClearWeek = async (cleared, rows, picks) => {
+    showToast(null)
+    try {
+      const created = await insertWeekMeals(rows)
+      const freezerIds = rows.map(r => r.freezerItemId).filter(Boolean)
+      if (freezerIds.length) {
+        setFreezerItems(items => items.map(it => freezerIds.includes(it.id) ? { ...it, in_stock: false } : it))
+        await updateFreezerStock(freezerIds, false)
+      }
+      await Promise.all(picks.map(pick => {
+        const row = rows.find(r => r.id === pick.planned_meal_id)
+        const meal = created.find(c => c.day_entry_id === row.dayEntryId && c.section === row.section && c.position === row.position)
+        return meal ? linkPickToMeal(pick.id, meal.id) : null
+      }))
+      refreshPicks()
+      fetchWeekMealCounts().then(setWeekMealCounts).catch(e => console.error('week counts failed', e))
+      if (loadedWeekOf.current === cleared.weekOf) await showWeek(cleared)
+    } catch (e) {
+      console.error('undo clear failed', e)
+      showToast("Couldn't bring those meals back. Try again.")
+    }
+  }
+
   // Settings › Your data › Export all recipes — one JSON file.
   const exportRecipes = async () => {
     const rows = await fetchRecipesForExport()
@@ -708,13 +796,15 @@ export default function App() {
   // ── AI functions ─────────────────────────────────────────────────
   const analyseNutrition = async () => {
     const { weekOf } = week
-    setNutriLoading(true); setNutriError(null)
+    setNutriLoadingWeek(weekOf); setNutriFailure(null)
     try {
       // Pass recipeId so the edge function can pull ingredients/macros from the recipe row
       // and scale by portion. Defaults: 1 portion/day/adult, 0.5 portion/day/toddler.
       const allMeals = plannedMealsPayload()
-      if (!allMeals.length) { setNutriError('Add some meals to the planner first.'); setNutriLoading(false); return }
+      if (!allMeals.length) { setNutriFailure({ weekOf, message: 'Add some meals to the planner first.' }); return }
 
+      // `signature` is the meals this analysis looked at, to tell when they've changed.
+      const signature = JSON.stringify(allMeals)
       const basePayload = { meals: allMeals, weekOf: week.weekOf, region, analysis: 'daily_and_weekly' }
 
       // The edge function should return per-day breakdown + weekly summary.
@@ -734,11 +824,11 @@ export default function App() {
           type: x.type,
         })),
       })
-      setNutriByWeek(prev => ({ ...prev, [weekOf]: { adult: normalize(adultResult), toddler: toddlerResult ? normalize(toddlerResult) : null } }))
+      setNutriByWeek(prev => ({ ...prev, [weekOf]: { signature, adult: normalize(adultResult), toddler: toddlerResult ? normalize(toddlerResult) : null } }))
     } catch(e) {
-      setNutriError(e.message)
+      setNutriFailure({ weekOf, message: e.message })
     } finally {
-      setNutriLoading(false)
+      setNutriLoadingWeek(w => w === weekOf ? null : w)
     }
   }
 
@@ -772,10 +862,10 @@ export default function App() {
   }
 
   // ── Swipe deck ──────────────────────────────────────────────────
-  const showToast = message => {
+  const showToast = (message, { action, ms = TOAST_MS } = {}) => {
     clearTimeout(toastTimer.current)
-    setToast(message)
-    if (message) toastTimer.current = setTimeout(() => setToast(null), TOAST_MS)
+    setToast(message ? { message, action } : null)
+    if (message) toastTimer.current = setTimeout(() => setToast(null), ms)
   }
 
   const pickRecipe = async (recipe, weekOf) => {
@@ -986,11 +1076,12 @@ export default function App() {
       </div>
     ) : null
 
-  // Which weeks the strip offers. The week on screen uses what's in memory, so
-  // its dot follows edits straight away.
+  // Which weeks have meals, for the dots. The week on screen uses what's in memory,
+  // so its dot follows edits straight away.
   const visibleMealCount = week.days.flatMap(day => dayMeals(plan[day], sectionIds)).length
-  const weekStrip = stripWeeks
-    .map(w =>w.weekOf === week.weekOf && !weekLoadState ? { ...w, hasMeals: visibleMealCount > 0 } : w)
+  const plannedWeeks = new Set(Object.keys(weekMealCounts).filter(w => weekMealCounts[w] > 0))
+  if (!weekLoadState) plannedWeeks[visibleMealCount > 0 ? 'add' : 'delete'](week.weekOf)
+  const nutriStale = !!nutriData && !weekLoadState && nutriData.signature !== JSON.stringify(plannedMealsPayload())
 
   const renderScreen = () => {
     if (loading) return <Spinner msg={loadMsg}/>
@@ -1024,7 +1115,7 @@ export default function App() {
     if (screen === 'toddlerCooking')  return <ToddlerCookingScreen guide={toddlerGuide} loading={toddlerGuideLoading} error={toddlerGuideError} activeBand={toddlerBand} setActiveBand={setToddlerBand} currentBand={toddlerDob?ageBandFromDob(toddlerDob):null} onGenerate={generateToddlerGuide}/>
     if (tab !== 'planner' && weekLoadState) return weekLoadState
     if (tab === 'home')    return <HomeScreen plan={plan} days={week.days} sectionIds={sectionIds} onDayOpen={openDayPlan} onRecipeOpen={openRecipeFromHome} moveMeal={moveMeal} onCopy={copyWeekPlan} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))} aiContext={aiContext}/>
-    if (tab === 'planner') return <PlannerScreen plan={plan} week={week} weekOffset={weekOffset} weekStrip={weekStrip} onSelectWeek={setWeekOffset} onSaveWeek={saveCurrentWeek} onFillWeek={fillWeek} notice={plannerNotice} onDismissNotice={()=>setPlannerNotice(null)} loadState={weekLoadState} sectionIds={sectionIds} removeMeal={removeMeal} moveMeal={moveMeal} duplicateMeal={duplicateMeal} updatePortion={updatePortion} onDayOpen={openDayPlan} onRecipeOpen={openRecipeFromHome} onNutrition={()=>{ setScreen('nutrition'); if(!nutriData) analyseNutrition() }} onShoppingList={generateShoppingList} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe} tryouts={tryouts}/>
+    if (tab === 'planner') return <PlannerScreen plan={plan} week={week} weekOffset={weekOffset} weekStartsOn={prefs.weekStartsOn} plannedWeeks={plannedWeeks} onSelectWeek={setWeekOffset} onSaveWeek={saveCurrentWeek} onFillWeek={fillWeek} onCopyWeek={copyWeek} onClearWeek={clearWeek} notice={plannerNotice} onDismissNotice={()=>setPlannerNotice(null)} loadState={weekLoadState} sectionIds={sectionIds} removeMeal={removeMeal} moveMeal={moveMeal} duplicateMeal={duplicateMeal} updatePortion={updatePortion} onDayOpen={openDayPlan} onRecipeOpen={openRecipeFromHome} nutrition={{scores:nutriData?.adult?.scores,stale:nutriStale,loading:nutriLoading,error:nutriError}} onCalculateNutrition={analyseNutrition} onNutrition={()=>{ setScreen('nutrition'); if(!nutriData) analyseNutrition() }} onShoppingList={generateShoppingList} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe} tryouts={tryouts}/>
     const weekBanner = !isThisWeek && <WeekBanner label={week.label} onBack={()=>setWeekOffset(0)}/>
     if (tab === 'list')    return <>{weekBanner}<ShoppingListScreen shopping={shopping} weekLabel={week.label} onToggle={onShoppingToggle} loading={shoppingLoading} loadingMsg={shoppingLoadingMsg} error={shoppingError} notice={shoppingNotice} onRegenerate={generateShoppingList} onBuildBasic={buildBasicList} onAddItem={addShoppingItemByHand} onRemoveItem={removeShoppingItemByHand} plannedPortions={plannedPortions()}/></>
     if (tab === 'batch')   return <>{weekBanner}<BatchScreen activeTab={batchTab} setActiveTab={setBatchTab} batchData={batchData} batchLoading={batchLoading} batchError={batchError} onGenerate={generateBatch} onOpenToddlerCooking={toddlerActivitiesOn?()=>openToddlerCooking(false):null} showToddler={toddlerActivitiesOn}/></>
@@ -1089,7 +1180,7 @@ export default function App() {
           </Sheet>
         )}
         {aiNotice && <AiLimitSheet key={aiNotice.id} notice={aiNotice} onClose={() => setAiNotice(null)}/>}
-        <Toast message={toast}/>
+        <Toast message={toast?.message} action={toast?.action}/>
       </div>
     </div>
   )

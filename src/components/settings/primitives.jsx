@@ -133,10 +133,10 @@ export function GroupLabel({ children, style }) {
 
 // Blocking confirmation for destructive rows. Rendered inline by the screen
 // that needs it; the overlay covers the app frame (max 430px wide).
-export function ConfirmDialog({ title, body, confirmLabel = 'Confirm', destructive, busy, onConfirm, onCancel }) {
+export function ConfirmDialog({ title, body, confirmLabel = 'Confirm', destructive, busy, radius = 16, onConfirm, onCancel }) {
   return (
     <div onClick={busy ? undefined : onCancel} style={{ position:'fixed', inset:0, zIndex:40, background:'rgba(24,36,23,0.42)', display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
-      <div onClick={e => e.stopPropagation()} style={{ width:'100%', maxWidth:430, background:C.white, borderRadius:'16px 16px 0 0', padding:'8px 20px 22px' }}>
+      <div onClick={e => e.stopPropagation()} style={{ width:'100%', maxWidth:430, background:C.white, borderRadius:`${radius}px ${radius}px 0 0`, padding:'8px 20px 22px' }}>
         <div style={{ width:44, height:4, borderRadius:R.pill, background:C.outlineVariant, margin:'0 auto 16px' }}/>
         <div style={{ ...ep, fontSize:19, color: destructive ? C.errorInk : C.onSurface, marginBottom:8 }}>{title}</div>
         <div style={{ ...mn, fontSize:13, color:C.onSurfaceVariant, lineHeight:1.6, marginBottom:18 }}>{body}</div>
