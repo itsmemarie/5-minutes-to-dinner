@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { C, ep, mn } from '../lib/theme.js'
 import { WEEK_START_OPTIONS } from '../lib/dateHelpers.js'
-import { countryName, languageName, RECIPE_UNIT_OPTIONS, MEASUREMENT_OPTIONS, RECIPE_TRANSLATE_OPTIONS } from '../lib/preferences.js'
+import { countryName, languageName, RECIPE_UNIT_OPTIONS, MEASUREMENT_OPTIONS, RECIPE_TRANSLATE_OPTIONS, TRYOUT_TARGET_MIN, TRYOUT_TARGET_MAX } from '../lib/preferences.js'
 import { APP_VERSION_LABEL } from '../lib/appVersion.js'
 import { useGeminiKey } from '../lib/geminiKey.js'
 import { useInstallState } from '../lib/install.js'
@@ -9,9 +9,10 @@ import { SectionHeading, RowCard, Row, RowValue, Switch, SegPill, InlineStepper,
 import { MealSectionsCard } from './settings/MealSectionsCard.jsx'
 import { ChildrenSection } from './settings/ChildrenSection.jsx'
 import { GoalSection } from './settings/GoalSection.jsx'
+import { RemovedRecipes } from './settings/RemovedRecipes.jsx'
 
 // ─── Settings ─────────────────────────────────────────────────────
-// Ten sections of row cards. Every control saves on interaction (App debounces
+// Eleven sections of row cards. Every control saves on interaction (App debounces
 // the write); chevron rows push a sub-screen via `onOpen`. The destructive
 // "Reset this week's plan" row confirms before it calls `onResetWeek`.
 //
@@ -25,7 +26,7 @@ export function SettingsScreen({
   goalProfile, goalTargets, setGoalProfile,
   freezerItems = [], weekLabel,
   session, isOwner,
-  onOpen, onExportRecipes, onResetWeek,
+  onOpen, onExportRecipes, onResetWeek, onRecipeRestored,
 }) {
   const [confirmReset, setConfirmReset] = useState(false)
   const [resetting, setResetting] = useState(false)
@@ -70,6 +71,15 @@ export function SettingsScreen({
       {/* 2 · Meal sections */}
       <SectionHeading sub='The rows every day is split into. Drag to reorder.'>Meal sections</SectionHeading>
       <MealSectionsCard sections={prefs.mealSections} onChange={mealSections => setPrefs({ mealSections })}/>
+
+      {/* Trying new things */}
+      <SectionHeading>Trying new things</SectionHeading>
+      <RowCard>
+        <Row gap={14} title='New recipes per week' sub='Your weekly goal in the swipe deck. 0 turns the goal off.'>
+          <InlineStepper value={prefs.tryoutWeeklyTarget} min={TRYOUT_TARGET_MIN} max={TRYOUT_TARGET_MAX} unit='new recipes' onChange={tryoutWeeklyTarget => setPrefs({ tryoutWeeklyTarget })}/>
+        </Row>
+        <RemovedRecipes onRestored={onRecipeRestored}/>
+      </RowCard>
 
       {/* 3 · Region & units */}
       <SectionHeading>Region &amp; units</SectionHeading>

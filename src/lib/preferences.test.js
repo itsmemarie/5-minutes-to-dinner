@@ -63,6 +63,20 @@ describe('normalisePreferences', () => {
     expect(normalisePreferences({ recipeLanguage: 'de', recipeTranslate: 'never' })).toMatchObject({ recipeLanguage: 'de', recipeTranslate: 'never' })
     expect(normalisePreferences({ recipeLanguage: 'klingon', recipeTranslate: 'sometimes' })).toMatchObject({ recipeLanguage: 'en', recipeTranslate: 'ask' })
   })
+  it('defaults the weekly try-out target to 2', () => {
+    expect(normalisePreferences().tryoutWeeklyTarget).toBe(2)
+  })
+  it('keeps a target of 0, which turns the goal off', () => {
+    expect(normalisePreferences({ tryoutWeeklyTarget: 0 }).tryoutWeeklyTarget).toBe(0)
+  })
+  it('holds the target to 0–7 and rejects anything that is not a whole number', () => {
+    expect(normalisePreferences({ tryoutWeeklyTarget: 7 }).tryoutWeeklyTarget).toBe(7)
+    expect(normalisePreferences({ tryoutWeeklyTarget: 12 }).tryoutWeeklyTarget).toBe(7)
+    expect(normalisePreferences({ tryoutWeeklyTarget: -1 }).tryoutWeeklyTarget).toBe(0)
+    expect(normalisePreferences({ tryoutWeeklyTarget: 1.5 }).tryoutWeeklyTarget).toBe(2)
+    expect(normalisePreferences({ tryoutWeeklyTarget: '3' }).tryoutWeeklyTarget).toBe(2)
+    expect(normalisePreferences({ tryoutWeeklyTarget: null }).tryoutWeeklyTarget).toBe(2)
+  })
   it('names a language from its code, and falls back to the code', () => {
     expect(languageName('de')).toBe('German')
     expect(languageName('not a code')).toBe('not a code')

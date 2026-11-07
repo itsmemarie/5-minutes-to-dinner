@@ -67,10 +67,7 @@ export async function uploadRecipePhoto(recipeId, photo, { source = 'user', cred
 }
 
 // ─── Recipes ───────────────────────────────────────────────────────
-export async function fetchRecipes() {
-  const { data, error } = await supabase
-    .from('recipes')
-    .select(`
+const RECIPE_LIST_COLUMNS = `
       id, name, meal_type_id,
       weekdays,
       prep_time_minutes,
@@ -87,42 +84,74 @@ export async function fetchRecipes() {
       image_path,
       image_credit,
       recipe_dietary_tags ( dietary_tag_id )
-    `)
+    `
+
+function toRecipe(r) {
+  const tags = (r.recipe_dietary_tags || []).map(t => t.dietary_tag_id)
+  return {
+    id:         r.id,
+    name:       r.name,
+    cat:        r.meal_type_id === 'breakfast' ? 'Breakfast'
+              : r.meal_type_id === 'side'      ? 'Sides'
+              : r.meal_type_id === 'entree'    ? 'Starters'
+              : r.meal_type_id === 'dessert'   ? 'Desserts'
+              : 'Mains',
+    prep:       r.prep_time_minutes  || 0,
+    active:     r.cook_time_minutes  || 0,
+    base:       r.portion_size       || 4,
+    min:        r.min_portions       || 1,
+    diet:       tags.includes('vegan')       ? 'vegan'
+              : tags.includes('vegetarian')  ? 'veg'
+              : 'omni',
+    tryOut:     !!r.try_out,
+    orderOut:   !!r.order_out,
+    defaultDays: r.weekdays || [],
+    fun:        !!r.fun_recipe,
+    husband:    !!r.husband_approved,
+    advancePrepHours: r.advance_prep_hours != null ? Number(r.advance_prep_hours) : null,
+    advancePrepNote:  r.advance_prep_note || null,
+    sideRecommendation: r.side_recommendation || null,
+    imagePath:   r.image_path   || null,
+    imageUrl:    recipeImageUrl(r.image_path),
+    imageCredit: r.image_credit || null,
+  }
+}
+
+// Every recipe list in the app reads this, so a removed recipe (archived_at set)
+// drops out of recipe selection, search, Home and suggestions in one place.
+// Meals already planned keep their snapshot, and the export keeps every recipe.
+export async function fetchRecipes() {
+  const { data, error } = await supabase
+    .from('recipes')
+    .select(RECIPE_LIST_COLUMNS)
     .in('meal_type_id', ['breakfast', 'main', 'side', 'entree', 'dessert'])
+    .is('archived_at', null)
     .order('name')
 
   if (error) throw error
 
-  return data.filter(r => r.name && !r.name.startsWith('[') && !r.name.startsWith('Untitled')).map(r => {
-    const tags = (r.recipe_dietary_tags || []).map(t => t.dietary_tag_id)
-    return {
-      id:         r.id,
-      name:       r.name,
-      cat:        r.meal_type_id === 'breakfast' ? 'Breakfast'
-                : r.meal_type_id === 'side'      ? 'Sides'
-                : r.meal_type_id === 'entree'    ? 'Starters'
-                : r.meal_type_id === 'dessert'   ? 'Desserts'
-                : 'Mains',
-      prep:       r.prep_time_minutes  || 0,
-      active:     r.cook_time_minutes  || 0,
-      base:       r.portion_size       || 4,
-      min:        r.min_portions       || 1,
-      diet:       tags.includes('vegan')       ? 'vegan'
-                : tags.includes('vegetarian')  ? 'veg'
-                : 'omni',
-      tryOut:     !!r.try_out,
-      orderOut:   !!r.order_out,
-      defaultDays: r.weekdays || [],
-      fun:        !!r.fun_recipe,
-      husband:    !!r.husband_approved,
-      advancePrepHours: r.advance_prep_hours != null ? Number(r.advance_prep_hours) : null,
-      advancePrepNote:  r.advance_prep_note || null,
-      sideRecommendation: r.side_recommendation || null,
-      imagePath:   r.image_path   || null,
-      imageUrl:    recipeImageUrl(r.image_path),
-      imageCredit: r.image_credit || null,
-    }
-  })
+  return data.filter(r => r.name && !r.name.startsWith('[') && !r.name.startsWith('Untitled')).map(toRecipe)
+}
+
+// Settings › Removed recipes, most recently removed first.
+export async function fetchRemovedRecipes() {
+  const { data, error } = await supabase
+    .from('recipes')
+    .select(RECIPE_LIST_COLUMNS)
+    .not('archived_at', 'is', null)
+    .order('archived_at', { ascending: false })
+  if (error) throw error
+  return data.map(toRecipe)
+}
+
+// Brings a removed recipe back. Its passes start again from zero, so the deck
+// doesn't offer to remove it again the next time it's skipped.
+export async function restoreRecipe(id) {
+  const { error } = await supabase
+    .from('recipes')
+    .update({ archived_at: null, skip_count: 0, updated_at: new Date().toISOString() })
+    .eq('id', id)
+  if (error) throw error
 }
 
 export async function createRecipe(fields) {
@@ -160,6 +189,7 @@ const PREFERENCE_FIELD_MAP = {
   toddlerVariations:  'toddler_variations',
   toddlerPortion:     'toddler_portion',
   kitchenEquipment:   'kitchen_equipment',
+  tryoutWeeklyTarget: 'tryout_weekly_target',
 }
 
 export async function fetchSettings() {
