@@ -42,6 +42,8 @@ export interface BtnProps {
   small?: boolean;
   /** With `secondary`: use the darker, accessible text colour. */
   strong?: boolean;
+  /** The filled destructive button. */
+  danger?: boolean;
 }
 export declare function Btn(props: BtnProps): JSX.Element;
 
@@ -49,6 +51,10 @@ export interface PillBtnProps {
   label: React.ReactNode;
   active?: boolean;
   onClick?: () => void;
+  /** Leading icon size in px (default 13). */
+  iconSize?: number;
+  /** Use the darker, accessible text colour when not active. */
+  strong?: boolean;
 }
 export declare function PillBtn(props: PillBtnProps): JSX.Element;
 
