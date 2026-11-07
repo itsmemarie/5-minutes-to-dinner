@@ -136,10 +136,25 @@ const LIST_JOINS: Record<string, string> = {
 const listToText = (field: string, list: unknown[]) =>
   list.filter((x): x is string => typeof x === 'string').map(x => x.trim()).filter(Boolean).join(LIST_JOINS[field] ?? ' ')
 
+// It can also write its line breaks out as a literal "\n", or run a numbered method
+// together on one line. parseIngredients drops whatever isn't on its own line, so
+// both are put right. Only the next number in sequence starts a new step.
+const STEP_FIELDS = new Set(['instructions_standard', 'instructions_thermomix'])
+function tidyText(field: string, text: string) {
+  let out = text.replace(/(?:\\r)?\\n/g, '\n').trim()
+  if (STEP_FIELDS.has(field) && out.startsWith('1. ') && !out.includes('\n')) {
+    for (let n = 2; out.includes(` ${n}. `); n++) out = out.replace(` ${n}. `, `\n${n}. `)
+  }
+  return out
+}
+
+const fieldText = (field: string, v: unknown) =>
+  typeof v === 'string' ? tidyText(field, v) : Array.isArray(v) ? tidyText(field, listToText(field, v)) : null
+
 // For a whole recipe, where every value should be a string or a number.
-export function flattenLists(raw: unknown): unknown {
+export function tidyRecipeText(raw: unknown): unknown {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw
-  return Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, Array.isArray(v) ? listToText(k, v) : v]))
+  return Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, fieldText(k, v) ?? v]))
 }
 
 // Keeps only requested keys with values of the right type. Anything the model
@@ -159,7 +174,7 @@ export function sanitiseCompletion(raw: unknown, fields: string[]): Record<strin
     } else if (kind === 'diet') {
       if (DIETS.includes(String(v))) out[f] = String(v)
     } else {
-      const text = typeof v === 'string' ? v.trim() : Array.isArray(v) ? listToText(f, v) : null
+      const text = fieldText(f, v)
       if (text || (text === '' && f === 'advance_prep_note')) out[f] = text
     }
   }

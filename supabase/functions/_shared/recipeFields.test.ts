@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  completableRequest, completionSchema, flattenLists, householdLines, recipeForPrompt, sanitiseCompletion, sanitiseLanguage, sanitiseReview,
+  completableRequest, completionSchema, tidyRecipeText, householdLines, recipeForPrompt, sanitiseCompletion, sanitiseLanguage, sanitiseReview,
   sanitiseTranslation, translatableFields, translationSchema,
 } from './recipeFields.ts'
 
@@ -58,7 +58,7 @@ describe('text fields answered with a list', () => {
   })
 
   it('flattens a generated recipe into the lines the app parses', () => {
-    const out = flattenLists({
+    const out = tidyRecipeText({
       name: 'Risotto',
       portion_size: 4,
       ingredients: ['[Rice]', '- 300g Arborio rice', '[Mushrooms]', '- 300g mushrooms'],
@@ -75,11 +75,49 @@ describe('text fields answered with a list', () => {
   })
   it('leaves a recipe with no lists as it was', () => {
     const recipe = { name: 'Dal', portion_size: 4, has_thermomix_version: false, chef_notes: 'Toast the spices.' }
-    expect(flattenLists(recipe)).toEqual(recipe)
+    expect(tidyRecipeText(recipe)).toEqual(recipe)
   })
   it('passes through an answer that is not a recipe', () => {
-    expect(flattenLists(null)).toBeNull()
-    expect(flattenLists('nope')).toBe('nope')
+    expect(tidyRecipeText(null)).toBeNull()
+    expect(tidyRecipeText('nope')).toBe('nope')
+  })
+})
+
+describe('text with its line breaks in the wrong form', () => {
+  it('turns written-out line breaks into real ones', () => {
+    const out = tidyRecipeText({ ingredients: '[Rice]\\n- 300g rice\\n[Stock]\\n- 1.2L stock' })
+    expect(out).toEqual({ ingredients: '[Rice]\n- 300g rice\n[Stock]\n- 1.2L stock' })
+  })
+  it('does the same for a field filled in by step 2', () => {
+    expect(sanitiseCompletion({ instructions_standard: '1. Chop.\\n2. Fry.' }, ['instructions_standard']))
+      .toEqual({ instructions_standard: '1. Chop.\n2. Fry.' })
+  })
+  it('puts a method run together on one line back into steps', () => {
+    const out = tidyRecipeText({ instructions_standard: '1. Prep: Pat dry. 2. Sauté: Cook 5 minutes. 3. Serve: Add rice.' })
+    expect(out).toEqual({ instructions_standard: '1. Prep: Pat dry.\n2. Sauté: Cook 5 minutes.\n3. Serve: Add rice.' })
+  })
+  it('splits a Thermomix method too', () => {
+    const out = tidyRecipeText({ instructions_thermomix: '1. Chop: 5 sec / speed 5. 2. Cook: 10 min / 100C.' })
+    expect(out).toEqual({ instructions_thermomix: '1. Chop: 5 sec / speed 5.\n2. Cook: 10 min / 100C.' })
+  })
+  it('only starts a step on the next number in sequence', () => {
+    const text = '1. Mix 5. 5 tins fit.'
+    expect(tidyRecipeText({ instructions_standard: text })).toEqual({ instructions_standard: text })
+  })
+  it('leaves a method that is already on separate lines', () => {
+    const text = '1. Add 2 eggs. 2. 5 cups of flour go in next.\n2. Stir.'
+    expect(tidyRecipeText({ instructions_standard: text })).toEqual({ instructions_standard: text })
+  })
+  it('leaves text that does not start at step 1', () => {
+    const text = 'Heat the oil. 2. Add the onion.'
+    expect(tidyRecipeText({ instructions_standard: text })).toEqual({ instructions_standard: text })
+  })
+  it('never splits numbered tips in chef notes', () => {
+    const text = '1. Rest the dough. 2. Salt early.'
+    expect(tidyRecipeText({ chef_notes: text })).toEqual({ chef_notes: text })
+  })
+  it('joins a list before tidying it', () => {
+    expect(tidyRecipeText({ ingredients: ['[Rice]\\n- 300g rice', '- 1 onion'] })).toEqual({ ingredients: '[Rice]\n- 300g rice\n- 1 onion' })
   })
 })
 

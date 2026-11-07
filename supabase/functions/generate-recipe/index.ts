@@ -2,13 +2,13 @@
 // This is generation by design — the form marks the whole result as AI-made.
 // Input: { description, context?: HouseholdContext }
 import { aiHandler, aiResponse, badInput, runAiStep } from '../_shared/router.ts'
-import { CHEF_PERSONA, type HouseholdContext, THERMOMIX_RULES, flattenLists, hasThermomix, householdLines } from '../_shared/recipeFields.ts'
+import { CHEF_PERSONA, type HouseholdContext, THERMOMIX_RULES, hasThermomix, householdLines, tidyRecipeText } from '../_shared/recipeFields.ts'
 
 const system = (ctx: HouseholdContext) => {
   const tm = hasThermomix(ctx)
   return `${CHEF_PERSONA} Invent an original recipe that satisfies the request.
 ${householdLines(ctx)}${tm ? `\n${THERMOMIX_RULES}` : ''}
-Return only a JSON object with these keys. Every value is a single string or number, never a list:
+Return only a JSON object with these keys. Every value is a string or a number, never a list:
 name: specific and descriptive, e.g. "Slow-Roasted Tomato & Ricotta Pasta", not "Pasta"
 meal_type_id: main | breakfast | side | dessert | entree
 diet: omni | veg | vegan
@@ -32,5 +32,5 @@ Deno.serve(aiHandler(async (req, body) => {
   if (!description) throw badInput('Describe the recipe you want.')
   const ctx: HouseholdContext = body.context ?? {}
   const { data, meta } = await runAiStep(req, 'recipe_generate', { system: system(ctx), user: description.slice(0, 2000) })
-  return aiResponse(flattenLists(data), meta)
+  return aiResponse(tidyRecipeText(data), meta)
 }))
