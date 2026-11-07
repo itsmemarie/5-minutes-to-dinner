@@ -7,7 +7,7 @@
 // dinner stays on Tuesday whatever "Week starts on" is set to.
 //
 // Everything here is pure, so it can be tested without a database.
-import { dayMeals } from './mealSections.js'
+import { ALL_SECTION_IDS, dayMeals } from './mealSections.js'
 
 export const SAVED_WEEK_NAME_MAX = 60
 
@@ -26,6 +26,15 @@ export function snapshotWeek(plan, days, sectionIds) {
     advancePrepHours: m.advancePrepHours ?? null,
     advancePrepNote:  m.advancePrepNote ?? null,
   })))
+}
+
+// Every meal in a week as insertWeekMeals takes them, in the place each one was,
+// sections that are turned off included. Keeps a cleared week so Undo can put it
+// back as it was. `id` stays on each row, for matching it to a swipe-deck pick.
+export function weekMealRows(plan, days, dayEntryMap) {
+  return days.flatMap(day => ALL_SECTION_IDS.flatMap(section =>
+    (plan[day]?.[section] || []).map((m, position) => ({ ...m, section, position, dayEntryId: dayEntryMap[day] }))
+  ))
 }
 
 // "Week of 12 Oct". `week` comes from dateHelpers.weekBounds.

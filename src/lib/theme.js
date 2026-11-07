@@ -14,6 +14,8 @@ export const C = {
   outlineStrong:'#a4b3a0', onSurfaceDisabled:'#7a8877', errorInk:'#a3341f',
   accent2_100:'#fff3e8', accent2_300:'#f0c090', accent2_600:'#d9791f',
   accent2_700:'#b85f16', accent2_800:'#8a4410',
+  // The planner's peach cards: the nutrition icon square, and small text on peach.
+  peachIcon:'#FFE2CC', onPeachMuted:'#5A4A3E',
   // Striped stand-in for a recipe photo we don't have yet (photo tile view).
   placeholderStripeA:'#e7efe5', placeholderStripeB:'#dde8db', placeholderInk:'#8c9a88',
 }

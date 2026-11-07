@@ -32,6 +32,14 @@ export function getWeekStart(startsOn = 'mon', d = new Date()) {
 const fmtShort = d => d.toLocaleDateString('en-GB', { day:'numeric', month:'short' })
 const fmtMonth = d => d.toLocaleDateString('en-GB', { month:'short' })
 
+// The planner's week range: "2 – 8 Nov", or "26 Oct – 1 Nov" across a month. The
+// year shows when it isn't this one, and on both ends across New Year.
+export function formatWeekRange(start, end, now = new Date()) {
+  if (start.getFullYear() !== end.getFullYear()) return `${fmtShort(start)} ${start.getFullYear()} – ${fmtShort(end)} ${end.getFullYear()}`
+  const year = end.getFullYear() !== now.getFullYear() ? ` ${end.getFullYear()}` : ''
+  return `${start.getMonth() === end.getMonth() ? start.getDate() : fmtShort(start)} – ${fmtShort(end)}${year}`
+}
+
 export function weekBounds(startsOn = 'mon', now = new Date()) {
   const start = getWeekStart(startsOn, now)
   const end = new Date(start); end.setDate(end.getDate() + 6)
@@ -41,7 +49,7 @@ export function weekBounds(startsOn = 'mon', now = new Date()) {
   const shortLabel = start.getMonth() === end.getMonth()
     ? `${start.getDate()}–${end.getDate()} ${fmtMonth(end)}`
     : `${fmtShort(start)} – ${fmtShort(end)}`
-  return { start, end, weekOf: toISO(start), label: `${fmtShort(start)} – ${fmtShort(end)}`, shortLabel, days }
+  return { start, end, weekOf: toISO(start), label: `${fmtShort(start)} – ${fmtShort(end)}`, shortLabel, range: formatWeekRange(start, end), days }
 }
 
 // `n` calendar weeks after `d` (negative for before). Goes through setDate so a
@@ -59,23 +67,44 @@ export function dayDateLabel(week, day) {
   return fmtShort(d)
 }
 
-// The Planner's week strip, oldest first: from the earliest week with meals
-// (this week if there are none) to `ahead` weeks after this one. It's built
-// from the calendar rather than from stored plans, so weeks that were never
-// opened still appear and can be planned. `mealCounts` is { 'YYYY-MM-DD': n },
-// keyed by the week's start date. `offset` is whole weeks from this week.
-export function weekStripItems(startsOn = 'mon', mealCounts = {}, { ahead = 8, now = new Date() } = {}) {
-  const thisWeekOf = weekBounds(startsOn, now).weekOf
-  const earliest = Object.keys(mealCounts).filter(w => mealCounts[w] > 0).sort()[0]
-  let back = 0
-  // ISO dates sort as text, so this walks back until it reaches that week.
-  while (earliest && earliest < weekBounds(startsOn, addWeeks(now, -back)).weekOf) back++
-  const items = []
-  for (let offset = 0 - back; offset <= ahead; offset++) { // 0 - back, as -0 isn't 0 to React
-    const { weekOf, shortLabel, label } = weekBounds(startsOn, addWeeks(now, offset))
-    items.push({ offset, weekOf, shortLabel, label, isThisWeek: weekOf === thisWeekOf, hasMeals: (mealCounts[weekOf] ?? 0) > 0 })
+// How the planner names a week, from whole weeks away from this one.
+export const weekLabel = offset =>
+  offset === 0 ? 'This week' : offset === 1 ? 'Next week' : offset === -1 ? 'Last week'
+    : offset > 0 ? `In ${offset} weeks` : `${-offset} weeks ago`
+
+// ISO week number of a date, worked out from the Thursday of its week.
+export function isoWeekNumber(d) {
+  const thursday = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  thursday.setDate(thursday.getDate() + 3 - (thursday.getDay() + 6) % 7)
+  const dayOfYear = Math.round((thursday - new Date(thursday.getFullYear(), 0, 1)) / 86400000)
+  return 1 + Math.floor(dayOfYear / 7)
+}
+
+// The week picker's rows for one month: every week touching it, oldest first.
+// `inMonth` says the week counts towards this month, by the day in its middle, so
+// a week across two months is only ever counted once. `offset` is whole weeks from
+// this week. Rounded, as a week across a clock change isn't exactly 7 × 24 hours.
+export function monthWeeks(startsOn, year, month, now = new Date()) {
+  const thisWeek = getWeekStart(startsOn, now)
+  const lastDay = new Date(year, month + 1, 0)
+  const rows = []
+  for (let start = getWeekStart(startsOn, new Date(year, month, 1)); start <= lastDay; start = addWeeks(start, 1)) {
+    const dates = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(start)
+      d.setDate(d.getDate() + i)
+      return d
+    })
+    const middle = dates[3]
+    rows.push({
+      weekOf: toISO(start),
+      offset: Math.round((start - thisWeek) / (7 * 86400000)),
+      number: isoWeekNumber(middle),
+      inMonth: middle.getMonth() === month,
+      range: formatWeekRange(dates[0], dates[6], now),
+      dates: dates.map(d => ({ day: d.getDate(), inMonth: d.getMonth() === month, isToday: toISO(d) === toISO(now) })),
+    })
   }
-  return items
+  return rows
 }
 
 // Backwards-compatible Monday-start defaults.

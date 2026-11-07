@@ -83,6 +83,15 @@ const RECIPE_LIST_COLUMNS = `
       side_recommendation,
       image_path,
       image_credit,
+      created_at,
+      toddler_friendly,
+      source_url,
+      source_platform,
+      source_author,
+      saved_at,
+      video_thumb_path,
+      skip_count,
+      snoozed_until,
       recipe_dietary_tags ( dietary_tag_id )
     `
 
@@ -91,6 +100,7 @@ function toRecipe(r) {
   return {
     id:         r.id,
     name:       r.name,
+    mealTypeId: r.meal_type_id,
     cat:        r.meal_type_id === 'breakfast' ? 'Breakfast'
               : r.meal_type_id === 'side'      ? 'Sides'
               : r.meal_type_id === 'entree'    ? 'Starters'
@@ -114,6 +124,16 @@ function toRecipe(r) {
     imagePath:   r.image_path   || null,
     imageUrl:    recipeImageUrl(r.image_path),
     imageCredit: r.image_credit || null,
+    // The swipe deck (see tryDeck.js).
+    createdAt:      r.created_at,
+    toddlerFriendly: !!r.toddler_friendly,
+    sourceUrl:      r.source_url || null,
+    sourcePlatform: r.source_platform || null,
+    sourceAuthor:   r.source_author || null,
+    savedAt:        r.saved_at || null,
+    videoThumbUrl:  recipeImageUrl(r.video_thumb_path),
+    skipCount:      r.skip_count ?? 0,
+    snoozedUntil:   r.snoozed_until || null,
   }
 }
 
@@ -151,6 +171,54 @@ export async function restoreRecipe(id) {
     .from('recipes')
     .update({ archived_at: null, skip_count: 0, updated_at: new Date().toISOString() })
     .eq('id', id)
+  if (error) throw error
+}
+
+// ─── Swipe deck ───────────────────────────────────────────────────
+const DECK_STATE_FIELD_MAP = { skipCount:'skip_count', snoozedUntil:'snoozed_until', archivedAt:'archived_at' }
+
+// patch: any subset of the fields above, as tryDeck.js builds them.
+export async function saveRecipeDeckState(id, patch) {
+  const columns = {}
+  for (const [k, v] of Object.entries(patch)) {
+    if (k in DECK_STATE_FIELD_MAP) columns[DECK_STATE_FIELD_MAP[k]] = v
+  }
+  const { error } = await supabase
+    .from('recipes')
+    .update({ ...columns, updated_at: new Date().toISOString() })
+    .eq('id', id)
+  if (error) throw error
+}
+
+const PICK_COLUMNS = 'id, recipe_id, week_of, picked_at, planned_meal_id'
+
+// Every pick from every week: the deck and the tray both need the older ones.
+export async function fetchTryoutPicks() {
+  const { data, error } = await supabase
+    .from('tryout_picks')
+    .select(PICK_COLUMNS)
+    .order('picked_at')
+  if (error) throw error
+  return data
+}
+
+export async function addTryoutPick(recipeId, weekOf) {
+  const { data, error } = await supabase
+    .from('tryout_picks')
+    .insert({ recipe_id: recipeId, week_of: weekOf })
+    .select(PICK_COLUMNS)
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function removeTryoutPick(id) {
+  const { error } = await supabase.from('tryout_picks').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function linkPickToMeal(id, plannedMealId) {
+  const { error } = await supabase.from('tryout_picks').update({ planned_meal_id: plannedMealId }).eq('id', id)
   if (error) throw error
 }
 
@@ -370,8 +438,8 @@ export async function fetchWeekPlan(planId) {
   return data
 }
 
-// How many meals each stored week holds, as { 'YYYY-MM-DD': n }, for the
-// Planner's week strip.
+// How many meals each stored week holds, as { 'YYYY-MM-DD': n }, for the dots
+// in the Planner's week stepper and picker.
 export async function fetchWeekMealCounts() {
   const { data, error } = await supabase
     .from('meal_plans')
@@ -412,11 +480,13 @@ export async function addPlannedMeals(dayEntryId, meals) {
 // A whole week at once, each meal carrying its own `dayEntryId` and `position`.
 // One statement, so either every meal goes in or none does.
 export async function insertWeekMeals(meals) {
-  if (!meals.length) return
-  const { error } = await supabase
+  if (!meals.length) return []
+  const { data, error } = await supabase
     .from('planned_meals')
     .insert(meals.map(m => plannedMealRow(m.dayEntryId, m, m.position)))
+    .select('id, day_entry_id, section, position')
   if (error) throw error
+  return data
 }
 
 // ─── Remove meal ──────────────────────────────────────────────────
@@ -626,6 +696,18 @@ export async function fetchRecipeDetails(id) {
     .single()
   if (error) throw error
   return data
+}
+
+// Asks reel-thumbnail to fetch a reel's still and creator. Resolves to the fields
+// to merge into the recipe, or null if it couldn't: the card just keeps its photo.
+export async function refreshReelThumbnail(recipeId) {
+  try {
+    const { data, error } = await supabase.functions.invoke('reel-thumbnail', { body: { recipe_id: recipeId } })
+    if (error || !data?.path) return null
+    return { videoThumbUrl: recipeImageUrl(data.path), sourceAuthor: data.author ?? null, sourceUrl: data.source_url }
+  } catch {
+    return null
+  }
 }
 
 // sourceUrl comes from normaliseRecipeLink; null removes the link.
