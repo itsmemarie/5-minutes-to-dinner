@@ -1,11 +1,14 @@
 import { useRef, useState } from 'react'
 import { C, ep, mn, R } from '../lib/theme.js'
 import { FLY_OUT_MS, ROTATE_DIVISOR, SWIPE_THRESHOLD, TAP_SLOP, deckName, savedLabel, totalMinutes } from '../lib/tryDeck.js'
+import { reelEmbed } from '../lib/reels.js'
 import { Icon } from './ui/index.js'
+import { ReelPlayer } from './ReelPlayer.jsx'
 
 const PLATFORM = { instagram:'Instagram', tiktok:'TikTok' }
 const MEDIA_HEIGHT = 300
 const onPhoto = `${C.onSurface}cc`
+const playButton = { position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', width:68, height:68, borderRadius:R.pill, background:onPhoto, display:'flex', alignItems:'center', justifyContent:'center' }
 
 const Chip = ({ icon, children, style }) => (
   <span style={{ ...mn, display:'inline-flex', alignItems:'center', gap:4, fontSize:12, fontWeight:600, color:C.onSurfaceVariant, whiteSpace:'nowrap', ...style }}>
@@ -22,7 +25,7 @@ const Stamp = ({ text, color, opacity, style }) => (
   <span aria-hidden style={{ ...mn, position:'absolute', top:56, fontSize:22, fontWeight:700, letterSpacing:'0.04em', color, background:C.white, border:`3px solid ${color}`, borderRadius:R.sm, padding:'4px 10px', opacity, pointerEvents:'none', ...style }}>{text}</span>
 )
 
-function Media({ recipe, dx, flyOut }) {
+function Media({ recipe, dx, flyOut, unavailable, onPlay }) {
   // The reel's still, then the recipe photo, then stripes, each if the last fails.
   const sources = [recipe.videoThumbUrl, recipe.imageUrl].filter(Boolean)
   const [failed, setFailed] = useState(0)
@@ -37,12 +40,10 @@ function Media({ recipe, dx, flyOut }) {
       {src && <img src={src} alt='' draggable={false} decoding='async' onError={() => setFailed(n => n + 1)} style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', display:'block' }}/>}
       {reel && <PhotoChip style={{ left:10 }}>{reel} reel</PhotoChip>}
       {recipe.skipCount > 0 && <PhotoChip style={{ right:10 }}>Passed {recipe.skipCount}×</PhotoChip>}
-      {reel && (
-        <a href={recipe.sourceUrl} target='_blank' rel='noopener noreferrer' aria-label={`Open in ${reel}`} draggable={false}
-          style={{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', width:68, height:68, borderRadius:R.pill, background:onPhoto, display:'flex', alignItems:'center', justifyContent:'center' }}>
-          <Icon name='play' size={30} color={C.onPrimary}/>
-        </a>
-      )}
+      {reel && !unavailable && (reelEmbed(recipe.sourceUrl)
+        ? <button onClick={onPlay} aria-label='Play video' style={{ ...playButton, border:'none', padding:0, cursor:'pointer' }}><Icon name='play' size={30} color={C.onPrimary}/></button>
+        : <a href={recipe.sourceUrl} target='_blank' rel='noopener noreferrer' aria-label={`Open in ${reel}`} draggable={false} style={playButton}><Icon name='play' size={30} color={C.onPrimary}/></a>)}
+      {reel && unavailable && <PhotoChip style={{ top:'auto', bottom:10, left:10 }}>Video unavailable</PhotoChip>}
       <Stamp text='YES' color={C.primary} opacity={yes} style={{ left:16, transform:'rotate(-12deg)' }}/>
       <Stamp text='NOT NOW' color={C.onSecondaryContainerStrong} opacity={no} style={{ right:16, transform:'rotate(12deg)' }}/>
     </div>
@@ -74,13 +75,13 @@ function Body({ recipe, showToddler, onViewRecipe }) {
 
 // One card. `behind` is the next card peeking out under the top one, which only
 // looks the part. On the top card, `flyOut` ('left' | 'right') sends it off
-// screen, and `onSwipe` reports a drag that went far enough. `locked` stops
-// swiping while a video plays.
+// screen, and `onSwipe` reports a drag that went far enough. `playing` swaps the
+// picture for the reel and stops swiping until the video is stopped.
 //
 // The pointer is only captured after TAP_SLOP, so anything inside the card still
 // gets its clicks. touch-action: pan-y leaves vertical drags to the page, so short
 // screens can still scroll past the card.
-export function TryCard({ recipe, behind, flyOut, locked, showToddler, onSwipe, onViewRecipe }) {
+export function TryCard({ recipe, behind, flyOut, playing, unavailable, showToddler, onSwipe, onViewRecipe, onPlay, onStopVideo, onVideoUnavailable }) {
   const [dx, setDx] = useState(0)
   const [dragging, setDragging] = useState(false)
   const gesture = useRef(null)
@@ -88,7 +89,7 @@ export function TryCard({ recipe, behind, flyOut, locked, showToddler, onSwipe, 
 
   const down = e => {
     swallowClick.current = false
-    if (locked || flyOut || e.button > 0) return
+    if (playing || flyOut || e.button > 0) return
     gesture.current = { id:e.pointerId, x:e.clientX, y:e.clientY, dragging:false }
   }
   const move = e => {
@@ -135,8 +136,10 @@ export function TryCard({ recipe, behind, flyOut, locked, showToddler, onSwipe, 
 
   return (
     <div data-try-card onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={cancel} onClickCapture={clickCapture}
-      style={{ position:'relative', overflow:'hidden', background:C.white, borderRadius:16, boxShadow:'0 2px 8px rgba(24,36,23,0.18)', transform, transition: dragging ? 'none' : `transform ${FLY_OUT_MS}ms ease-out`, touchAction:'pan-y', userSelect:'none', WebkitUserSelect:'none', cursor: locked ? 'default' : dragging ? 'grabbing' : 'grab' }}>
-      <Media recipe={recipe} dx={dx} flyOut={flyOut}/>
+      style={{ position:'relative', overflow:'hidden', background:C.white, borderRadius:16, boxShadow:'0 2px 8px rgba(24,36,23,0.18)', transform, transition: dragging ? 'none' : `transform ${FLY_OUT_MS}ms ease-out`, touchAction:'pan-y', userSelect:'none', WebkitUserSelect:'none', cursor: playing ? 'default' : dragging ? 'grabbing' : 'grab' }}>
+      {playing
+        ? <ReelPlayer recipe={recipe} onStop={onStopVideo} onUnavailable={onVideoUnavailable}/>
+        : <Media recipe={recipe} dx={dx} flyOut={flyOut} unavailable={unavailable} onPlay={onPlay}/>}
       <Body recipe={recipe} showToddler={showToddler} onViewRecipe={onViewRecipe}/>
     </div>
   )
