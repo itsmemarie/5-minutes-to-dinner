@@ -9,6 +9,7 @@ import {
   fetchToddlerCookingGuide, saveToddlerCookingGuide,
   fetchUserProfile, saveUserProfile, fetchAllRecipeNutrition, saveRecipeView, fetchRecipesForExport,
   getSession, onAuthChange, addShoppingItem, removeShoppingItem, fetchRecipeIngredients,
+  fetchTryoutPicks, addTryoutPick, removeTryoutPick, saveRecipeDeckState,
 } from './supabase.js'
 import { callEdgeFn, fetchAiConfig, onAiLimit } from './ai.js'
 import { computeTargets } from './goalMaths.js'
@@ -18,11 +19,12 @@ import { ALL_SECTION_IDS, enabledSectionIds, sectionLabel, sectionShort, dayMeal
 import { normalisePreferences, migrateLegacyToddlerDob, activeToddlerDob, newChild, COUNTRIES, RECIPE_LANGUAGES, countryName, equipmentLabels } from './preferences.js'
 import { buildBasicShoppingList, guessAisle } from './basicShoppingList.js'
 import { snapshotWeek, buildFill, fillNotice, savedRecipeIds } from './savedWeeks.js'
+import { deckProgressLabel, pickWeek, picksInWeek, progressLabel } from './tryDeck.js'
 import { consumePwaShare } from './share/pwaShareInbox.js'
 import { onIncomingShare, clearIncomingShare } from './share/handleIncomingShare.js'
 import { APP_VERSION_LABEL } from './appVersion.js'
 import { useScrollMemory } from './useScrollMemory.js'
-import { Spinner, Btn, Icon, WeekBanner } from '../components/ui/index.js'
+import { Spinner, Btn, Icon, WeekBanner, Toast } from '../components/ui/index.js'
 import { OptionListScreen, ChildEditorScreen, FeedbackScreen } from '../components/settings/subscreens.jsx'
 import { GeminiKeyScreen, SignInScreen, EquipmentScreen, InstallScreen, OwnerModelsScreen } from '../components/settings/aiScreens.jsx'
 import { NewRecipeForm } from '../components/NewRecipeForm.jsx'
@@ -32,6 +34,7 @@ import { Sheet } from '../components/ui/Sheet.jsx'
 import { RecipeScreen } from '../components/RecipeScreen.jsx'
 import { HomeScreen } from '../components/HomeScreen.jsx'
 import { PlannerScreen } from '../components/PlannerScreen.jsx'
+import { TryDeckScreen } from '../components/TryDeckScreen.jsx'
 import { DailyPlanScreen } from '../components/DailyPlanScreen.jsx'
 import { RecipeSelectionScreen } from '../components/RecipeSelectionScreen.jsx'
 import { NutritionScreen } from '../components/NutritionScreen.jsx'
@@ -59,6 +62,9 @@ const readStoredRecipeView = () => {
   } catch { return null }
 }
 const writeStoredRecipeView = v => { try { localStorage.setItem(RECIPE_VIEW_KEY, v) } catch {} }
+
+const byName = (a, b) => a.name.localeCompare(b.name)
+const TOAST_MS = 2400
 
 // ─── Root App ──────────────────────────────────────────────────────────
 export default function App() {
@@ -143,6 +149,10 @@ export default function App() {
   const [weekLoadError, setWeekLoadError] = useState(null)
   const [weekMealCounts,setWeekMealCounts]= useState({})
   const [plannerNotice, setPlannerNotice] = useState(null)
+  // Every swipe-deck pick from every week (see tryDeck.js).
+  const [tryoutPicks,   setTryoutPicks]   = useState([])
+  const [toast,         setToast]         = useState(null)
+  const toastTimer = useRef(null)
 
   // ── Derived from preferences ─────────────────────────────────────
   // The week (start day, dates, label), the day sections the user has turned
@@ -234,10 +244,11 @@ export default function App() {
     ;(async () => {
       try {
         setLoadMsg('Loading recipes…')
-        const [recs, settings, freezer, profile, nutritionMap] = await Promise.all([
-          fetchRecipes(), fetchSettings(), fetchFreezerItems(), fetchUserProfile(), fetchAllRecipeNutrition(),
+        const [recs, settings, freezer, profile, nutritionMap, picks] = await Promise.all([
+          fetchRecipes(), fetchSettings(), fetchFreezerItems(), fetchUserProfile(), fetchAllRecipeNutrition(), fetchTryoutPicks(),
         ])
         setRecipes(recs)
+        setTryoutPicks(picks)
         setFreezerItems(freezer)
         if (settings.defaultPortions) setDefPortSt(settings.defaultPortions)
         // Adopt the saved view only when this device has no local choice yet,
@@ -754,6 +765,34 @@ export default function App() {
     }
   }
 
+  // ── Swipe deck ──────────────────────────────────────────────────
+  const showToast = message => {
+    clearTimeout(toastTimer.current)
+    setToast(message)
+    if (message) toastTimer.current = setTimeout(() => setToast(null), TOAST_MS)
+  }
+
+  const pickRecipe = async (recipe, weekOf) => {
+    const pick = await addTryoutPick(recipe.id, weekOf)
+    setTryoutPicks(prev => [...prev, pick])
+    return pick
+  }
+  const removePick = async pick => {
+    await removeTryoutPick(pick.id)
+    setTryoutPicks(prev => prev.filter(p => p.id !== pick.id))
+  }
+  // Archiving takes a recipe out of the list every screen reads, and undoing
+  // that puts it back.
+  const saveDeckState = async (recipe, patch) => {
+    await saveRecipeDeckState(recipe.id, patch)
+    const next = { ...recipe, ...patch }
+    setRecipes(prev => {
+      const others = prev.filter(r => r.id !== recipe.id)
+      return next.archivedAt ? others : [...others, next].sort(byName)
+    })
+  }
+  const closeDeck = () => { setTab('planner'); setScreen(null) }
+
   // ── Nav ─────────────────────────────────────────────────────────
   const openDayPlan   = day => { setSelDay(day); setScreen('dailyPlan') }
   // Entering the picker afresh starts clean; returning from a recipe preview
@@ -853,7 +892,14 @@ export default function App() {
     : screen === 'recipe'        ? 'Recipe details'
     : screen === 'freezerManage' ? 'Freezer'
     : screen === 'toddlerCooking' ? 'Toddler cooking'
+    : screen === 'tryDeck'       ? 'Try something new'
     : '5 Minutes to Dinner'
+
+  // The deck and its pill always mean this week, whichever week is selected.
+  const picksThisWeek = picksInWeek(tryoutPicks, pickWeek(prefs.weekStartsOn).weekOf).length
+  const picksPill = progressLabel(picksThisWeek, prefs.tryoutWeeklyTarget)
+  const deckPill = deckProgressLabel(picksThisWeek, prefs.tryoutWeeklyTarget)
+  const onDeck = screen === 'tryDeck'
 
   const NAV = [{id:'home',icon:'home',label:'Home'},{id:'planner',icon:'calendar',label:'Planner'},{id:'list',icon:'cart',label:'Shopping'},{id:'batch',icon:'chefHat',label:'Batch'}]
 
@@ -902,6 +948,7 @@ export default function App() {
     if (screen === 'dailyPlan')       return <DailyPlanScreen day={selDay} dateLabel={isThisWeek?null:dayDateLabel(week,selDay)} plan={plan} recipes={recipes} updatePortion={updatePortion} removeMeal={removeMeal} onAddToSection={openAddSec} onRecipeOpen={openRecipeFromDailyPlan} onSave={()=>setScreen(null)} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe} sectionIds={sectionIds}/>
     if (screen === 'recipeSelection') return <RecipeSelectionScreen day={selDay} section={selSec} plan={plan} recipes={recipes} freezerItems={freezerItems} onAdd={addMeals} onAddFreezer={addFreezerMeals} onManageFreezer={openFreezerManage} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))} onPreview={openRecipeFromSelection} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe} recipeView={recipeView} setRecipeView={setRecipeView} search={recipeSearch} setSearch={setRecipeSearch} chip={recipeChip} setChip={setRecipeChip} selected={selectedRecipes} setSelected={setSelectedRecipes} days={week.days} sectionIds={sectionIds} aiContext={aiContext}/>
     if (screen === 'recipe')          return <RecipeScreen recipeId={selRecipeId} portion={recipeDetailPortion} onPortionChange={changeRecipeDetailPortion} onAddMeal={()=>addMeals([selRecipeId])} toddlerDob={toddlerActivitiesOn?toddlerDob:null} showToddlerVariations={toddlerVariationsOn} onOpenToddlerCooking={()=>openToddlerCooking(true)} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe} day={selDay} plan={plan} sectionIds={sectionIds} onPhotoChange={(id,img)=>setRecipes(prev=>prev.map(r=>r.id===id?{...r,...img}:r))}/>
+    if (screen === 'tryDeck')         return <TryDeckScreen recipes={recipes} picks={tryoutPicks} weekStartsOn={prefs.weekStartsOn} target={prefs.tryoutWeeklyTarget} showToddler={prefs.toddlerModeEnabled} onPick={pickRecipe} onRemovePick={removePick} onDeckState={saveDeckState} onDone={closeDeck} showToast={showToast} recipeProps={{ defPort, showToddlerVariations:toddlerVariationsOn, goalProfile, goalTargets, nutritionByRecipe, sectionIds, onPhotoChange:(id,img)=>setRecipes(prev=>prev.map(r=>r.id===id?{...r,...img}:r)) }}/>
     if (screen === 'toddlerCooking')  return <ToddlerCookingScreen guide={toddlerGuide} loading={toddlerGuideLoading} error={toddlerGuideError} activeBand={toddlerBand} setActiveBand={setToddlerBand} currentBand={toddlerDob?ageBandFromDob(toddlerDob):null} onGenerate={generateToddlerGuide}/>
     if (tab !== 'planner' && weekLoadState) return weekLoadState
     if (tab === 'home')    return <HomeScreen plan={plan} days={week.days} sectionIds={sectionIds} onDayOpen={openDayPlan} onRecipeOpen={openRecipeFromHome} moveMeal={moveMeal} onCopy={copyWeekPlan} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))} aiContext={aiContext}/>
@@ -919,7 +966,8 @@ export default function App() {
             ? <button onClick={goBack} style={{border:'none',background:'none',color:C.onPrimary,cursor:'pointer',padding:'2px 8px 2px 0',display:'flex',alignItems:'center'}}><Icon name='back' color={C.onPrimary}/></button>
             : <img src='/dino-logo.png' alt='' style={{width:30,height:30,objectFit:'contain',flexShrink:0}}/>
           }
-          <span style={{...ep,fontSize:screen?16:18,letterSpacing:'0.005em',color:C.onPrimary,flex:1}}>{headerTitle}</span>
+          <span style={{...ep,fontSize:onDeck?19:screen?16:18,letterSpacing:'0.005em',color:C.onPrimary,flex:1}}>{headerTitle}</span>
+          {onDeck && <span style={{...mn,fontSize:12,fontWeight:700,color:C.onPrimary,background:'rgba(255,255,255,0.16)',padding:'5px 12px',borderRadius:R.pill,whiteSpace:'nowrap'}}>{deckPill}</span>}
           {!loading && !screen && (
             <div style={{display:'flex',alignItems:'center',gap:8}}>
               {error && <div style={{width:6,height:6,borderRadius:R.pill,background:'#ffb4a9'}} title='DB error'/>}
@@ -927,7 +975,7 @@ export default function App() {
             </div>
           )}
         </div>
-        <div style={{flex:1,overflowY:'auto',position:'relative',paddingBottom:screen?80:0,display:'flex',flexDirection:'column'}}>
+        <div style={{flex:1,overflowY:'auto',position:'relative',paddingBottom:screen&&!onDeck?80:0,display:'flex',flexDirection:'column'}}>
           {renderScreen()}
         </div>
         <div style={{flexShrink:0,position:'sticky',bottom:0,zIndex:20,display:'flex',flexDirection:'column'}}>
@@ -938,7 +986,7 @@ export default function App() {
               </button>
             </div>
           )}
-          {screen !== 'settings' && (
+          {screen !== 'settings' && !onDeck && (
             <div style={{background:C.primaryFixed,borderTop:`1px solid ${C.outlineVariant}30`,display:'flex',padding:'8px 0 14px'}}>
               {NAV.map(t => {
                 const active = tab === t.id && !screen
@@ -969,6 +1017,7 @@ export default function App() {
           </Sheet>
         )}
         {aiNotice && <AiLimitSheet key={aiNotice.id} notice={aiNotice} onClose={() => setAiNotice(null)}/>}
+        <Toast message={toast}/>
       </div>
     </div>
   )
