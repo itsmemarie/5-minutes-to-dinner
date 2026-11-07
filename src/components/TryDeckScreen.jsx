@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { C, ep, mn, R } from '../lib/theme.js'
 import {
   FLY_OUT_MS, SNOOZE_WEEKS, buildDeck, deckCaption, emptyTitle, hiddenCount, keepPatch,
@@ -40,7 +40,7 @@ function RecipePreview({ recipe, onBack, onNotNow, onAdd, ...recipeProps }) {
       <div style={{ flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch' }}>
         <RecipeScreen key={recipe.id} recipeId={recipe.id} portion={portion} onPortionChange={setPortion} toddlerDob={null}
           showToddlerVariations={recipeProps.showToddlerVariations} goalProfile={recipeProps.goalProfile} goalTargets={recipeProps.goalTargets}
-          nutritionByRecipe={recipeProps.nutritionByRecipe} sectionIds={recipeProps.sectionIds} onPhotoChange={recipeProps.onPhotoChange}/>
+          nutritionByRecipe={recipeProps.nutritionByRecipe} sectionIds={recipeProps.sectionIds} onPhotoChange={recipeProps.onPhotoChange} onLinkChange={recipeProps.onLinkChange}/>
       </div>
       <div style={{ display:'flex', gap:10, padding:'12px 20px calc(12px + env(safe-area-inset-bottom))', flexShrink:0, background:C.white, borderTop:`1px solid ${C.outlineVariant}40` }}>
         <Btn label='Not now' secondary strong onClick={onNotNow}/>
@@ -57,7 +57,7 @@ function RecipePreview({ recipe, onBack, onNotNow, onAdd, ...recipeProps }) {
 // `onPick(recipe, weekOf)` resolves to the new pick, `onRemovePick(pick)` undoes
 // one, and `onDeckState(recipe, patch)` saves skips, snoozes and archiving. All
 // three reject on failure, and the card then stays where it was.
-export function TryDeckScreen({ recipes, picks, weekStartsOn, target, showToddler, onPick, onRemovePick, onDeckState, onDone, showToast, recipeProps }) {
+export function TryDeckScreen({ recipes, picks, weekStartsOn, target, showToddler, onPick, onRemovePick, onDeckState, onNeedStill, onDone, showToast, recipeProps }) {
   const [order, setOrder] = useState('newest')
   const [recent, setRecent] = useState(false)
   const [sides, setSides] = useState(false)
@@ -66,10 +66,16 @@ export function TryDeckScreen({ recipes, picks, weekStartsOn, target, showToddle
   const [sheet, setSheet] = useState(null)       // { kind:'yes', sheet } | { kind:'remove', recipe }
   const [undo, setUndo] = useState(null)         // { pick?, before? }
   const [preview, setPreview] = useState(null)
+  const [playingId, setPlayingId] = useState(null)
+  const [deadVideos, setDeadVideos] = useState(() => new Set())
 
   const filters = { sides, recent }
   const deck = useMemo(() => buildDeck(recipes, picks, { order, sides, recent, seed:SESSION_SEED }), [recipes, picks, order, sides, recent])
   const current = deck[0]
+
+  // A reel with no still yet gets one the first time its card comes up.
+  const needsStill = !!current?.sourcePlatform && !current.videoThumbUrl
+  useEffect(() => { if (needsStill) onNeedStill(current.id) }, [current?.id, needsStill])
 
   // The card leaves first, then the write runs. If it fails the card comes back.
   const flyThen = (recipe, dir, commit) => {
@@ -96,6 +102,7 @@ export function TryDeckScreen({ recipes, picks, weekStartsOn, target, showToddle
   const act = (dir, recipe = current) => {
     if (!recipe || busy) return
     showToast(null)
+    setPlayingId(null)
     if (dir === 'left') {
       const outcome = passOutcome(recipe)
       if (outcome.ask) setSheet({ kind:'remove', recipe })
@@ -156,7 +163,9 @@ export function TryDeckScreen({ recipes, picks, weekStartsOn, target, showToddle
           <div style={{ position:'relative', margin:'0 16px 18px' }}>
             {deck[1] && <TryCard key={`behind-${deck[1].id}`} recipe={deck[1]} behind/>}
             <TryCard key={current.id} recipe={current} showToddler={showToddler} flyOut={fly?.id === current.id ? fly.dir : null}
-              onSwipe={act} onViewRecipe={() => setPreview(current)}/>
+              playing={playingId === current.id} unavailable={deadVideos.has(current.id)}
+              onSwipe={act} onViewRecipe={() => setPreview(current)} onPlay={() => setPlayingId(current.id)} onStopVideo={() => setPlayingId(null)}
+              onVideoUnavailable={() => { setPlayingId(null); setDeadVideos(prev => new Set(prev).add(current.id)) }}/>
           </div>
           {/* Sticks to the bottom so the buttons stay reachable on a short screen,
               where the card is taller than the space left for it. */}

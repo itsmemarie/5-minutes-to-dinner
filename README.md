@@ -47,7 +47,7 @@ Do these in order: database → secrets → functions → auth settings → fron
      shopping-list nutrition batch-cooking buyers-eye toddler-cooking recipe-toddler-task \
      generate-recipe-image
    ```
-   Don't deploy the image functions (`bulk-image-fill`, `ingest-recipe-image`, `cleanup-orphan-images`) with `--no-verify-jwt`: they must keep JWT checks on.
+   Don't deploy the image functions (`bulk-image-fill`, `ingest-recipe-image`, `cleanup-orphan-images`, `reel-thumbnail`) with `--no-verify-jwt`: they must keep JWT checks on.
 4. **Auth settings** (Supabase dashboard › Authentication):
    - URL Configuration: set Site URL to the live app (e.g. `https://5-minutes-to-dinner.vercel.app`) and add it under Redirect URLs.
    - Email Templates › Magic Link: the default link-only template works. Open the link on the device you're signing in on. (An installed iPhone app can't receive a link opened in Safari, so sign in from a normal Safari tab there.)

@@ -696,6 +696,18 @@ export async function fetchRecipeDetails(id) {
   return data
 }
 
+// Asks reel-thumbnail to fetch a reel's still and creator. Resolves to the fields
+// to merge into the recipe, or null if it couldn't: the card just keeps its photo.
+export async function refreshReelThumbnail(recipeId) {
+  try {
+    const { data, error } = await supabase.functions.invoke('reel-thumbnail', { body: { recipe_id: recipeId } })
+    if (error || !data?.path) return null
+    return { videoThumbUrl: recipeImageUrl(data.path), sourceAuthor: data.author ?? null, sourceUrl: data.source_url }
+  } catch {
+    return null
+  }
+}
+
 // sourceUrl comes from normaliseRecipeLink; null removes the link.
 export async function saveRecipeSourceUrl(id, sourceUrl) {
   const { error } = await supabase

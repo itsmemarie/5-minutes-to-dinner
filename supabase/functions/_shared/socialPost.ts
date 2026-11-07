@@ -14,6 +14,8 @@ import { APP_UA } from './remoteImage.ts'
 
 export type Social = 'tiktok' | 'instagram'
 export interface SocialPost { caption: string | null; imageUrls: string[] }
+// `postUrl` is the post's own address, which a short link only reveals by redirect.
+export interface Reel extends SocialPost { author: string | null; postUrl: string | null }
 
 const BOT_UA = 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)'
 const MAX_IMAGE_URLS = 6
@@ -26,12 +28,13 @@ export function socialKind(u: URL): Social | null {
 }
 
 const instagramCode = (u: URL) => u.pathname.match(/\/(?:p|reels?|tv)\/([\w-]+)/)?.[1] ?? null
-const isPost = (u: URL, kind: Social) => (kind === 'tiktok' ? /\/(?:video|photo)\/\d+/.test(u.pathname) : !!instagramCode(u))
+export const isPost = (u: URL, kind: Social) => (kind === 'tiktok' ? /\/(?:video|photo)\/\d+/.test(u.pathname) : !!instagramCode(u))
 
 // ── Reading a post's page ─────────────────────────────────────────
 interface TikTokImage { imageURL?: { urlList?: unknown } }
 interface TikTokItem {
   desc?: unknown
+  author?: { uniqueId?: unknown }
   video?: { cover?: unknown; originCover?: unknown }
   imagePost?: { images?: TikTokImage[]; cover?: TikTokImage }
 }
@@ -79,6 +82,16 @@ export function parsePostPage(html: string, kind: Social, pageUrl: string): Soci
   }
 }
 
+// The creator's handle. TikTok has it in the post's data and its address; Instagram
+// only in the line above the caption: '12 likes - someone on May 1, 2026: "…"'.
+export function postAuthor(html: string, kind: Social, postUrl: URL): string | null {
+  if (kind === 'instagram') {
+    return metaContent(html, 'og:description')?.match(/ - ([\w.]+) on [A-Z][a-z]+ \d{1,2}, \d{4}:/)?.[1] ?? null
+  }
+  const id = tiktokItem(html)?.author?.uniqueId
+  return (typeof id === 'string' && id) || postUrl.pathname.match(/\/@([\w.-]+)/)?.[1] || null
+}
+
 // ── Fetching ──────────────────────────────────────────────────────
 async function getText(url: string, headers: Record<string, string> = {}): Promise<{ text: string; finalUrl: string } | null> {
   try {
@@ -101,11 +114,29 @@ async function instagramOembedCaption(link: URL, token: string): Promise<string 
   }
 }
 
+// An older oEmbed route that still names the creator when the page doesn't. It isn't
+// documented, so it's only a fallback, and losing it just means no handle on the card.
+async function instagramOembedAuthor(post: URL): Promise<string | null> {
+  const o = await getText(`https://www.instagram.com/api/v1/oembed/?url=${encodeURIComponent(post.href)}`, { 'User-Agent': APP_UA })
+  try {
+    const name = JSON.parse(o?.text ?? '')?.author_name
+    return typeof name === 'string' && name ? name : null
+  } catch {
+    return null
+  }
+}
+
 // The caption and the post's pictures, best first. Either can come back empty.
 // Short links (vm.tiktok.com, instagram.com/share/…) resolve by redirect, so
 // what decides if this is a post is where the fetch ended up.
 export async function readSocialPost(link: URL, kind: Social, instagramToken?: string): Promise<SocialPost> {
-  const post: SocialPost = { caption: null, imageUrls: [] }
+  const { caption, imageUrls } = await readReel(link, kind, instagramToken)
+  return { caption, imageUrls }
+}
+
+// The same read, plus who posted it and where the post really lives.
+export async function readReel(link: URL, kind: Social, instagramToken?: string): Promise<Reel> {
+  const post: Reel = { caption: null, imageUrls: [], author: null, postUrl: null }
   let postUrl = isPost(link, kind) ? link : null
 
   for (const ua of [APP_UA, BOT_UA]) {
@@ -118,6 +149,7 @@ export async function readSocialPost(link: URL, kind: Social, instagramToken?: s
     // Longest wins: a wall shown at the post's own address has a short line of its own.
     if ((found.caption?.length ?? 0) > (post.caption?.length ?? 0)) post.caption = found.caption
     post.imageUrls.push(...found.imageUrls.filter(u => !post.imageUrls.includes(u)))
+    post.author ??= postAuthor(page.text, kind, at)
     if (post.caption && post.imageUrls.length) break
   }
 
@@ -127,5 +159,13 @@ export async function readSocialPost(link: URL, kind: Social, instagramToken?: s
     if (!post.caption && instagramToken) post.caption = await instagramOembedCaption(link, instagramToken)
   }
   post.imageUrls = post.imageUrls.slice(0, MAX_IMAGE_URLS)
+  post.postUrl = postUrl?.href ?? null
   return post
+}
+
+// Separate from readReel so importing a recipe never spends the extra request.
+export async function readReelAuthor(post: Reel, kind: Social): Promise<string | null> {
+  if (post.author) return post.author
+  if (kind === 'instagram' && post.postUrl) return await instagramOembedAuthor(new URL(post.postUrl))
+  return post.postUrl?.match(/\/@([\w.-]+)/)?.[1] ?? null
 }

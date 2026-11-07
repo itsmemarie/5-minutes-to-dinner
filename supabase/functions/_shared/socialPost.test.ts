@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { parsePostPage, readSocialPost, socialKind } from './socialPost.ts'
+import { isPost, parsePostPage, postAuthor, readReel, readReelAuthor, readSocialPost, socialKind } from './socialPost.ts'
 
 const TT_POST = 'https://www.tiktok.com/@jose.elcook/video/7448169436764212510'
 const IG_POST = 'https://www.instagram.com/p/Cs7MUHIJW7w/'
@@ -184,5 +184,83 @@ describe('readSocialPost', () => {
     stubFetch(url => { asked.push(url); return igPage })
     await readSocialPost(new URL(IG_POST), 'instagram', 'token')
     expect(asked.some(u => u.includes('graph.facebook.com'))).toBe(false)
+  })
+})
+
+describe('postAuthor', () => {
+  const tt = new URL(TT_POST), ig = new URL(IG_POST)
+
+  it("takes a TikTok creator's handle from the post's data", () => {
+    expect(postAuthor(blob({ desc: 'x', author: { uniqueId: 'jose.elcook' } }), 'tiktok', new URL('https://www.tiktok.com/video/1'))).toBe('jose.elcook')
+  })
+  it("falls back to the handle in a TikTok address", () => {
+    expect(postAuthor('<html></html>', 'tiktok', tt)).toBe('jose.elcook')
+  })
+  it('has no TikTok handle to give when neither shows one', () => {
+    expect(postAuthor('<html></html>', 'tiktok', new URL('https://www.tiktok.com/video/1'))).toBe(null)
+  })
+  it("reads an Instagram creator from the line above the caption", () => {
+    const html = '<meta property="og:description" content="123 likes, 4 comments - terzo.mpls on May 1, 2026: &quot;Pasta&quot;" />'
+    expect(postAuthor(html, 'instagram', ig)).toBe('terzo.mpls')
+  })
+  it('has no Instagram handle to give from a bare caption', () => {
+    expect(postAuthor(igPage, 'instagram', ig)).toBe(null)
+  })
+})
+
+describe('isPost', () => {
+  it('tells a post from a short link', () => {
+    expect(isPost(new URL(TT_POST), 'tiktok')).toBe(true)
+    expect(isPost(new URL('https://vm.tiktok.com/ZMabc/'), 'tiktok')).toBe(false)
+    expect(isPost(new URL(IG_POST), 'instagram')).toBe(true)
+    expect(isPost(new URL('https://www.instagram.com/share/BAabc123'), 'instagram')).toBe(false)
+  })
+})
+
+describe('readReel', () => {
+  afterEach(() => vi.unstubAllGlobals())
+  const stubFetch = (answer: (url: string) => string | { body: string; url: string } | null) => {
+    const asked: string[] = []
+    vi.stubGlobal('fetch', async (url: string) => {
+      asked.push(url)
+      const a = answer(url)
+      if (a == null) throw new Error('network')
+      const { body, url: final } = typeof a === 'string' ? { body: a, url } : a
+      return { ok: true, url: final, text: async () => body }
+    })
+    return asked
+  }
+  const page = blob({ desc: 'Feta pasta', author: { uniqueId: 'jose.elcook' }, video: { cover: COVER } })
+
+  it('finds the post behind a short link', async () => {
+    stubFetch(() => ({ body: page, url: TT_POST }))
+    const post = await readReel(new URL('https://vm.tiktok.com/ZMabc/'), 'tiktok')
+    expect(post).toMatchObject({ author: 'jose.elcook', postUrl: TT_POST, imageUrls: [COVER] })
+  })
+  it('leaves postUrl empty when a link never reaches a post', async () => {
+    stubFetch(() => ({ body: '<html></html>', url: 'https://www.tiktok.com/foryou' }))
+    expect((await readReel(new URL('https://vm.tiktok.com/gone/'), 'tiktok')).postUrl).toBe(null)
+  })
+  it('keeps readSocialPost to its two fields, for the recipe importer', async () => {
+    stubFetch(() => page)
+    expect(Object.keys(await readSocialPost(new URL(TT_POST), 'tiktok')).sort()).toEqual(['caption', 'imageUrls'])
+  })
+
+  it('asks the older oEmbed route for an Instagram creator the page left out', async () => {
+    const asked = stubFetch(url => (url.includes('/api/v1/oembed/') ? JSON.stringify({ author_name: 'terzo.mpls' }) : igPage))
+    const post = await readReel(new URL(IG_POST), 'instagram')
+    expect(post.author).toBe(null)
+    await expect(readReelAuthor(post, 'instagram')).resolves.toBe('terzo.mpls')
+    expect(asked.filter(u => u.includes('/api/v1/oembed/'))).toHaveLength(1)
+  })
+  it('makes no extra request when the page named the creator', async () => {
+    const asked = stubFetch(() => page)
+    const post = await readReel(new URL(TT_POST), 'tiktok')
+    await expect(readReelAuthor(post, 'tiktok')).resolves.toBe('jose.elcook')
+    expect(asked.some(u => u.includes('oembed'))).toBe(false)
+  })
+  it('gives no creator rather than failing when oEmbed does', async () => {
+    stubFetch(url => (url.includes('/api/v1/oembed/') ? null : igPage))
+    await expect(readReelAuthor(await readReel(new URL(IG_POST), 'instagram'), 'instagram')).resolves.toBe(null)
   })
 })

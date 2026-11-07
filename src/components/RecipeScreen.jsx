@@ -19,7 +19,7 @@ import { dayNutritionTotals, rowFigure } from '../lib/goalMaths.js'
 // toddlerDob is null when toddler activities are off in Settings; that hides the
 // activities card and the ideas button. showToddlerVariations gates the recipe's
 // own toddler variation notes separately.
-export function RecipeScreen({ recipeId, portion, onPortionChange, onAddMeal, toddlerDob, showToddlerVariations = true, onOpenToddlerCooking, goalProfile, goalTargets, nutritionByRecipe={}, day, plan, sectionIds = ALL_SECTION_IDS, onPhotoChange }) {
+export function RecipeScreen({ recipeId, portion, onPortionChange, onAddMeal, toddlerDob, showToddlerVariations = true, onOpenToddlerCooking, goalProfile, goalTargets, nutritionByRecipe={}, day, plan, sectionIds = ALL_SECTION_IDS, onPhotoChange, onLinkChange }) {
   const goalMode = !!goalProfile?.goalModeEnabled && !!goalTargets
   const recipeNutrition = nutritionByRecipe[recipeId]
   const [showGoalSheet, setShowGoalSheet] = useState(false)
@@ -107,6 +107,7 @@ export function RecipeScreen({ recipeId, portion, onPortionChange, onAddMeal, to
   async function handleSourceLinkSave(sourceUrl) {
     await saveRecipeSourceUrl(recipeId, sourceUrl)
     setData(d => ({ ...d, source_url: sourceUrl }))
+    onLinkChange?.(recipeId, sourceUrl)
     const currentSource = photo ? photo.imageSource : data.image_source
     if (sourceUrl && sourceUrl !== data.source_url && linkPhotoMayReplace(currentSource)) takeLinkPhoto(sourceUrl)
   }
