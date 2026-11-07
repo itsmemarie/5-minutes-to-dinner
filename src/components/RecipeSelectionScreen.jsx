@@ -8,6 +8,7 @@ import { RecipePhotoBucket } from './RecipePhotoBucket.jsx'
 import { NewRecipeForm } from './NewRecipeForm.jsx'
 import { parseSideNames, matchSideRecipes } from '../lib/sidePairing.js'
 import { dayNutritionTotals } from '../lib/goalMaths.js'
+import { isRetired } from '../lib/mealRating.js'
 
 // Local primitive, following the pattern SettingsScreen establishes with
 // Switch/SegPill/FieldBox. SegPill itself is label-text driven and would need
@@ -58,8 +59,8 @@ export function RecipeSelectionScreen({day,section,plan,recipes,freezerItems,onA
 
   const filtered=useMemo(()=>{
     let list=catName?recipes.filter(r=>r.cat===catName):recipes
-    if(search)list=list.filter(r=>r.name.toLowerCase().includes(search.toLowerCase()))
-    return list
+    // A retired recipe stays out of the way until someone searches for it.
+    return search?list.filter(r=>r.name.toLowerCase().includes(search.toLowerCase())):list.filter(r=>!isRetired(r))
   },[catName,search,recipes])
 
   // Drop recipes already on this day (any section) — they shouldn't appear at all
