@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
-  DECK_MEAL_TYPES, REMOVE_ON_PASS, deckProgressLabel, SNOOZE_WEEKS, buildDeck, deckCaption, deckName, emptyTitle, hiddenCount, keepPatch,
-  londonClock, orderDeck, passOutcome, pickWeek, picksInWeek, progressLabel, removePatch, savedLabel, shuffleKey,
-  snoozeUntil, totalMinutes, undoPatch, waitingRecipes, yesSheet,
+  DECK_MEAL_TYPES, REMOVE_ON_PASS, SCROLL_ZONE, SNOOZE_WEEKS, autoScrollStep, buildDeck, deckCaption, deckName, deckProgressLabel,
+  dropSection, emptyTitle, hiddenCount, keepPatch, londonClock, orderDeck, passOutcome, pickWeek, pickedMealIds, picksInWeek,
+  plannedMealFrom, progressLabel, removePatch, savedLabel, shuffleKey, snoozeUntil, totalMinutes, trayItems, undoPatch,
+  waitingLabel, waitingRecipes, yesSheet,
 } from './tryDeck.js'
 
 const NOW = new Date('2026-11-07T12:00:00Z')
@@ -165,6 +166,10 @@ describe('the words', () => {
     expect(deckProgressLabel(1, 2)).toBe('1/2')
     expect(deckProgressLabel(3, 0)).toBe('3 added')
   })
+  it('counts what is waiting', () => {
+    expect(waitingLabel(112)).toBe('112 try-outs waiting')
+    expect(waitingLabel(1)).toBe('1 try-out waiting')
+  })
   it('captions the deck', () => {
     expect(deckCaption(84, { sides: false, recent: false })).toBe('84 mains to look at')
     expect(deckCaption(28, { sides: true, recent: false })).toBe('28 sides to look at')
@@ -175,6 +180,75 @@ describe('the words', () => {
     expect(emptyTitle({ sides: false, recent: true })).toBe('Nothing else from the last 30 days')
     expect(emptyTitle({ sides: true, recent: true })).toBe('No more sides for now')
     expect(emptyTitle({ sides: false, recent: false })).toBe("You've seen everything for now")
+  })
+})
+
+describe('the tray', () => {
+  const recipes = [recipe('a'), recipe('b')]
+
+  it('holds unscheduled picks from any week, and carries them over', () => {
+    const picks = [pick('a', { week_of: '2026-10-05' }), pick('b', { planned_meal_id: 'm1' })]
+    expect(trayItems(picks, recipes).map(i => i.recipe.id)).toEqual(['a'])
+  })
+  it('skips a pick whose recipe is no longer listed', () => {
+    expect(trayItems([pick('gone')], recipes)).toEqual([])
+  })
+  it('marks the meals that came from the deck', () => {
+    const marked = pickedMealIds([pick('a'), pick('b', { planned_meal_id: 'm1' })])
+    expect([...marked]).toEqual(['m1'])
+  })
+})
+
+describe('dropSection', () => {
+  const main = recipe('a')
+  const side = recipe('b', { mealTypeId: 'side' })
+
+  it('puts a main in the main meal', () => {
+    expect(dropSection(main, ['breakfast', 'main', 'side'])).toBe('main')
+  })
+  it('puts a side with the sides', () => {
+    expect(dropSection(side, ['breakfast', 'main', 'side'])).toBe('side')
+  })
+  it('falls back to dinner when the main meal is off', () => {
+    expect(dropSection(main, ['breakfast', 'dinner', 'side'])).toBe('dinner')
+  })
+  it('puts a side in the main meal when sides are off', () => {
+    expect(dropSection(side, ['breakfast', 'main'])).toBe('main')
+  })
+  it('never picks a section that is off', () => {
+    expect(dropSection(main, ['breakfast'])).toBe('breakfast')
+  })
+})
+
+describe('plannedMealFrom', () => {
+  it('snapshots the recipe the way adding a meal does', () => {
+    const meal = plannedMealFrom(recipe('a', { name: 'Dal', min: 2, base: 6, advancePrepHours: 4, advancePrepNote: 'Soak' }), 'main', 3, 4)
+    expect(meal).toEqual({ recipeId: 'a', section: 'main', name: 'Dal', prep: 10, active: 20, min: 2, portion: 4, base: 6, advancePrepHours: 4, advancePrepNote: 'Soak', position: 3 })
+  })
+})
+
+describe('autoScrollStep', () => {
+  const TOP = 60, BOTTOM = 650
+
+  it('stays still in the middle of the list', () => {
+    expect(autoScrollStep(300, TOP, BOTTOM)).toBe(0)
+  })
+  it('leaves the zones exactly at their edges', () => {
+    expect(SCROLL_ZONE).toEqual({ top: 50, bottom: 70 })
+    expect(autoScrollStep(BOTTOM - 70, TOP, BOTTOM)).toBe(0)
+    expect(autoScrollStep(TOP + 50, TOP, BOTTOM)).toBe(0)
+  })
+  it('scrolls down near the bottom, faster further in', () => {
+    const near = autoScrollStep(BOTTOM - 60, TOP, BOTTOM)
+    const far = autoScrollStep(BOTTOM - 5, TOP, BOTTOM)
+    expect(near).toBeGreaterThan(0)
+    expect(far).toBeGreaterThan(near)
+  })
+  it('scrolls up near the top', () => {
+    expect(autoScrollStep(TOP + 10, TOP, BOTTOM)).toBeLessThan(0)
+  })
+  it('caps the speed past the edge', () => {
+    expect(autoScrollStep(BOTTOM + 100, TOP, BOTTOM)).toBe(14)
   })
 })
 

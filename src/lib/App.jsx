@@ -9,7 +9,7 @@ import {
   fetchToddlerCookingGuide, saveToddlerCookingGuide,
   fetchUserProfile, saveUserProfile, fetchAllRecipeNutrition, saveRecipeView, fetchRecipesForExport,
   getSession, onAuthChange, addShoppingItem, removeShoppingItem, fetchRecipeIngredients,
-  fetchTryoutPicks, addTryoutPick, removeTryoutPick, saveRecipeDeckState,
+  fetchTryoutPicks, addTryoutPick, removeTryoutPick, linkPickToMeal, saveRecipeDeckState,
 } from './supabase.js'
 import { callEdgeFn, fetchAiConfig, onAiLimit } from './ai.js'
 import { computeTargets } from './goalMaths.js'
@@ -19,7 +19,7 @@ import { ALL_SECTION_IDS, enabledSectionIds, sectionLabel, sectionShort, dayMeal
 import { normalisePreferences, migrateLegacyToddlerDob, activeToddlerDob, newChild, COUNTRIES, RECIPE_LANGUAGES, countryName, equipmentLabels } from './preferences.js'
 import { buildBasicShoppingList, guessAisle } from './basicShoppingList.js'
 import { snapshotWeek, buildFill, fillNotice, savedRecipeIds } from './savedWeeks.js'
-import { deckProgressLabel, pickWeek, picksInWeek, progressLabel } from './tryDeck.js'
+import { deckProgressLabel, dropSection, pickWeek, pickedMealIds, picksInWeek, plannedMealFrom, progressLabel, trayItems, waitingRecipes } from './tryDeck.js'
 import { consumePwaShare } from './share/pwaShareInbox.js'
 import { onIncomingShare, clearIncomingShare } from './share/handleIncomingShare.js'
 import { APP_VERSION_LABEL } from './appVersion.js'
@@ -425,6 +425,8 @@ export default function App() {
       updateFreezerStock(meal.freezerItemId, true)
     }
     await removePlannedMeal(id)
+    // The database has unlinked its pick, if any, which puts it back in the tray.
+    setTryoutPicks(prev => prev.map(p => p.planned_meal_id === id ? { ...p, planned_meal_id: null } : p))
   }
 
   const moveMeal = async (fromDay, toDay, mealId, section) => {
@@ -645,6 +647,7 @@ export default function App() {
       await updateFreezerStock(freezerIds, true)
     }
     setPlanState(emptyWeek())
+    refreshPicks()
   }
 
   // Planner › Save week. Keeps a copy of the week on screen as it looks now.
@@ -684,6 +687,7 @@ export default function App() {
     // Read it back rather than patching state: this gives real ids and the saved
     // order, and shows what's there even if clearing the old meals failed.
     await showWeek(week)
+    refreshPicks()
     if (clearError) throw new Error(`The saved meals went in, but the old ones couldn't be cleared, so the week has both: ${clearError.message}`)
     setPlannerNotice(fillNotice(fill))
   }
@@ -793,6 +797,46 @@ export default function App() {
   }
   const closeDeck = () => { setTab('planner'); setScreen(null) }
 
+  // After clearing meals in bulk, some picks may have gone back to the tray.
+  const refreshPicks = () => fetchTryoutPicks().then(setTryoutPicks).catch(e => console.error('picks refresh failed', e))
+
+  // Planner tray: a pick dropped on a day becomes a planned meal. The meal goes in
+  // first, so a failure can't leave a pick pointing at nothing; if linking fails,
+  // the meal comes back out and the card returns to the tray.
+  const dropPick = async (pick, day) => {
+    const recipe = recipes.find(r => r.id === pick.recipe_id)
+    const entryId = dayEntryMap[day]
+    if (!recipe || !entryId) return
+    const section = dropSection(recipe, sectionIds)
+    const meal = plannedMealFrom(recipe, section, plan[day][section].length, defPort)
+    const tempId = uid()
+    const setPickMeal = mealId => setTryoutPicks(prev => prev.map(p => p.id === pick.id ? { ...p, planned_meal_id: mealId } : p))
+    const swapMeal = change => setPlanState(prev => ({ ...prev, [day]: { ...prev[day], [section]: change(prev[day][section]) } }))
+
+    swapMeal(meals => [...meals, { ...meal, id: tempId }])
+    setPickMeal(tempId)
+    let createdId = null
+    try {
+      const [created] = await addPlannedMeals(entryId, [meal])
+      createdId = created.id
+      await linkPickToMeal(pick.id, createdId)
+      swapMeal(meals => meals.map(m => m.id === tempId ? { ...m, id: createdId } : m))
+      setPickMeal(createdId)
+      showToast(`Added to ${DAY_LBL[day]}`)
+    } catch (e) {
+      console.error('tray drop failed', e)
+      if (createdId) removePlannedMeal(createdId).catch(err => console.error('tray drop cleanup failed', err))
+      swapMeal(meals => meals.filter(m => m.id !== tempId))
+      setPickMeal(null)
+      showToast("Couldn't add that. Try again.")
+    }
+  }
+
+  const removeFromTray = async ({ pick }) => {
+    try { await removePick(pick) }
+    catch (e) { console.error('tray remove failed', e); showToast("Couldn't remove that. Try again.") }
+  }
+
   // ── Nav ─────────────────────────────────────────────────────────
   const openDayPlan   = day => { setSelDay(day); setScreen('dailyPlan') }
   // Entering the picker afresh starts clean; returning from a recipe preview
@@ -900,6 +944,15 @@ export default function App() {
   const picksPill = progressLabel(picksThisWeek, prefs.tryoutWeeklyTarget)
   const deckPill = deckProgressLabel(picksThisWeek, prefs.tryoutWeeklyTarget)
   const onDeck = screen === 'tryDeck'
+  const tryouts = {
+    waiting: waitingRecipes(recipes, tryoutPicks).length,
+    pill: picksPill,
+    onOpen: () => setScreen('tryDeck'),
+    tray: trayItems(tryoutPicks, recipes),
+    newMealIds: pickedMealIds(tryoutPicks),
+    onDrop: dropPick,
+    onRemove: removeFromTray,
+  }
 
   const NAV = [{id:'home',icon:'home',label:'Home'},{id:'planner',icon:'calendar',label:'Planner'},{id:'list',icon:'cart',label:'Shopping'},{id:'batch',icon:'chefHat',label:'Batch'}]
 
@@ -952,7 +1005,7 @@ export default function App() {
     if (screen === 'toddlerCooking')  return <ToddlerCookingScreen guide={toddlerGuide} loading={toddlerGuideLoading} error={toddlerGuideError} activeBand={toddlerBand} setActiveBand={setToddlerBand} currentBand={toddlerDob?ageBandFromDob(toddlerDob):null} onGenerate={generateToddlerGuide}/>
     if (tab !== 'planner' && weekLoadState) return weekLoadState
     if (tab === 'home')    return <HomeScreen plan={plan} days={week.days} sectionIds={sectionIds} onDayOpen={openDayPlan} onRecipeOpen={openRecipeFromHome} moveMeal={moveMeal} onCopy={copyWeekPlan} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))} aiContext={aiContext}/>
-    if (tab === 'planner') return <PlannerScreen plan={plan} week={week} weekOffset={weekOffset} weekStrip={weekStrip} onSelectWeek={setWeekOffset} onSaveWeek={saveCurrentWeek} onFillWeek={fillWeek} notice={plannerNotice} onDismissNotice={()=>setPlannerNotice(null)} loadState={weekLoadState} sectionIds={sectionIds} removeMeal={removeMeal} moveMeal={moveMeal} duplicateMeal={duplicateMeal} updatePortion={updatePortion} onDayOpen={openDayPlan} onRecipeOpen={openRecipeFromHome} onNutrition={()=>{ setScreen('nutrition'); if(!nutriData) analyseNutrition() }} onShoppingList={generateShoppingList} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe}/>
+    if (tab === 'planner') return <PlannerScreen plan={plan} week={week} weekOffset={weekOffset} weekStrip={weekStrip} onSelectWeek={setWeekOffset} onSaveWeek={saveCurrentWeek} onFillWeek={fillWeek} notice={plannerNotice} onDismissNotice={()=>setPlannerNotice(null)} loadState={weekLoadState} sectionIds={sectionIds} removeMeal={removeMeal} moveMeal={moveMeal} duplicateMeal={duplicateMeal} updatePortion={updatePortion} onDayOpen={openDayPlan} onRecipeOpen={openRecipeFromHome} onNutrition={()=>{ setScreen('nutrition'); if(!nutriData) analyseNutrition() }} onShoppingList={generateShoppingList} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe} tryouts={tryouts}/>
     const weekBanner = !isThisWeek && <WeekBanner label={week.label} onBack={()=>setWeekOffset(0)}/>
     if (tab === 'list')    return <>{weekBanner}<ShoppingListScreen shopping={shopping} weekLabel={week.label} onToggle={onShoppingToggle} loading={shoppingLoading} loadingMsg={shoppingLoadingMsg} error={shoppingError} notice={shoppingNotice} onRegenerate={generateShoppingList} onBuildBasic={buildBasicList} onAddItem={addShoppingItemByHand} onRemoveItem={removeShoppingItemByHand} plannedPortions={plannedPortions()}/></>
     if (tab === 'batch')   return <>{weekBanner}<BatchScreen activeTab={batchTab} setActiveTab={setBatchTab} batchData={batchData} batchLoading={batchLoading} batchError={batchError} onGenerate={generateBatch} onOpenToddlerCooking={toddlerActivitiesOn?()=>openToddlerCooking(false):null} showToddler={toddlerActivitiesOn}/></>
@@ -961,7 +1014,7 @@ export default function App() {
   return (
     <div style={{display:'flex',justifyContent:'center',background:'#dbe6d8',minHeight:'100vh'}}>
       <div style={{width:'100%',maxWidth:430,background:C.white,display:'flex',flexDirection:'column',minHeight:'100vh',position:'relative',...mn}}>
-        <div style={{background:C.primary,padding:'16px 20px',display:'flex',alignItems:'center',gap:10,flexShrink:0,position:'sticky',top:0,zIndex:20}}>
+        <div data-top-bar style={{background:C.primary,padding:'16px 20px',display:'flex',alignItems:'center',gap:10,flexShrink:0,position:'sticky',top:0,zIndex:20}}>
           {screen
             ? <button onClick={goBack} style={{border:'none',background:'none',color:C.onPrimary,cursor:'pointer',padding:'2px 8px 2px 0',display:'flex',alignItems:'center'}}><Icon name='back' color={C.onPrimary}/></button>
             : <img src='/dino-logo.png' alt='' style={{width:30,height:30,objectFit:'contain',flexShrink:0}}/>
@@ -978,7 +1031,7 @@ export default function App() {
         <div style={{flex:1,overflowY:'auto',position:'relative',paddingBottom:screen&&!onDeck?80:0,display:'flex',flexDirection:'column'}}>
           {renderScreen()}
         </div>
-        <div style={{flexShrink:0,position:'sticky',bottom:0,zIndex:20,display:'flex',flexDirection:'column'}}>
+        <div data-bottom-bar style={{flexShrink:0,position:'sticky',bottom:0,zIndex:20,display:'flex',flexDirection:'column'}}>
           {tab === 'planner' && !screen && !isPastWeek && !weekLoadState && (
             <div style={{padding:'10px 20px'}}>
               <button onClick={generateShoppingList} style={{width:'100%',background:C.primary,color:C.onPrimary,border:'none',borderRadius:R.pill,padding:'15px',...mn,fontSize:15,fontWeight:700,cursor:'pointer',boxShadow:'0 4px 20px rgba(45,96,47,0.3)',display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>

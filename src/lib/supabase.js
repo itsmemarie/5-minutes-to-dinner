@@ -217,6 +217,11 @@ export async function removeTryoutPick(id) {
   if (error) throw error
 }
 
+export async function linkPickToMeal(id, plannedMealId) {
+  const { error } = await supabase.from('tryout_picks').update({ planned_meal_id: plannedMealId }).eq('id', id)
+  if (error) throw error
+}
+
 export async function createRecipe(fields) {
   const { diet, ...dbFields } = fields
   const id = 'mp-' + crypto.randomUUID()
