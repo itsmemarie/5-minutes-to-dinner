@@ -98,6 +98,8 @@ export const savedLabel = r =>
   new Date(r.savedAt ?? r.createdAt).toLocaleDateString('en-GB', { day:'numeric', month:'short', timeZone:'Europe/London' })
 
 export const progressLabel = (picked, target) => (target > 0 ? `${picked}/${target} this week` : `${picked} this week`)
+// The shorter form in the deck's header, where the full one wraps the title at 360px.
+export const deckProgressLabel = (picked, target) => (target > 0 ? `${picked}/${target}` : `${picked} added`)
 
 export function deckCaption(n, { sides, recent }) {
   const kind = sides ? 'side' : 'main'

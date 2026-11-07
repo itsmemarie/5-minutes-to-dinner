@@ -19,7 +19,7 @@ import { ALL_SECTION_IDS, enabledSectionIds, sectionLabel, sectionShort, dayMeal
 import { normalisePreferences, migrateLegacyToddlerDob, activeToddlerDob, newChild, COUNTRIES, RECIPE_LANGUAGES, countryName, equipmentLabels } from './preferences.js'
 import { buildBasicShoppingList, guessAisle } from './basicShoppingList.js'
 import { snapshotWeek, buildFill, fillNotice, savedRecipeIds } from './savedWeeks.js'
-import { pickWeek, picksInWeek, progressLabel } from './tryDeck.js'
+import { deckProgressLabel, pickWeek, picksInWeek, progressLabel } from './tryDeck.js'
 import { consumePwaShare } from './share/pwaShareInbox.js'
 import { onIncomingShare, clearIncomingShare } from './share/handleIncomingShare.js'
 import { APP_VERSION_LABEL } from './appVersion.js'
@@ -769,7 +769,7 @@ export default function App() {
   const showToast = message => {
     clearTimeout(toastTimer.current)
     setToast(message)
-    toastTimer.current = setTimeout(() => setToast(null), TOAST_MS)
+    if (message) toastTimer.current = setTimeout(() => setToast(null), TOAST_MS)
   }
 
   const pickRecipe = async (recipe, weekOf) => {
@@ -898,6 +898,7 @@ export default function App() {
   // The deck and its pill always mean this week, whichever week is selected.
   const picksThisWeek = picksInWeek(tryoutPicks, pickWeek(prefs.weekStartsOn).weekOf).length
   const picksPill = progressLabel(picksThisWeek, prefs.tryoutWeeklyTarget)
+  const deckPill = deckProgressLabel(picksThisWeek, prefs.tryoutWeeklyTarget)
   const onDeck = screen === 'tryDeck'
 
   const NAV = [{id:'home',icon:'home',label:'Home'},{id:'planner',icon:'calendar',label:'Planner'},{id:'list',icon:'cart',label:'Shopping'},{id:'batch',icon:'chefHat',label:'Batch'}]
@@ -966,7 +967,7 @@ export default function App() {
             : <img src='/dino-logo.png' alt='' style={{width:30,height:30,objectFit:'contain',flexShrink:0}}/>
           }
           <span style={{...ep,fontSize:onDeck?19:screen?16:18,letterSpacing:'0.005em',color:C.onPrimary,flex:1}}>{headerTitle}</span>
-          {onDeck && <span style={{...mn,fontSize:12,fontWeight:700,color:C.onPrimary,background:'rgba(255,255,255,0.16)',padding:'5px 12px',borderRadius:R.pill,whiteSpace:'nowrap'}}>{picksPill}</span>}
+          {onDeck && <span style={{...mn,fontSize:12,fontWeight:700,color:C.onPrimary,background:'rgba(255,255,255,0.16)',padding:'5px 12px',borderRadius:R.pill,whiteSpace:'nowrap'}}>{deckPill}</span>}
           {!loading && !screen && (
             <div style={{display:'flex',alignItems:'center',gap:8}}>
               {error && <div style={{width:6,height:6,borderRadius:R.pill,background:'#ffb4a9'}} title='DB error'/>}

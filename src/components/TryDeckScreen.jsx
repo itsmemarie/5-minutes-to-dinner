@@ -42,9 +42,9 @@ function RecipePreview({ recipe, onBack, onNotNow, onAdd, ...recipeProps }) {
           showToddlerVariations={recipeProps.showToddlerVariations} goalProfile={recipeProps.goalProfile} goalTargets={recipeProps.goalTargets}
           nutritionByRecipe={recipeProps.nutritionByRecipe} sectionIds={recipeProps.sectionIds} onPhotoChange={recipeProps.onPhotoChange}/>
       </div>
-      <div style={{ display:'flex', gap:10, padding:'12px 20px', flexShrink:0, background:C.white, borderTop:`1px solid ${C.outlineVariant}40` }}>
-        <div style={{ flex:1 }}><Btn label='Not now' full secondary strong onClick={onNotNow}/></div>
-        <div style={{ flex:1 }}><Btn label='Add to this week' full onClick={onAdd}/></div>
+      <div style={{ display:'flex', gap:10, padding:'12px 20px calc(12px + env(safe-area-inset-bottom))', flexShrink:0, background:C.white, borderTop:`1px solid ${C.outlineVariant}40` }}>
+        <Btn label='Not now' secondary strong onClick={onNotNow}/>
+        <div style={{ flex:1, minWidth:0 }}><Btn label='Add to this week' full onClick={onAdd}/></div>
       </div>
     </div>
   )
@@ -95,6 +95,7 @@ export function TryDeckScreen({ recipes, picks, weekStartsOn, target, showToddle
 
   const act = (dir, recipe = current) => {
     if (!recipe || busy) return
+    showToast(null)
     if (dir === 'left') {
       const outcome = passOutcome(recipe)
       if (outcome.ask) setSheet({ kind:'remove', recipe })
@@ -141,7 +142,7 @@ export function TryDeckScreen({ recipes, picks, weekStartsOn, target, showToddle
   }
 
   return (
-    <div style={{ padding:'12px 0 24px', display:'flex', flexDirection:'column', flex:1 }}>
+    <div style={{ paddingTop:12, display:'flex', flexDirection:'column', flex:1 }}>
       <div data-deck-filters style={{ display:'flex', gap:8, overflowX:'auto', padding:'2px 16px 8px', scrollbarWidth:'none', flexShrink:0 }}>
         <PillBtn label='Newest first' icon='arrowDownWideNarrow' iconSize={14} strong active={order === 'newest'} onClick={() => setOrder('newest')}/>
         <PillBtn label='Shuffle' icon='shuffle' iconSize={14} strong active={order === 'shuffle'} onClick={() => setOrder('shuffle')}/>
@@ -152,12 +153,14 @@ export function TryDeckScreen({ recipes, picks, weekStartsOn, target, showToddle
       {current ? (
         <>
           <div style={{ ...mn, fontSize:13, color:C.onSurfaceVariant, padding:'0 16px 10px' }}>{deckCaption(deck.length, filters)}</div>
-          <div style={{ position:'relative', margin:'0 16px 26px' }}>
+          <div style={{ position:'relative', margin:'0 16px 18px' }}>
             {deck[1] && <TryCard key={`behind-${deck[1].id}`} recipe={deck[1]} behind/>}
             <TryCard key={current.id} recipe={current} showToddler={showToddler} flyOut={fly?.id === current.id ? fly.dir : null}
               onSwipe={act} onViewRecipe={() => setPreview(current)}/>
           </div>
-          <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'center', gap:18 }}>
+          {/* Sticks to the bottom so the buttons stay reachable on a short screen,
+              where the card is taller than the space left for it. */}
+          <div style={{ position:'sticky', bottom:0, zIndex:1, marginTop:'auto', background:C.white, display:'flex', alignItems:'flex-start', justifyContent:'center', gap:18, padding:'10px 0 calc(12px + env(safe-area-inset-bottom))' }}>
             <RoundButton size={64} label='Not now' caption='Not now' background={C.white} border={C.accent2_300} onClick={() => act('left')}>
               <Icon name='x' size={28} color={C.accent2_700}/>
             </RoundButton>

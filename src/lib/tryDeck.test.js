@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  DECK_MEAL_TYPES, REMOVE_ON_PASS, SNOOZE_WEEKS, buildDeck, deckCaption, deckName, emptyTitle, hiddenCount, keepPatch,
+  DECK_MEAL_TYPES, REMOVE_ON_PASS, deckProgressLabel, SNOOZE_WEEKS, buildDeck, deckCaption, deckName, emptyTitle, hiddenCount, keepPatch,
   londonClock, orderDeck, passOutcome, pickWeek, picksInWeek, progressLabel, removePatch, savedLabel, shuffleKey,
   snoozeUntil, totalMinutes, undoPatch, waitingRecipes, yesSheet,
 } from './tryDeck.js'
@@ -160,6 +160,10 @@ describe('the words', () => {
   it('writes the progress pill, with and without a goal', () => {
     expect(progressLabel(1, 2)).toBe('1/2 this week')
     expect(progressLabel(3, 0)).toBe('3 this week')
+  })
+  it('shortens the pill for the deck header', () => {
+    expect(deckProgressLabel(1, 2)).toBe('1/2')
+    expect(deckProgressLabel(3, 0)).toBe('3 added')
   })
   it('captions the deck', () => {
     expect(deckCaption(84, { sides: false, recent: false })).toBe('84 mains to look at')
