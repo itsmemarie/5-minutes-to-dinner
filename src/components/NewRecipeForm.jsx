@@ -11,6 +11,7 @@ import {
 import { languageName } from '../lib/preferences.js'
 import { applySuggestion } from '../lib/reviewSuggestions.js'
 import { linkPhotoCredit, linkPhotoMayReplace, normaliseRecipeLink } from '../lib/recipeLink.js'
+import { reelPlatform } from '../lib/reels.js'
 import { C, ep, mn, CARD, R } from '../lib/theme.js'
 import { Btn } from './ui/index.js'
 import { Icon } from './ui/Icon.jsx'
@@ -346,6 +347,10 @@ export function NewRecipeForm({ defaultMealType, onSave, onCancel, aiContext, in
       onSave({
         id: newId,
         name: dbFields.name,
+        mealTypeId: f.meal_type_id,
+        createdAt: new Date().toISOString(),
+        sourceUrl: dbFields.source_url,
+        sourcePlatform: reelPlatform(dbFields.source_url),
         cat: catMap[f.meal_type_id] || 'Mains',
         prep: dbFields.prep_time_minutes ?? 0,
         active: dbFields.cook_time_minutes ?? 0,
