@@ -3,8 +3,8 @@
 // show in. Pure, so the order can be tested without a screen.
 import { DAY_LBL } from './dateHelpers.js'
 
-// Off until the picker's swipe deck ships, so the buttons stay hidden.
-export const PICKER_SWIPE = false
+// The Swipe / Help me pick buttons that open the deck on a bucket.
+export const PICKER_SWIPE = true
 
 // What a day's defaults are called in the subtitle, per meal section.
 const SECTION_NOUN = { breakfast:'breakfasts', lunch:'lunches', main:'mains', dinner:'dinners', side:'sides', dessert:'desserts', drinks:'drinks' }
