@@ -43,7 +43,16 @@
       "Bash(npx -y supabase@latest functions deploy complete-recipe translate-recipe ai-config review-recipe generate-recipe batch-cooking toddler-cooking recipe-toddler-task --no-verify-jwt --remote=chcjytxvpvhzdgvwllss --use-api --yes)",
       "Bash(node __TRACKED_VAR__/watch.mjs)",
       "Bash(node __TRACKED_VAR__/prodcheck.mjs)",
-      "Bash(grep -oE '.{0,120}amount.{0,160}')"
+      "Bash(grep -oE '.{0,120}amount.{0,160}')",
+      "Bash(npx supabase@latest functions deploy reel-thumbnail --project-ref chcjytxvpvhzdgvwllss)",
+      "Bash(npx supabase@latest functions deploy reel-thumbnail --remote=chcjytxvpvhzdgvwllss --yes)",
+      "Bash(timeout 30 bash -c 'until curl -s http://localhost:5173 > /dev/null; do sleep 1; done')",
+      "Bash(node screenshot.mjs)",
+      "Bash(npx playwright-core *)",
+      "Bash(npm list *)",
+      "Bash(curl -s http://localhost:5173)",
+      "Read(//c/Users/Hanita/.claude/projects/c--Users-Hanita-Desktop-5-Minutes-to-Dinner-App/memory/**)",
+      "Bash(git commit -m ' *)"
     ],
     "additionalDirectories": [
       "C:\\Users\\Hanita\\.claude\\skills\\synced\\bf8d5b1a-85a7-41b8-afe2-10aa8f796b22_ea3a193a-12d0-4b52-8ab1-90cbb7dd0c3b\\5-minutes-to-dinner"
