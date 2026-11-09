@@ -10,6 +10,7 @@ import { parseSideNames, matchSideRecipes } from '../lib/sidePairing.js'
 import { dayNutritionTotals } from '../lib/goalMaths.js'
 import { isRetired } from '../lib/mealRating.js'
 import { PICKER_SWIPE, collapsedSubtitle, pickerBuckets } from '../lib/pickerBuckets.js'
+import { PickerDeck } from './PickerDeck.jsx'
 
 // Opens and closes the Defaults bucket. 34px round, with the same transparent
 // overlay as ViewToggle so the tap target reaches 44px.
@@ -48,7 +49,7 @@ function ViewToggle({ value, onChange }) {
   )
 }
 
-export function RecipeSelectionScreen({day,section,plan,recipes,freezerItems,onAdd,onAddFreezer,onManageFreezer,onRecipeCreated,onPreview,goalProfile,goalTargets,nutritionByRecipe={},recipeView='list',setRecipeView,search,setSearch,chip,setChip,selected,setSelected,days=DAYS,sectionIds=ALL_SECTION_IDS,aiContext}){
+export function RecipeSelectionScreen({day,section,plan,recipes,freezerItems,onAdd,onAddFreezer,onManageFreezer,onRecipeCreated,onPreview,goalProfile,goalTargets,nutritionByRecipe={},recipeView='list',setRecipeView,search,setSearch,chip,setChip,selected,setSelected,days=DAYS,sectionIds=ALL_SECTION_IDS,aiContext,showToast=()=>{},showToddler,deckRecipeProps}){
   const goalMode=!!goalProfile?.goalModeEnabled&&!!goalTargets
   const dayTotals=useMemo(()=>goalMode?dayNutritionTotals(dayMeals(plan[day],sectionIds),nutritionByRecipe):null,[goalMode,plan,day,nutritionByRecipe,sectionIds])
   const [freezerSelected,setFreezerSelected]=useState([])
@@ -95,7 +96,10 @@ export function RecipeSelectionScreen({day,section,plan,recipes,freezerItems,onA
   const [defaultsOpen,setDefaultsOpen]=useState(true)
   // The deck can't open while searching: results stay in their buckets.
   const showSwipe=PICKER_SWIPE&&!search
-  const openDeck=()=>{}
+  // The swipe deck over one bucket: { pool, key }. Its cards follow the bucket live.
+  const [deckOn,setDeckOn]=useState(null)
+  const openDeck=b=>setDeckOn({pool:b.swipe,key:b.key})
+  const deckItems=deckOn?(buckets.find(b=>b.key===deckOn.key)?.items||[]):[]
 
   const [showNewRecipe,setShowNewRecipe]=useState(false)
   const toggle=rid=>setSelected(s=>s.includes(rid)?s.filter(x=>x!==rid):[...s,rid])
@@ -110,6 +114,7 @@ export function RecipeSelectionScreen({day,section,plan,recipes,freezerItems,onA
 
   return(
     <div style={{display:'flex',flexDirection:'column',minHeight:'100%'}}>
+      {deckOn&&<PickerDeck pool={deckOn.pool} items={deckItems} day={day} selected={selected} setSelected={setSelected} showToast={showToast} showToddler={showToddler} recipeProps={deckRecipeProps} onClose={()=>setDeckOn(null)}/>}
       {showNewRecipe&&<NewRecipeForm defaultMealType={defaultMealType} aiContext={aiContext} onSave={handleRecipeCreated} onCancel={()=>setShowNewRecipe(false)}/>}
       {goalMode&&<div style={{padding:'0 20px'}}><BudgetStrip dayTotals={dayTotals} targets={goalTargets}/></div>}
       <div style={{flex:1,padding:'12px 20px 120px'}}>
