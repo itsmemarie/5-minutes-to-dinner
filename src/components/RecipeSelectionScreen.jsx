@@ -9,6 +9,19 @@ import { NewRecipeForm } from './NewRecipeForm.jsx'
 import { parseSideNames, matchSideRecipes } from '../lib/sidePairing.js'
 import { dayNutritionTotals } from '../lib/goalMaths.js'
 import { isRetired } from '../lib/mealRating.js'
+import { PICKER_SWIPE, collapsedSubtitle, pickerBuckets } from '../lib/pickerBuckets.js'
+
+// Opens and closes the Defaults bucket. 34px round, with the same transparent
+// overlay as ViewToggle so the tap target reaches 44px.
+function CollapseToggle({ open, label, onClick }) {
+  return (
+    <button onClick={onClick} aria-expanded={open} aria-label={open?`Collapse ${label}`:`Expand ${label}`}
+      style={{width:34,height:34,borderRadius:R.pill,border:'none',padding:0,background:C.primaryFixed,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',position:'relative',flexShrink:0}}>
+      <span style={{display:'flex',transform:open?'rotate(180deg)':'none',transition:'transform 0.15s'}}><Icon name='chevronDown' size={18} color={C.primary}/></span>
+      <span aria-hidden style={{position:'absolute',inset:-5}}/>
+    </button>
+  )
+}
 
 // Local primitive, following the pattern SettingsScreen establishes with
 // Switch/SegPill/FieldBox. SegPill itself is label-text driven and would need
@@ -75,15 +88,14 @@ export function RecipeSelectionScreen({day,section,plan,recipes,freezerItems,onA
   const suggestedIds=suggested.map(r=>r.id)
   const availableRest=available.filter(r=>!suggestedIds.includes(r.id))
 
-  // Bucket order requested: Suggested → Already Planned This Week → Default → Try Out → Order Out → Other
-  // Default takes priority: if a recipe has this day in defaultDays it always lands here
-  const alreadyWeek=availableRest.filter(r=>otherDaysIds.includes(r.id))
-  const rest=availableRest.filter(r=>!otherDaysIds.includes(r.id))
-  const defaults=rest.filter(r=>(r.defaultDays||[]).includes(day))
-  const notDefault=rest.filter(r=>!(r.defaultDays||[]).includes(day))
-  const tryOut=notDefault.filter(r=>r.tryOut&&!r.orderOut)
-  const orderOut=notDefault.filter(r=>r.orderOut)
-  const other=notDefault.filter(r=>!r.tryOut&&!r.orderOut)
+  // Bucket order: Suggested → Already planned this week → {Day} defaults →
+  // Tested & approved → Try something new → Order out. pickerBuckets.js has
+  // which recipe goes where (Default wins over Try / Order out, Order out over Try).
+  const buckets=pickerBuckets({suggested,available:availableRest,otherDayIds:otherDaysIds,day,section})
+  const [defaultsOpen,setDefaultsOpen]=useState(true)
+  // The deck can't open while searching: results stay in their buckets.
+  const showSwipe=PICKER_SWIPE&&!search
+  const openDeck=()=>{}
 
   const [showNewRecipe,setShowNewRecipe]=useState(false)
   const toggle=rid=>setSelected(s=>s.includes(rid)?s.filter(x=>x!==rid):[...s,rid])
@@ -140,12 +152,17 @@ export function RecipeSelectionScreen({day,section,plan,recipes,freezerItems,onA
           </div>
         ):(
           <>
-            <Bucket title='Suggested' items={suggested} disabled={false} selected={selected} onToggle={toggle} onPreview={onPreview} suggestionLabel={mainRecipe?.name} nutritionByRecipe={goalMode?nutritionByRecipe:null}/>
-            <Bucket title='Already Planned This Week' items={alreadyWeek} disabled={false} selected={selected} onToggle={toggle} onPreview={onPreview} nutritionByRecipe={goalMode?nutritionByRecipe:null}/>
-            <Bucket title='Default' items={defaults} disabled={false} selected={selected} onToggle={toggle} onPreview={onPreview} nutritionByRecipe={goalMode?nutritionByRecipe:null}/>
-            <Bucket title='Try Out' items={tryOut} disabled={false} selected={selected} onToggle={toggle} onPreview={onPreview} nutritionByRecipe={goalMode?nutritionByRecipe:null}/>
-            <Bucket title='Order Out' items={orderOut} disabled={false} selected={selected} onToggle={toggle} onPreview={onPreview} nutritionByRecipe={goalMode?nutritionByRecipe:null}/>
-            <Bucket title='Other Meals' items={other} disabled={false} selected={selected} onToggle={toggle} onPreview={onPreview} nutritionByRecipe={goalMode?nutritionByRecipe:null}/>
+            {buckets.map(b=>{
+              const isDefaults=b.key==='defaults'
+              const collapsed=isDefaults&&!defaultsOpen
+              const swipeBtn=showSwipe&&b.swipe&&(b.pick
+                ?<Btn small hit icon='heart' iconSize={14} label='Help me pick' ariaLabel={`Help me pick from ${b.title}`} onClick={()=>openDeck(b)}/>
+                :<Btn small hit secondary strong icon='shuffle' iconSize={15} label='Swipe' ariaLabel={`Swipe through ${b.title}`} onClick={()=>openDeck(b)}/>)
+              const action=isDefaults
+                ?<>{swipeBtn}<CollapseToggle open={defaultsOpen} label={b.title} onClick={()=>setDefaultsOpen(o=>!o)}/></>
+                :swipeBtn||null
+              return <Bucket key={b.key} title={b.title} subtitle={collapsed?collapsedSubtitle(b.items):b.subtitle} action={action} collapsed={collapsed} items={b.items} disabled={false} selected={selected} onToggle={toggle} onPreview={onPreview} suggestionLabel={b.key==='suggested'?mainRecipe?.name:undefined} nutritionByRecipe={goalMode?nutritionByRecipe:null}/>
+            })}
           </>
         )}
       </div>

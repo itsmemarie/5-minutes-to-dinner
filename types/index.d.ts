@@ -44,6 +44,14 @@ export interface BtnProps {
   strong?: boolean;
   /** The filled destructive button. */
   danger?: boolean;
+  /** Icon name shown before the label. */
+  icon?: string;
+  iconSize?: number;
+  iconStroke?: number;
+  /** Accessible name when the label alone is not enough. */
+  ariaLabel?: string;
+  /** Transparent area that lifts a small button's tap target to 44px. */
+  hit?: boolean;
 }
 export declare function Btn(props: BtnProps): JSX.Element;
 
@@ -109,8 +117,16 @@ export interface RecipeCardProps {
 export declare function RecipeCard(props: RecipeCardProps): JSX.Element;
 
 export interface RecipeBucketProps {
-  /** Uppercase group title, e.g. "Default" or "Try Out". Bucket renders nothing when items is empty. */
+  /** Bucket heading, e.g. "Tested & approved". Bucket renders nothing when items is empty. */
   title: React.ReactNode;
+  /** One line under the title. */
+  subtitle?: React.ReactNode;
+  /** Shown in the pill after the title; defaults to items.length. */
+  count?: number;
+  /** Right-aligned header content, such as a Swipe button. */
+  action?: React.ReactNode;
+  /** Keep the header, hide the rows. */
+  collapsed?: boolean;
   items: RecipeSummary[];
   disabled?: boolean;
   selected: string[];
