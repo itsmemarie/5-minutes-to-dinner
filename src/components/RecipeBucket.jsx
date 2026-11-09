@@ -1,14 +1,21 @@
-import { mn, C, CARD } from '../lib/theme.js'
+import { useId } from 'react'
+import { CARD } from '../lib/theme.js'
 import { RecipeCard } from './RecipeCard.jsx'
+import { BucketHeader } from './BucketHeader.jsx'
 
-export function RecipeBucket({title,items,disabled,selected,onToggle,onPreview,suggestionLabel,nutritionByRecipe}){
+// `count` defaults to the bucket's length. `collapsed` keeps the header and hides
+// the rows.
+export function RecipeBucket({title,subtitle,count,action,collapsed,items,disabled,selected,onToggle,onPreview,suggestionLabel,nutritionByRecipe}){
+  const headId=useId()
   if(!items.length)return null
   return(
-    <div style={{marginBottom:16}}>
-      <div style={{...mn,fontSize:11,fontWeight:700,color:C.onSurfaceVariant,letterSpacing:'0.05em',textTransform:'uppercase',marginBottom:8}}>{title}</div>
-      <div style={{...CARD,overflow:'hidden'}}>
-        {items.map((r,i)=><RecipeCard key={r.id} r={r} disabled={disabled} selected={selected} onToggle={onToggle} onPreview={onPreview} suggestionLabel={suggestionLabel} isLast={i===items.length-1} nutrition={nutritionByRecipe?.[r.id]}/>)}
-      </div>
-    </div>
+    <section aria-labelledby={headId} style={{marginBottom:28}}>
+      <BucketHeader id={headId} title={title} count={count??items.length} subtitle={subtitle} action={action}/>
+      {!collapsed&&(
+        <div style={{...CARD,overflow:'hidden'}}>
+          {items.map((r,i)=><RecipeCard key={r.id} r={r} disabled={disabled} selected={selected} onToggle={onToggle} onPreview={onPreview} suggestionLabel={suggestionLabel} isLast={i===items.length-1} nutrition={nutritionByRecipe?.[r.id]}/>)}
+        </div>
+      )}
+    </section>
   )
 }
