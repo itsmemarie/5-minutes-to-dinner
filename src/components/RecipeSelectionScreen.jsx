@@ -11,6 +11,7 @@ import { dayNutritionTotals } from '../lib/goalMaths.js'
 import { isRetired } from '../lib/mealRating.js'
 import { PICKER_SWIPE, collapsedSubtitle, pickerBuckets } from '../lib/pickerBuckets.js'
 import { PickerDeck } from './PickerDeck.jsx'
+import { defaultsDeckItems } from '../lib/pickerDeck.js'
 
 // Opens and closes the Defaults bucket. 34px round, with the same transparent
 // overlay as ViewToggle so the tap target reaches 44px.
@@ -89,7 +90,7 @@ export function RecipeSelectionScreen({day,section,plan,recipes,freezerItems,onA
   const suggestedIds=suggested.map(r=>r.id)
   const availableRest=available.filter(r=>!suggestedIds.includes(r.id))
 
-  // Bucket order: Suggested → Already planned this week → {Day} defaults →
+  // Bucket order: Suggested → Already planned this week → Defaults →
   // Tested & approved → Try something new → Order out. pickerBuckets.js has
   // which recipe goes where (Default wins over Try / Order out, Order out over Try).
   const buckets=pickerBuckets({suggested,available:availableRest,otherDayIds:otherDaysIds,day,section})
@@ -99,7 +100,9 @@ export function RecipeSelectionScreen({day,section,plan,recipes,freezerItems,onA
   // The swipe deck over one bucket: { pool, key }. Its cards follow the bucket live.
   const [deckOn,setDeckOn]=useState(null)
   const openDeck=b=>setDeckOn({pool:b.swipe,key:b.key})
-  const deckItems=deckOn?(buckets.find(b=>b.key===deckOn.key)?.items||[]):[]
+  // Defaults swaps placeholders ("Pasta") for the recipes they stand for.
+  const deckBucket=deckOn?(buckets.find(b=>b.key===deckOn.key)?.items||[]):[]
+  const deckItems=deckOn?.pool==='defaults'?defaultsDeckItems(deckBucket,available):deckBucket
 
   const [showNewRecipe,setShowNewRecipe]=useState(false)
   const toggle=rid=>setSelected(s=>s.includes(rid)?s.filter(x=>x!==rid):[...s,rid])
@@ -161,7 +164,7 @@ export function RecipeSelectionScreen({day,section,plan,recipes,freezerItems,onA
               const isDefaults=b.key==='defaults'
               const collapsed=isDefaults&&!defaultsOpen
               const swipeBtn=showSwipe&&b.swipe&&(b.pick
-                ?<Btn small hit icon='heart' iconSize={14} label='Help me pick' ariaLabel={`Help me pick from ${b.title}`} onClick={()=>openDeck(b)}/>
+                ?<Btn small hit icon='shuffle' iconSize={15} label='Help me pick' ariaLabel={`Help me pick from ${b.title}`} onClick={()=>openDeck(b)}/>
                 :<Btn small hit secondary strong icon='shuffle' iconSize={15} label='Swipe' ariaLabel={`Swipe through ${b.title}`} onClick={()=>openDeck(b)}/>)
               const action=isDefaults
                 ?<>{swipeBtn}<CollapseToggle open={defaultsOpen} label={b.title} onClick={()=>setDefaultsOpen(o=>!o)}/></>

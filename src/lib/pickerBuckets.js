@@ -14,7 +14,7 @@ const SECTION_NOUN = { breakfast:'breakfasts', lunch:'lunches', main:'mains', di
 //
 // Precedence: planned this week, then Default (it wins over Try / Order out),
 // then Order out (it wins over Try), then Try, then everything else.
-// Render order: Suggested → Already planned → {Day} defaults → Tested & approved
+// Render order: Suggested → Already planned → Defaults → Tested & approved
 // → Try something new → Order out. `swipe` names the deck pool a bucket opens,
 // and `pick` marks the one whose button reads Help me pick.
 export function pickerBuckets({ suggested = [], available, otherDayIds, day, section }) {
@@ -28,7 +28,7 @@ export function pickerBuckets({ suggested = [], available, otherDayIds, day, sec
   return [
     { key:'suggested',   title:'Suggested',                 subtitle:null,                                                       items:suggested },
     { key:'alreadyWeek', title:'Already planned this week', subtitle:'Cook once, eat twice: handy for leftovers',                items:alreadyWeek },
-    { key:'defaults',    title:`${dayName} defaults`,       subtitle:`Your usual ${dayName} ${SECTION_NOUN[section] || 'meals'}`, items:defaults, swipe:'defaults', pick:true },
+    { key:'defaults',    title:'Defaults',                  subtitle:`Your usual ${dayName} ${SECTION_NOUN[section] || 'meals'}`, items:defaults, swipe:'defaults', pick:true },
     { key:'tested',      title:'Tested & approved',         subtitle:"Meals you've cooked and kept",                             items:notDefault.filter(r => !r.tryOut && !r.orderOut), swipe:'tested' },
     { key:'tryNew',      title:'Try something new',         subtitle:"Recipes you've saved to try",                              items:notDefault.filter(r => r.tryOut && !r.orderOut), swipe:'tryNew' },
     { key:'orderOut',    title:'Order out',                 subtitle:'Takeaway and restaurant nights',                           items:notDefault.filter(r => r.orderOut), swipe:'orderOut' },

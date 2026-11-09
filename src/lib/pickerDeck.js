@@ -10,9 +10,50 @@ const DAY_MS = 24 * 60 * 60 * 1000
 
 export const POOLS = ['defaults', 'tested', 'tryNew', 'orderOut']
 
-export function poolTitle(pool, day) {
-  if (pool === 'defaults') return `${DAY_LBL[day] || day} defaults`
-  return { tested:'Tested & approved', tryNew:'Try something new', orderOut:'Order out' }[pool]
+export function poolTitle(pool) {
+  return { defaults:'Defaults', tested:'Tested & approved', tryNew:'Try something new', orderOut:'Order out' }[pool]
+}
+
+// ── Defaults: placeholders stand for real recipes ─────────────────
+// A day's defaults can include placeholders ("Pasta", "Poke Bowl") that only
+// name a kind of meal. Help me pick swipes the real recipes behind them instead.
+// Until recipes have categories, membership comes from names: a recipe belongs
+// when its name has every word of the placeholder's, counting a word's family
+// (spaghetti and orzo are pasta, a platter is a board). If nothing has them all,
+// the last word decides, so "Poke Bowl" means bowls.
+const FAMILIES = [
+  [/^pastas?$/, /\b(pastas?|spaghetti|penne|fusilli|tagliatelle|linguine|orzo|tortellini|ravioli|lasagnes?|lasagnas?|macaroni|rigatoni|carbonara|bolognese|bolognaise|pappardelle|farfalle|trofie)\b/i],
+  [/^lentils?$/, /\b(lentils?|dal|dahl|daal)\b/i],
+  [/^soups?$/, /\b(soups?|dal|dahl|daal|broth)\b/i],
+  [/^(bowls?|poke)$/, /\b(bowls?|poke)\b/i],
+  [/^(boards?|platters?|charcuterie)$/, /\b(boards?|platters?|charcuterie|grazing)\b/i],
+]
+const STOP = new Set(['and', 'with', 'the', 'of', 'a', 'an', 'or', 'in', 'on'])
+const escape = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const familyOf = word => FAMILIES.find(([key]) => key.test(word))?.[1] ?? new RegExp(`\\b${escape(word)}s?\\b`, 'i')
+const nameWords = name => name.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(w => w.length > 1 && !STOP.has(w))
+
+export function placeholderMembers(placeholder, pool) {
+  const words = nameWords(placeholder.name)
+  if (!words.length) return []
+  const real = pool.filter(r => !r.placeholder && r.id !== placeholder.id)
+  const all = real.filter(r => words.every(w => familyOf(w).test(r.name)))
+  if (all.length || words.length === 1) return all
+  const head = familyOf(words[words.length - 1])
+  return real.filter(r => head.test(r.name))
+}
+
+// The defaults deck: each default in the bucket's order, a placeholder swapped
+// for its recipes. `pool` is every recipe that can go on this day.
+export function defaultsDeckItems(defaults, pool) {
+  const seen = new Set()
+  const out = []
+  for (const d of defaults) {
+    for (const r of d.placeholder ? placeholderMembers(d, pool) : [d]) {
+      if (!seen.has(r.id)) { seen.add(r.id); out.push(r) }
+    }
+  }
+  return out
 }
 
 // The filter pills each pool offers. An `order` pill changes the order (tap it

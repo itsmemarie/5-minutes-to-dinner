@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  NO_PILLS, POOL_PILLS, START, addedCount, addedToast, deckStep, pickerCaption, pickerDeckCards, pillActive, poolTitle, tapPill, waitingInAdd,
+  NO_PILLS, POOL_PILLS, START, addedCount, addedToast, deckStep, pickerCaption, pickerDeckCards, pillActive, poolTitle, tapPill, waitingInAdd, defaultsDeckItems, placeholderMembers,
 } from './pickerDeck.js'
 
 const NOW = new Date('2026-11-09T12:00:00Z')
@@ -99,7 +99,7 @@ describe('picker deck: which cards, in what order', () => {
 
 describe('picker deck: words', () => {
   it('names each pool', () => {
-    expect(poolTitle('defaults', 'tuesday')).toBe('Tuesday defaults')
+    expect(poolTitle('defaults')).toBe('Defaults')
     expect(['tested', 'tryNew', 'orderOut'].map(p => poolTitle(p, 'tuesday'))).toEqual(['Tested & approved', 'Try something new', 'Order out'])
   })
   it('counts', () => {
@@ -107,5 +107,47 @@ describe('picker deck: words', () => {
     expect(waitingInAdd(3)).toBe('3 recipes are waiting in Add Selected.')
     expect(waitingInAdd(1)).toBe('1 recipe is waiting in Add Selected.')
     expect(addedToast('tuesday', 2)).toBe('Added to Tuesday · 2 selected')
+  })
+})
+
+describe('picker deck: defaults swap placeholders for real recipes', () => {
+  const ph = (id, name) => r(id, { name, placeholder: true })
+  const real = (id, name) => r(id, { name })
+  // Names from the live recipes, 2026-11-09.
+  const pool = [
+    real('p1', 'Butternut Pasta'), real('p2', 'One-Pan Orzo with Spinach & Parmesan'), real('p3', "Penne all'Arrabbiata"),
+    real('p4', 'Antipasto Tortellini Pasta Salad'), real('p5', 'Vegetarian Lentil Lasagna'),
+    real('g1', 'Sweet Potato Gnocchi'),
+    real('l1', 'Warm Lentil Walnut Feta Salad'), real('l2', 'Red Lentil Soup'), real('l3', 'One-Pot Thai Red Curry Lentil Soup'), real('l4', 'Lentil Moussaka'),
+    real('b1', 'Buddha Bowl with Peanut Dressing'), real('b2', 'Roasted Chickpea & Avocado Power Bowl'),
+    real('q1', 'Courgette Quiche'),
+    real('v1', 'Rainbow Platter with Herbed Fritters'), real('v2', 'Creamy & Crunchy Platter'),
+    real('x1', 'Jacket Potato'), real('x2', 'Antipasti Board'),
+    ph('fp', 'Fruit Platter'),
+  ]
+  const members = name => ids(placeholderMembers(ph('ph', name), pool))
+
+  it('finds the recipes named after a one-word placeholder, synonyms included', () => {
+    expect(members('Pasta')).toEqual(['p1', 'p2', 'p3', 'p4', 'p5'])
+    expect(members('Gnocchi')).toEqual(['g1'])
+    expect(members('Quiche')).toEqual(['q1'])
+  })
+  it('needs every word when some recipe has them all', () => {
+    expect(members('Lentil Salad')).toEqual(['l1'])
+    expect(members('Lentil Soup')).toEqual(['l2', 'l3'])
+  })
+  it('falls back to the last word when no recipe has them all', () => {
+    expect(members('Poke Bowl')).toEqual(['b1', 'b2'])
+    expect(members('Vegetable Charcuterie Board')).toEqual(['v1', 'v2', 'x2'])
+  })
+  it('never offers another placeholder', () => {
+    expect(members('Platter')).toEqual(['v1', 'v2', 'x2'])
+  })
+  it('builds the deck in the bucket order, placeholders swapped out, no repeats', () => {
+    const defaults = [real('x1', 'Jacket Potato'), ph('pp', 'Pasta'), ph('pl', 'Lentil Soup'), real('p1', 'Butternut Pasta')]
+    expect(ids(defaultsDeckItems(defaults, pool))).toEqual(['x1', 'p1', 'p2', 'p3', 'p4', 'p5', 'l2', 'l3'])
+  })
+  it('drops a placeholder nothing matches', () => {
+    expect(ids(defaultsDeckItems([ph('z', 'Zzz Casserole')], pool))).toEqual([])
   })
 })

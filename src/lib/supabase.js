@@ -141,6 +141,10 @@ function toRecipe(r) {
     status:            r.status || 'active',
     fixNote:           r.fix_note || null,
     secondChanceSince: r.second_chance_since || null,
+    // A stand-in like "Pasta" or "Poke Bowl" set as a day's default: a name with
+    // no recipe behind it. On 2026-11-09 every row without times also had no
+    // ingredients or method, and every real recipe had a time.
+    placeholder: r.prep_time_minutes == null && r.cook_time_minutes == null,
   }
 }
 

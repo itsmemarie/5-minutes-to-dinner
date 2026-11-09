@@ -10,7 +10,7 @@ describe('picker buckets', () => {
   it('come in the new order with the new titles', () => {
     const buckets = build([])
     expect(buckets.map(b => b.key)).toEqual(['suggested', 'alreadyWeek', 'defaults', 'tested', 'tryNew', 'orderOut'])
-    expect(buckets.map(b => b.title)).toEqual(['Suggested', 'Already planned this week', 'Tuesday defaults', 'Tested & approved', 'Try something new', 'Order out'])
+    expect(buckets.map(b => b.title)).toEqual(['Suggested', 'Already planned this week', 'Defaults', 'Tested & approved', 'Try something new', 'Order out'])
   })
   it('never use the old names', () => {
     const titles = build([]).map(b => b.title).join(' ')
