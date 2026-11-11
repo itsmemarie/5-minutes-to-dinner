@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { C, ep, mn, CARD, screenTitle, R } from '../lib/theme.js'
 import { DAY_LBL, TODAY, addWeeks, dayDateLabel, weekBounds, weekLabel } from '../lib/dateHelpers.js'
 import { dayMeals, sectionShort } from '../lib/mealSections.js'
@@ -24,7 +24,7 @@ const countOf = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
 // newMealIds, onDrop, onRemove }. It stays off past weeks, which are for looking back.
 // `plannedWeeks` is a Set of the weekOf dates with meals. `nutrition` is what
 // NutritionCard needs, and `onNutrition` opens the Nutrition insights screen.
-export function PlannerScreen({plan,week,weekOffset=0,weekStartsOn,plannedWeeks=new Set(),onSelectWeek,onSaveWeek,onFillWeek,onCopyWeek,onClearWeek,notice,onDismissNotice,loadState,sectionIds,removeMeal,moveMeal,duplicateMeal,updatePortion,onDayOpen,onRecipeOpen,nutrition={},onCalculateNutrition,onNutrition,goalProfile,goalTargets,nutritionByRecipe={},tryouts}){
+export function PlannerScreen({plan,week,weekOffset=0,weekStartsOn,plannedWeeks=new Set(),onSelectWeek,onSaveWeek,onFillWeek,onCopyWeek,onClearWeek,onEditSavedWeek,fillWith=null,onFillWithHandled,notice,onDismissNotice,loadState,sectionIds,removeMeal,moveMeal,duplicateMeal,updatePortion,onDayOpen,onRecipeOpen,nutrition={},onCalculateNutrition,onNutrition,goalProfile,goalTargets,nutritionByRecipe={},tryouts}){
   const goalMode = !!goalProfile?.goalModeEnabled && !!goalTargets
   const days=week.days
   const isThisWeek=weekOffset===0
@@ -35,7 +35,14 @@ export function PlannerScreen({plan,week,weekOffset=0,weekStartsOn,plannedWeeks=
   const label=weekLabel(weekOffset)
   const [sheet,setSheet]=useState(null)   // 'picker' | 'actions' | 'save' | 'fill' | 'clear' | null
   const [clearing,setClearing]=useState(false)
-  const closeSheet=()=>setSheet(null)
+  // Settings › Use for a week lands here with `fillWith`, a saved week's id: the
+  // fill sheet opens on it once the chosen week has loaded.
+  const [fillPickedId,setFillPickedId]=useState(null)
+  useEffect(()=>{
+    if(!fillWith||loadState)return
+    setFillPickedId(fillWith);setSheet('fill');onFillWithHandled?.()
+  },[fillWith,loadState])
+  const closeSheet=()=>{setSheet(null);setFillPickedId(null)}
   useBackToClose(!!sheet,closeSheet)
   const selectWeek=offset=>{closeSheet();onSelectWeek(offset)}
   // Where this week can be copied: this week and next week, less the one on screen.
@@ -170,7 +177,7 @@ export function PlannerScreen({plan,week,weekOffset=0,weekStartsOn,plannedWeeks=
       {sheet==='picker'&&<WeekPicker week={week} weekOffset={weekOffset} weekStartsOn={weekStartsOn} plannedWeeks={plannedWeeks} onSelect={selectWeek} onClose={closeSheet}/>}
       {sheet==='actions'&&<WeekActionsSheet label={label} range={week.range} hasMeals={mealCount>0} canFill={canFill} copyTargets={copyTargets} onCopy={copyWeek} onSave={()=>setSheet('save')} onFill={()=>setSheet('fill')} onClear={()=>setSheet('clear')} onClose={closeSheet}/>}
       {sheet==='save'&&<SaveWeekSheet week={week} mealCount={mealCount} onSave={onSaveWeek} onClose={closeSheet}/>}
-      {sheet==='fill'&&<FillWeekSheet week={week} mealCount={mealCount} onFill={onFillWeek} onClose={closeSheet}/>}
+      {sheet==='fill'&&<FillWeekSheet week={week} mealCount={mealCount} onFill={onFillWeek} initialPickedId={fillPickedId} onEdit={onEditSavedWeek?s=>{closeSheet();onEditSavedWeek(s)}:null} onClose={closeSheet}/>}
       {sheet==='clear'&&<ConfirmDialog destructive radius={28} title={`Clear all meals for ${week.range}?`} body="Freezer meals go back in stock. You'll have a few seconds to undo this." confirmLabel='Clear week' busy={clearing} onConfirm={clearWeek} onCancel={closeSheet}/>}
     </div>
   )

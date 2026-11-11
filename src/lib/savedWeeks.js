@@ -1,7 +1,8 @@
 // ─── Saved weeks ──────────────────────────────────────────────────
 // A saved week is a named, independent copy of a week's meals (the saved_weeks
 // table). Filling a week copies it into planned_meals; from then on that week
-// is an ordinary week, and changing it leaves the saved copy alone.
+// is an ordinary week, and changing it leaves the saved copy alone. The saved
+// copy itself can be renamed and edited in Settings › Saved weeks.
 //
 // Each meal is stored by weekday name, not by its place in the week, so Tuesday's
 // dinner stays on Tuesday whatever "Week starts on" is set to.
@@ -123,6 +124,107 @@ export function buildFill(saved, { plan, days, sectionIds, mode = 'add', recipes
     skipped,
     hiddenCount: meals.filter(m => !sectionIds.includes(m.section)).length,
   }
+}
+
+// ─── Names ────────────────────────────────────────────────────────
+// Names are compared ignoring case and repeated spaces, so "Busy  week" and
+// "busy week" count as the same saved week.
+const nameKey = name => (name || '').trim().replace(/\s+/g, ' ').toLowerCase()
+
+// The saved week already called `name`, or null. `exceptId` leaves one row out,
+// so a saved week being renamed doesn't clash with itself.
+export const findSavedByName = (all, name, exceptId = null) =>
+  (all || []).find(s => s.id !== exceptId && nameKey(s.name) === nameKey(name)) || null
+
+// `name`, or `name (2)`, `(3)`… if that's taken, kept within the length limit.
+// An existing " (n)" is dropped first, so copying "Busy week (2)" gives
+// "Busy week (3)" rather than "Busy week (2) (2)".
+export function uniqueSavedName(name, all, exceptId = null) {
+  const base = (name || '').trim().replace(/\s+\(\d+\)$/, '') || 'Saved week'
+  if (!findSavedByName(all, base, exceptId)) return base.slice(0, SAVED_WEEK_NAME_MAX)
+  for (let n = 2; ; n++) {
+    const suffix = ` (${n})`
+    const candidate = base.slice(0, SAVED_WEEK_NAME_MAX - suffix.length) + suffix
+    if (!findSavedByName(all, candidate, exceptId)) return candidate
+  }
+}
+
+// Checks a name typed for a saved week. `error` stops it being saved at all;
+// `clash` is the other saved week that already has it.
+export function checkSavedName(raw, all, exceptId = null) {
+  const name = (raw || '').trim().replace(/\s+/g, ' ')
+  if (!name) return { name, error: 'Give it a name.', clash: null }
+  if (name.length > SAVED_WEEK_NAME_MAX) return { name, error: `Keep it under ${SAVED_WEEK_NAME_MAX} characters.`, clash: null }
+  return { name, error: null, clash: findSavedByName(all, name, exceptId) }
+}
+
+// "6 meals · 5 days", or "No meals yet".
+export function savedWeekSummary(saved) {
+  const meals = saved.meals || []
+  const count = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
+  if (!meals.length) return 'No meals yet'
+  return `${count(meals.length, 'meal')} · ${count(new Set(meals.map(m => m.day)).size, 'day')}`
+}
+
+// A few of the week's main meals, in day order, for the saved weeks list.
+// Falls back to any meal when there are no mains or dinners.
+export function savedWeekPreview(saved, days, max = 3) {
+  const inOrder = days.flatMap(day => (saved.meals || []).filter(m => m.day === day))
+  const mains = inOrder.filter(m => m.section === 'main' || m.section === 'dinner')
+  const names = [...new Set((mains.length ? mains : inOrder).map(m => m.name))]
+  return names.slice(0, max).join(', ') + (names.length > max ? '…' : '')
+}
+
+// ─── Editing a saved week's meals ─────────────────────────────────
+// Saved meals carry an `id` of their own, so a row can be opened, dragged or
+// taken out without depending on its place in the list. Rows saved before ids
+// existed get one when they're read. The id never reaches planned_meals:
+// buildFill builds each planned meal afresh.
+const newMealId = () => (globalThis.crypto?.randomUUID?.() ?? `sm-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`)
+
+export const withMealIds = (meals, makeId = newMealId) =>
+  (meals || []).map(m => (m.id ? m : { ...m, id: makeId() }))
+
+// One day's saved meals, in meal-section order, then the order they were added.
+export function savedDayMeals(meals, day, sectionOrder = ALL_SECTION_IDS) {
+  const rank = section => { const i = sectionOrder.indexOf(section); return i < 0 ? sectionOrder.length : i }
+  return (meals || [])
+    .map((meal, index) => ({ meal, index }))
+    .filter(x => x.meal.day === day)
+    .sort((a, b) => rank(a.meal.section) - rank(b.meal.section) || a.index - b.index)
+    .map(x => x.meal)
+}
+
+export const removeSavedMeal = (meals, id) => meals.filter(m => m.id !== id)
+
+// Moves a meal to another day. It goes to the end of its section there.
+export function moveSavedMeal(meals, id, day) {
+  const meal = meals.find(m => m.id === id)
+  if (!meal || meal.day === day) return meals
+  return [...meals.filter(m => m.id !== id), { ...meal, day }]
+}
+
+export function setSavedMealPortion(meals, id, portion, min = 1) {
+  const value = Math.max(min, Math.round(portion))
+  return meals.map(m => (m.id === id ? { ...m, portion: value } : m))
+}
+
+// Adds recipes to one day and section, the way the planner's picker would.
+export function addSavedMeals(meals, { day, section, recipes, defPort = 4 }, makeId = newMealId) {
+  return [...meals, ...recipes.map(r => ({
+    id:               makeId(),
+    day,
+    section,
+    recipeId:         r.id,
+    freezerItemId:    null,
+    name:             r.name,
+    prep:             r.prep ?? 0,
+    active:           r.active ?? 0,
+    portion:          Math.max(r.min ?? 1, defPort),
+    base:             r.base ?? null,
+    advancePrepHours: r.advancePrepHours ?? null,
+    advancePrepNote:  r.advancePrepNote ?? null,
+  }))]
 }
 
 // The line shown after a fill, or null when there's nothing to point out.

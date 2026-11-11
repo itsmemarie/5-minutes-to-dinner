@@ -10,6 +10,7 @@ import { MealSectionsCard } from './settings/MealSectionsCard.jsx'
 import { ChildrenSection } from './settings/ChildrenSection.jsx'
 import { GoalSection } from './settings/GoalSection.jsx'
 import { RemovedRecipes } from './settings/RemovedRecipes.jsx'
+import { SavedWeeksRow } from './settings/SavedWeeksScreens.jsx'
 
 // ─── Settings ─────────────────────────────────────────────────────
 // Eleven sections of row cards. Every control saves on interaction (App debounces
@@ -24,7 +25,7 @@ export function SettingsScreen({
   defPort, setDefPort,
   prefs, setPrefs,
   goalProfile, goalTargets, setGoalProfile,
-  freezerItems = [], weekLabel,
+  freezerItems = [], weekLabel, savedWeekCount = null,
   session, isOwner,
   onOpen, onExportRecipes, onResetWeek, onRecipeRestored,
 }) {
@@ -71,6 +72,10 @@ export function SettingsScreen({
       {/* 2 · Meal sections */}
       <SectionHeading sub='The rows every day is split into. Drag to reorder.'>Meal sections</SectionHeading>
       <MealSectionsCard sections={prefs.mealSections} onChange={mealSections => setPrefs({ mealSections })}/>
+
+      {/* Saved weeks */}
+      <SectionHeading>Saved weeks</SectionHeading>
+      <SavedWeeksRow savedCount={savedWeekCount} onOpen={() => onOpen({ kind:'savedWeeks' })}/>
 
       {/* Trying new things */}
       <SectionHeading>Trying new things</SectionHeading>

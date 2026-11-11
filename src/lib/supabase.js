@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { withMealIds } from './savedWeeks.js'
 
 const url  = import.meta.env.VITE_SUPABASE_URL
 const key  = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -588,22 +589,51 @@ export async function removePlannedMeals(ids) {
 }
 
 // ─── Saved weeks (see savedWeeks.js) ──────────────────────────────
+const SAVED_WEEK_COLUMNS = 'id, name, meals, created_at, updated_at'
+// Every saved meal has an id of its own (see withMealIds), including rows saved
+// before ids existed.
+const savedWeekRow = row => ({ ...row, meals: withMealIds(row.meals) })
+
+// Most recently changed first.
 export async function fetchSavedWeeks() {
   const { data, error } = await supabase
     .from('saved_weeks')
-    .select('id, name, meals, created_at')
-    .order('created_at', { ascending: false })
+    .select(SAVED_WEEK_COLUMNS)
+    .order('updated_at', { ascending: false })
   if (error) throw error
-  return data
+  return (data || []).map(savedWeekRow)
 }
 
-export async function saveWeek(name, meals) {
-  const { error } = await supabase.from('saved_weeks').insert({ name, meals })
+// Returns the new row.
+export async function createSavedWeek(name, meals) {
+  const { data, error } = await supabase.from('saved_weeks')
+    .insert({ name, meals: withMealIds(meals) })
+    .select(SAVED_WEEK_COLUMNS)
+    .single()
   if (error) throw error
+  return savedWeekRow(data)
+}
+
+// `patch` is { name?, meals? }. The database sets updated_at. Returns the row as saved.
+export async function updateSavedWeek(id, patch) {
+  const row = {}
+  if (patch.name !== undefined) row.name = patch.name
+  if (patch.meals !== undefined) row.meals = withMealIds(patch.meals)
+  const { data, error } = await supabase.from('saved_weeks').update(row).eq('id', id).select(SAVED_WEEK_COLUMNS)
+  if (error) throw error
+  if (!data?.length) throw new Error('That saved week no longer exists.')
+  return savedWeekRow(data[0])
 }
 
 export async function deleteSavedWeek(id) {
   const { error } = await supabase.from('saved_weeks').delete().eq('id', id)
+  if (error) throw error
+}
+
+// Undo for a delete: puts the row back as it was, with its id and dates.
+export async function restoreSavedWeek(saved) {
+  const { id, name, meals, created_at, updated_at } = saved
+  const { error } = await supabase.from('saved_weeks').insert({ id, name, meals, created_at, updated_at })
   if (error) throw error
 }
 
