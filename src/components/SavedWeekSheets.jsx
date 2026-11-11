@@ -2,15 +2,17 @@ import { useEffect, useState } from 'react'
 import { C, ep, mn, R } from '../lib/theme.js'
 import { DAY_LBL } from '../lib/dateHelpers.js'
 import { sectionShort } from '../lib/mealSections.js'
-import { SAVED_WEEK_NAME_MAX, defaultWeekName, mealsByDay } from '../lib/savedWeeks.js'
+import { SAVED_WEEK_NAME_MAX, defaultWeekName, mealsByDay, checkSavedName, uniqueSavedName, savedWeekSummary } from '../lib/savedWeeks.js'
 import { fetchSavedWeeks, deleteSavedWeek } from '../lib/supabase.js'
 import { Btn, Icon, Spinner } from './ui/index.js'
 import { Sheet } from './ui/Sheet.jsx'
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
 const ErrorLine = ({ children }) => <div role='alert' style={{ ...mn, fontSize:13, color:C.error, lineHeight:1.5, marginBottom:12 }}>{children}</div>
+const quietLink = { ...mn, border:'none', background:'none', padding:4, fontSize:12, fontWeight:600, color:C.onSurfaceVariant, textDecoration:'underline', cursor:'pointer' }
 
-function ActionRow({ icon, title, hint, disabled, onClick }) {
+// A big icon-led choice in a sheet. Also used by Settings › Saved weeks.
+export function ActionRow({ icon, title, hint, disabled, onClick }) {
   return (
     <button onClick={onClick} disabled={disabled} style={{ ...mn, width:'100%', minHeight:64, border:'none', background:'none', padding:'8px 0', display:'flex', alignItems:'center', gap:14, textAlign:'left', opacity:disabled ? 0.45 : 1, cursor:disabled ? 'default' : 'pointer' }}>
       <span style={{ width:44, height:44, flexShrink:0, borderRadius:R.lg, background:C.primaryFixed, display:'flex', alignItems:'center', justifyContent:'center' }}><Icon name={icon} size={20} color={C.primary}/></span>
@@ -46,41 +48,74 @@ export function WeekActionsSheet({ label, range, hasMeals, canFill, copyTargets,
   )
 }
 
-// Names the week on screen and keeps a copy of it. `onSave` is App's
-// saveCurrentWeek, which throws if the save fails.
+// Names the week on screen and keeps a copy of it. `onSave(name, replaceId)` is
+// App's saveCurrentWeek, which throws if the save fails. If the name is already
+// taken it asks: replace that saved week, or keep both under a numbered name.
+// Enter never replaces; that takes the button.
 export function SaveWeekSheet({ week, mealCount, onSave, onClose }) {
   const [name, setName] = useState(() => defaultWeekName(week))
+  const [all, setAll] = useState([])   // the saved weeks, to spot a name that's taken
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
-  const trimmed = name.trim()
+  const { name: clean, error: nameError, clash } = checkSavedName(name, all)
 
-  const save = async e => {
-    e.preventDefault()
-    if (!trimmed || busy) return
+  useEffect(() => {
+    let cancelled = false
+    fetchSavedWeeks().then(rows => { if (!cancelled) setAll(rows) }).catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
+  const save = async (saveName, replaceId = null) => {
+    if (busy) return
     setBusy(true); setError(null)
-    try { await onSave(trimmed); onClose() }
+    try { await onSave(saveName, replaceId); onClose() }
     catch (err) { setError(`Couldn't save it: ${err.message}`); setBusy(false) }
   }
+  const submit = e => {
+    e.preventDefault()
+    if (!nameError && !clash) save(clean)
+  }
+  const copyName = clash ? uniqueSavedName(clean, all) : null
 
   return (
     <Sheet title='Save this week' radius={28} swipe onClose={onClose} busy={busy}>
       <div style={{ ...mn, fontSize:13, color:C.onSurfaceVariant, lineHeight:1.6, marginBottom:14 }}>
         Keeps a copy of {plural(mealCount, 'meal')} from {week.range}. Changing this week later won't change the copy.
       </div>
-      <form onSubmit={save}>
+      <form onSubmit={submit}>
         <input value={name} onChange={e => setName(e.target.value)} maxLength={SAVED_WEEK_NAME_MAX} autoFocus aria-label='Name for this saved week'
-          style={{ ...mn, width:'100%', boxSizing:'border-box', fontSize:16, fontWeight:600, color:C.onSurface, background:C.surfaceContainerHigh, border:'none', outline:'none', borderRadius:R.md, padding:'12px 14px', marginBottom:14 }}/>
+          style={{ ...mn, width:'100%', boxSizing:'border-box', fontSize:16, fontWeight:600, color:C.onSurface, background:C.surfaceContainerHigh, border:'none', outline:'none', borderRadius:R.md, padding:'12px 14px', marginBottom:clash ? 10 : 14 }}/>
+        {clash && (
+          <div role='status' style={{ ...mn, display:'flex', gap:8, alignItems:'flex-start', fontSize:13, lineHeight:1.5, color:C.onSecondaryContainerStrong, background:C.secondaryContainer, borderRadius:R.md, padding:'10px 12px', marginBottom:14 }}>
+            <span style={{ display:'flex', paddingTop:2 }}><Icon name='info' size={14} color={C.onSecondaryContainerStrong}/></span>
+            <span>You already have “{clash.name}” ({savedWeekSummary(clash).toLowerCase()}). Replace it with this week, or keep both.</span>
+          </div>
+        )}
         {error && <ErrorLine>{error}</ErrorLine>}
-        <Btn label={busy ? 'Saving…' : 'Save week'} full disabled={!trimmed || busy} onClick={save}/>
+        {!clash && <Btn label={busy ? 'Saving…' : 'Save week'} full disabled={!!nameError || busy} onClick={submit}/>}
       </form>
+      {/* Outside the form: Enter "clicks" a form's first button, and it mustn't be Replace. */}
+      {clash && (
+        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+          <Btn label={busy ? 'Saving…' : `Replace “${clash.name}”`} full disabled={busy} onClick={() => save(clean, clash.id)}/>
+          <OutlineButton disabled={busy} onClick={() => save(copyName)}>Keep both, save as “{copyName}”</OutlineButton>
+        </div>
+      )}
+      <div style={{ ...mn, fontSize:12, color:C.onSurfaceVariant, textAlign:'center', marginTop:14 }}>Rename, edit or delete saved weeks any time in Settings.</div>
     </Sheet>
   )
 }
 
+const OutlineButton = ({ children, onClick, disabled, color = C.primary }) => (
+  <button type='button' onClick={onClick} disabled={disabled} style={{ ...mn, width:'100%', background:'none', border:`1px solid ${color}`, borderRadius:R.pill, padding:'12px', fontSize:14, fontWeight:700, color, cursor:disabled ? 'wait' : 'pointer', opacity:disabled ? 0.6 : 1, lineHeight:1.35 }}>{children}</button>
+)
+
 // Picks a saved week, shows what's in it, then fills the week on screen. Loads
 // its own list, so a problem with saved weeks never gets in the way of the
 // Planner. `onFill(saved, mode)` is App's fillWeek, which throws if it fails.
-export function FillWeekSheet({ week, mealCount, onFill, onClose }) {
+// `initialPickedId` opens straight on one saved week (Settings › Use for a week).
+// `onEdit(saved)`, when given, opens that saved week in Settings.
+export function FillWeekSheet({ week, mealCount, onFill, onEdit, initialPickedId = null, onClose }) {
   const [saved, setSaved] = useState(null)     // the list; null while it loads
   const [picked, setPicked] = useState(null)   // the row being looked at
   const [busy, setBusy] = useState(false)
@@ -90,7 +125,7 @@ export function FillWeekSheet({ week, mealCount, onFill, onClose }) {
   useEffect(() => {
     let cancelled = false
     fetchSavedWeeks()
-      .then(rows => { if (!cancelled) setSaved(rows) })
+      .then(rows => { if (!cancelled) { setSaved(rows); if (initialPickedId) setPicked(rows.find(r => r.id === initialPickedId) ?? null) } })
       .catch(e => { if (!cancelled) { setSaved([]); setError(`Couldn't load your saved weeks: ${e.message}`) } })
     return () => { cancelled = true }
   }, [])
@@ -148,7 +183,10 @@ export function FillWeekSheet({ week, mealCount, onFill, onClose }) {
             </div>
           </div>
         ) : (
-          <button onClick={() => setConfirmingDelete(true)} disabled={busy} style={{ ...mn, display:'block', margin:'14px auto 0', border:'none', background:'none', padding:4, fontSize:12, fontWeight:600, color:C.onSurfaceVariant, textDecoration:'underline', cursor:'pointer' }}>Delete this saved week</button>
+          <div style={{ display:'flex', justifyContent:'center', gap:18, marginTop:14 }}>
+            {onEdit && <button onClick={() => onEdit(picked)} disabled={busy} style={quietLink}>Edit in Settings</button>}
+            <button onClick={() => setConfirmingDelete(true)} disabled={busy} style={quietLink}>{onEdit ? 'Delete' : 'Delete this saved week'}</button>
+          </div>
         )}
       </Sheet>
     )
@@ -163,7 +201,7 @@ export function FillWeekSheet({ week, mealCount, onFill, onClose }) {
           <button key={s.id} onClick={() => { setPicked(s); setError(null) }} style={{ ...mn, width:'100%', display:'flex', alignItems:'center', gap:10, textAlign:'left', border:'none', background:C.surfaceContainerHigh, borderRadius:R.md, padding:'12px 14px', marginBottom:8, cursor:'pointer' }}>
             <span style={{ flex:1, minWidth:0 }}>
               <span style={{ display:'block', fontSize:14, fontWeight:700, color:C.onSurface, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{s.name}</span>
-              <span style={{ display:'block', fontSize:12, color:C.onSurfaceVariant, marginTop:2 }}>{plural(s.meals.length, 'meal')}</span>
+              <span style={{ display:'block', fontSize:12, color:C.onSurfaceVariant, marginTop:2 }}>{savedWeekSummary(s)}</span>
             </span>
             <Icon name='chevronRight' size={16} color={C.onSurfaceVariant}/>
           </button>

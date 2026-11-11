@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { snapshotWeek, weekMealRows, defaultWeekName, mealsByDay, savedRecipeIds, buildFill, fillNotice } from './savedWeeks.js'
+import {
+  snapshotWeek, weekMealRows, defaultWeekName, mealsByDay, savedRecipeIds, buildFill, fillNotice,
+  SAVED_WEEK_NAME_MAX, findSavedByName, uniqueSavedName, checkSavedName, savedWeekSummary, savedWeekPreview,
+  withMealIds, savedDayMeals, moveSavedMeal, removeSavedMeal, setSavedMealPortion, addSavedMeals,
+} from './savedWeeks.js'
 import { emptyWeek, weekBounds } from './dateHelpers.js'
 
 const DAYS = weekBounds('mon', new Date(2026, 10, 4)).days
@@ -198,5 +202,123 @@ describe('fillNotice', () => {
   })
   it('reads correctly for one hidden meal', () => {
     expect(fillNotice({ skipped: [], hiddenCount: 1 })).toContain("1 meal is in a meal section that's turned off, so it won't")
+  })
+})
+
+describe('saved week names', () => {
+  const all = [{ id: 'a', name: 'Busy week' }, { id: 'b', name: 'Busy week (2)' }, { id: 'c', name: 'Roast' }]
+
+  it('finds a name ignoring case and repeated spaces', () => {
+    expect(findSavedByName(all, '  busy   WEEK ')?.id).toBe('a')
+    expect(findSavedByName(all, 'Quiet week')).toBeNull()
+  })
+  it('lets a saved week keep its own name', () => {
+    expect(findSavedByName(all, 'Roast', 'c')).toBeNull()
+    expect(checkSavedName('Roast', all, 'c').clash).toBeNull()
+  })
+  it('numbers a copy past the ones already taken', () => {
+    expect(uniqueSavedName('Busy week', all)).toBe('Busy week (3)')
+    expect(uniqueSavedName('Busy week (2)', all)).toBe('Busy week (3)')
+    expect(uniqueSavedName('Quiet week', all)).toBe('Quiet week')
+    expect(uniqueSavedName('   ', [])).toBe('Saved week')
+  })
+  it('keeps a numbered copy within the length limit', () => {
+    const long = 'x'.repeat(SAVED_WEEK_NAME_MAX)
+    const copy = uniqueSavedName(long, [{ id: 'a', name: long }])
+    expect(copy).toHaveLength(SAVED_WEEK_NAME_MAX)
+    expect(copy.endsWith(' (2)')).toBe(true)
+  })
+  it('rejects an empty or overlong name and reports a clash', () => {
+    expect(checkSavedName('  ', all).error).toBe('Give it a name.')
+    expect(checkSavedName('y'.repeat(SAVED_WEEK_NAME_MAX + 1), all).error).toContain('under 60')
+    const check = checkSavedName(' roast ', all)
+    expect(check).toMatchObject({ name: 'roast', error: null })
+    expect(check.clash.id).toBe('c')
+  })
+})
+
+describe('savedWeekSummary and savedWeekPreview', () => {
+  const week = saved(
+    savedMeal({ day: 'wednesday', section: 'main', name: 'Curry' }),
+    savedMeal({ day: 'monday', section: 'side', name: 'Rice' }),
+    savedMeal({ day: 'monday', section: 'main', name: 'Pie' }),
+    savedMeal({ day: 'friday', section: 'main', name: 'Pizza' }),
+    savedMeal({ day: 'saturday', section: 'dinner', name: 'Tacos' }),
+  )
+  it('counts meals and the days they fall on', () => {
+    expect(savedWeekSummary(week)).toBe('5 meals · 4 days')
+    expect(savedWeekSummary(saved(savedMeal()))).toBe('1 meal · 1 day')
+    expect(savedWeekSummary(saved())).toBe('No meals yet')
+  })
+  it('previews the mains in day order', () => {
+    expect(savedWeekPreview(week, DAYS)).toBe('Pie, Curry, Pizza…')
+    expect(savedWeekPreview(week, DAYS, 5)).toBe('Pie, Curry, Pizza, Tacos')
+  })
+  it('falls back to any meal when there are no mains', () => {
+    expect(savedWeekPreview(saved(savedMeal({ section: 'side', name: 'Rice' })), DAYS)).toBe('Rice')
+  })
+})
+
+describe('editing a saved week', () => {
+  let n = 0
+  const makeId = () => `new${++n}`
+  const meals = withMealIds([
+    savedMeal({ id: 'm1', day: 'monday', section: 'side', name: 'Rice' }),
+    savedMeal({ id: 'm2', day: 'monday', section: 'main', name: 'Pie', portion: 3 }),
+    savedMeal({ id: 'm3', day: 'tuesday', section: 'main', name: 'Curry' }),
+    savedMeal({ id: 'm4', day: 'monday', section: 'main', name: 'Soup' }),
+  ])
+
+  it('gives meals saved without an id one, and keeps the ids already there', () => {
+    const got = withMealIds([savedMeal(), savedMeal({ id: 'keep' })], () => 'fresh')
+    expect(got.map(m => m.id)).toEqual(['fresh', 'keep'])
+    expect(withMealIds(null)).toEqual([])
+  })
+  it('makes ids that differ by default', () => {
+    const [a, b] = withMealIds([savedMeal(), savedMeal()])
+    expect(a.id).toBeTruthy()
+    expect(a.id).not.toBe(b.id)
+  })
+  it('lists a day in meal-section order, then the order meals were added', () => {
+    expect(savedDayMeals(meals, 'monday', ['breakfast', 'main', 'side']).map(m => m.name)).toEqual(['Pie', 'Soup', 'Rice'])
+    expect(savedDayMeals(meals, 'sunday')).toEqual([])
+  })
+  it('puts a section not in the order last', () => {
+    expect(savedDayMeals(meals, 'monday', ['side']).map(m => m.name)).toEqual(['Rice', 'Pie', 'Soup'])
+  })
+  it('moves a meal to another day, at the end of its section', () => {
+    const moved = moveSavedMeal(meals, 'm2', 'tuesday')
+    expect(moved.find(m => m.id === 'm2').day).toBe('tuesday')
+    expect(savedDayMeals(moved, 'tuesday').map(m => m.name)).toEqual(['Curry', 'Pie'])
+    expect(moved).toHaveLength(4)
+  })
+  it('leaves the list alone for the same day or an unknown meal', () => {
+    expect(moveSavedMeal(meals, 'm2', 'monday')).toBe(meals)
+    expect(moveSavedMeal(meals, 'nope', 'friday')).toBe(meals)
+  })
+  it('takes out only the meal asked for', () => {
+    expect(removeSavedMeal(meals, 'm2').map(m => m.id)).toEqual(['m1', 'm3', 'm4'])
+  })
+  it('changes servings, rounded and never below the minimum', () => {
+    expect(setSavedMealPortion(meals, 'm2', 5).find(m => m.id === 'm2').portion).toBe(5)
+    expect(setSavedMealPortion(meals, 'm2', 0, 2).find(m => m.id === 'm2').portion).toBe(2)
+    expect(setSavedMealPortion(meals, 'm2', 3.6).find(m => m.id === 'm2').portion).toBe(4)
+    expect(setSavedMealPortion(meals, 'm2', 6).find(m => m.id === 'm1').portion).toBe(3)
+  })
+  it('adds recipes with the default servings, or the recipe minimum if higher', () => {
+    const recipes = [
+      { id: 'r9', name: 'Tacos', prep: 10, active: 15, min: 1, base: 4, advancePrepHours: 2, advancePrepNote: 'Marinate' },
+      { id: 'r8', name: 'Lasagne', min: 6 },
+    ]
+    const added = addSavedMeals(meals, { day: 'friday', section: 'dinner', recipes, defPort: 4 }, makeId).slice(4)
+    expect(added).toEqual([
+      { id: 'new1', day: 'friday', section: 'dinner', recipeId: 'r9', freezerItemId: null, name: 'Tacos', prep: 10, active: 15, portion: 4, base: 4, advancePrepHours: 2, advancePrepNote: 'Marinate' },
+      { id: 'new2', day: 'friday', section: 'dinner', recipeId: 'r8', freezerItemId: null, name: 'Lasagne', prep: 0, active: 0, portion: 6, base: null, advancePrepHours: null, advancePrepNote: null },
+    ])
+  })
+  it('fills a week from edited meals without carrying their ids', () => {
+    const { meals: planned } = buildFill(saved(...meals), ctx({ existingRecipeIds: new Set(['r1']) }))
+    expect(planned).toHaveLength(4)
+    planned.forEach(m => expect(m).not.toHaveProperty('id'))
   })
 })

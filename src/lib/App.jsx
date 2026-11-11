@@ -3,7 +3,8 @@ import {
   fetchRecipes, fetchSettings, saveSettings, savePreferences,
   getOrCreatePlan, fetchWeekPlan, clearPlannedMeals,
   addPlannedMeals, removePlannedMeal, updatePlannedMealPortion, movePlannedMeal,
-  insertWeekMeals, removePlannedMeals, fetchWeekMealCounts, saveWeek, fetchExistingRecipeIds,
+  insertWeekMeals, removePlannedMeals, fetchWeekMealCounts, fetchExistingRecipeIds,
+  fetchSavedWeeks, createSavedWeek, updateSavedWeek, deleteSavedWeek, restoreSavedWeek,
   fetchShoppingList, saveShoppingList, updateShoppingItem,
   fetchFreezerItems, replaceFreezerItems, addFreezerItem, updateFreezerStock, removeFreezerItem,
   fetchToddlerCookingGuide, saveToddlerCookingGuide,
@@ -19,7 +20,7 @@ import { TODAY, DAY_LBL, WEEK_START_OPTIONS, toISO, weekBounds, addWeeks, dayDat
 import { ALL_SECTION_IDS, enabledSectionIds, sectionLabel, sectionShort, dayMeals } from './mealSections.js'
 import { normalisePreferences, migrateLegacyToddlerDob, activeToddlerDob, newChild, COUNTRIES, RECIPE_LANGUAGES, countryName, equipmentLabels } from './preferences.js'
 import { buildBasicShoppingList, guessAisle } from './basicShoppingList.js'
-import { snapshotWeek, weekMealRows, buildFill, fillNotice, savedRecipeIds } from './savedWeeks.js'
+import { snapshotWeek, weekMealRows, buildFill, fillNotice, savedRecipeIds, defaultWeekName, uniqueSavedName } from './savedWeeks.js'
 import { deckProgressLabel, dropSection, pickWeek, pickedMealIds, picksInWeek, plannedMealFrom, progressLabel, trayItems, waitingRecipes } from './tryDeck.js'
 import { reelPlatform } from './reels.js'
 import { activePatch, mealDate, mealHasCome, nextAte, ratingOutcome, retiredPatch, reviewPatch, rotationOf } from './mealRating.js'
@@ -45,6 +46,8 @@ import { NutritionScreen } from '../components/NutritionScreen.jsx'
 import { ShoppingListScreen } from '../components/ShoppingListScreen.jsx'
 import { BatchScreen } from '../components/BatchScreen.jsx'
 import { SettingsScreen } from '../components/SettingsScreen.jsx'
+import { SavedWeeksScreen } from '../components/settings/SavedWeeksScreens.jsx'
+import { SavedWeekEditor } from '../components/SavedWeekEditor.jsx'
 import { FreezerScreen } from '../components/FreezerScreen.jsx'
 import { ToddlerCookingScreen } from '../components/ToddlerCookingScreen.jsx'
 
@@ -52,6 +55,7 @@ import { ToddlerCookingScreen } from '../components/ToddlerCookingScreen.jsx'
 const SETTINGS_SUB_TITLE = {
   weekStart:'Week starts on', country:'Country', recipeLanguage:'Recipe language', child:'Child', feedback:'Feedback & support',
   geminiKey:'Free Google AI key', signIn:'Account', equipment:'Kitchen equipment', aiModels:'AI models', install:'Install the app',
+  savedWeeks:'Saved weeks', savedWeek:'Edit saved week',
 }
 
 // Recipe selection view mode. Persisted to app_settings so it follows the user
@@ -123,8 +127,13 @@ export default function App() {
   const [recipeDetailMealId, setRecipeDetailMealId] = useState(null)
   const [prevScreen,       setPrevScreen]       = useState(null)
   const [screenBeforeToddler, setScreenBeforeToddler] = useState(null)
-  // Settings sub-screen: null, or { kind: 'weekStart'|'country'|'child'|'feedback', childId? }
+  // Settings sub-screen: null, or { kind: 'weekStart'|'country'|'child'|'feedback'|'savedWeeks'|'savedWeek'|…, childId?, id?, fresh? }
   const [settingsSub,      setSettingsSub]      = useState(null)
+  // Settings › Saved weeks: the list (null until loaded), why it failed to load,
+  // and a saved week's id for the Planner to open its fill sheet on.
+  const [savedWeeks,       setSavedWeeks]       = useState(null)
+  const [savedWeeksError,  setSavedWeeksError]  = useState(null)
+  const [fillWithSaved,    setFillWithSaved]    = useState(null)
 
   // Data
   const [loading,     setLoading]     = useState(true)
@@ -846,9 +855,77 @@ export default function App() {
   }
 
   // Planner › Save week. Keeps a copy of the week on screen as it looks now.
-  const saveCurrentWeek = async name => {
-    await saveWeek(name, snapshotWeek(plan, week.days, sectionIds))
-    setPlannerNotice(`Saved “${name}”. It'll be under Fill from a saved week, ready for any week.`)
+  // `replaceId` is the saved week of the same name to overwrite instead.
+  const saveCurrentWeek = async (name, replaceId = null) => {
+    const meals = snapshotWeek(plan, week.days, sectionIds)
+    const row = replaceId ? await updateSavedWeek(replaceId, { name, meals }) : await createSavedWeek(name, meals)
+    putSavedWeek(row)
+    setPlannerNotice(replaceId
+      ? `Replaced “${name}” with this week's meals. Edit it any time in Settings › Saved weeks.`
+      : `Saved “${name}”. Fill any week from it with ⋯ › Fill from a saved week, or edit it in Settings › Saved weeks.`)
+  }
+
+  // ── Settings › Saved weeks ──────────────────────────────────────
+  // The list is loaded each time Settings opens, for the count on its row. Every
+  // change below keeps it in step, most recently changed first.
+  const loadSavedWeeks = () => {
+    setSavedWeeksError(null)
+    fetchSavedWeeks().then(setSavedWeeks).catch(e => { console.error('saved weeks failed', e); setSavedWeeksError(e.message) })
+  }
+  const putSavedWeek = row => setSavedWeeks(list => list && [row, ...list.filter(s => s.id !== row.id)])
+  const openSavedWeek = (id, extra = {}) => setSettingsSub({ kind:'savedWeek', id, ...extra })
+
+  // New saved week, from this week's plan or empty. Opens it with the name ready to type over.
+  const createSavedWeekFrom = async from => {
+    const meals = from === 'current' ? snapshotWeek(plan, week.days, sectionIds) : []
+    const row = await createSavedWeek(uniqueSavedName(from === 'current' ? defaultWeekName(week) : 'New saved week', savedWeeks), meals)
+    putSavedWeek(row)
+    openSavedWeek(row.id, { fresh: true })
+  }
+
+  // The editor's autosave. Keeps the list's copy in step (it moves to the top, as
+  // the most recently changed) and returns the row.
+  const editSavedWeek = async (id, patch) => {
+    const row = await updateSavedWeek(id, patch)
+    putSavedWeek(row)
+    return row
+  }
+
+  const duplicateSavedWeek = async saved => {
+    const row = await createSavedWeek(uniqueSavedName(saved.name, savedWeeks), saved.meals)
+    putSavedWeek(row)
+    openSavedWeek(row.id)
+    showToast(`Made a copy: “${row.name}”`)
+  }
+
+  // Settings is always this week, so this is the week the editor offers.
+  const replaceSavedWithCurrent = async saved => {
+    const row = await editSavedWeek(saved.id, { meals: snapshotWeek(plan, week.days, sectionIds) })
+    showToast(`“${row.name}” now has this week's meals.`)
+    return row
+  }
+
+  const removeSavedWeek = async saved => {
+    await deleteSavedWeek(saved.id)
+    setSavedWeeks(list => list && list.filter(s => s.id !== saved.id))
+    setSettingsSub({ kind:'savedWeeks' })
+    showToast(`Deleted “${saved.name}”`, { ms: UNDO_TOAST_MS, action: { label: 'Undo', onClick: async () => {
+      showToast(null)
+      try {
+        await restoreSavedWeek(saved)
+        setSavedWeeks(list => list && [...list, saved].sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || '')))
+      } catch (e) {
+        console.error('restore saved week failed', e)
+        showToast("Couldn't bring it back. Try again.")
+      }
+    } } })
+  }
+
+  // Use for a week: the Planner opens on that week with the fill sheet on this saved week.
+  const fillFromSavedWeek = (saved, offset) => {
+    setSettingsSub(null); setScreen(null); setTab('planner')
+    setWeekOffset(offset)
+    setFillWithSaved(saved.id)
   }
 
   // Planner › Fill from a saved week. New meals go in before old ones come out, so a
@@ -1140,7 +1217,9 @@ export default function App() {
   // goes through goBack(), which leaves these intact.
   const openAddSec    = (day, sec) => { setSelDay(day); setSelSec(sec); setSelectedRecipes([]); setRecipeSearch(''); setRecipeChip('cat'); setScreen('recipeSelection') }
   const openFreezerManage = () => { setPrevScreen('recipeSelection'); setScreen('freezerManage') }
-  const openSettings = () => { setSettingsSub(null); setWeekOffset(0); setScreen('settings') }
+  const openSettings = () => { setSettingsSub(null); setWeekOffset(0); setScreen('settings'); loadSavedWeeks() }
+  // Planner › Fill › Edit in Settings.
+  const editSavedWeekFromPlanner = saved => { openSettings(); openSavedWeek(saved.id) }
   // Home is always today, and a past week only stays selected on the Planner. A
   // future week carries on to Shopping and Batch, so it can be shopped for and
   // prepped ahead; WeekBanner says so.
@@ -1200,7 +1279,9 @@ export default function App() {
   }
   const goBack = () => {
     if (screen === 'freezerManage') setFreezerShare(null)
-    if (screen === 'settings' && settingsSub) {
+    if (screen === 'settings' && settingsSub?.kind === 'savedWeek') {
+      setSettingsSub({ kind:'savedWeeks' })
+    } else if (screen === 'settings' && settingsSub) {
       setSettingsSub(null)
     } else if (screen === 'freezerManage' && prevScreen === 'settings') {
       setPrevScreen(null)
@@ -1308,7 +1389,21 @@ export default function App() {
       if (settingsSub?.kind === 'equipment') return <EquipmentScreen value={prefs.kitchenEquipment} onChange={kitchenEquipment=>setPrefs({kitchenEquipment})}/>
       if (settingsSub?.kind === 'install')   return <InstallScreen/>
       if (settingsSub?.kind === 'aiModels')  return <OwnerModelsScreen config={aiConfig} onConfigChange={setAiConfig}/>
-      return <SettingsScreen defPort={defPort} setDefPort={setDefPort} prefs={prefs} setPrefs={setPrefs} goalProfile={goalProfile} goalTargets={goalTargets} setGoalProfile={setGoalProfile} freezerItems={freezerItems} weekLabel={week.label} session={session} isOwner={!!aiConfig?.isOwner} onOpen={openSettingsSub} onExportRecipes={exportRecipes} onResetWeek={resetWeekPlan} onRecipeRestored={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))}/>
+      // Settings always shows this week, so `thisWeek` is the week on screen.
+      const thisWeek = { range: week.range, mealCount: visibleMealCount }
+      const savedList = <SavedWeeksScreen saved={savedWeeks} loadError={savedWeeksError} onRetry={loadSavedWeeks} days={week.days} current={thisWeek} onOpen={id=>openSavedWeek(id)} onCreate={createSavedWeekFrom}/>
+      if (settingsSub?.kind === 'savedWeeks') return savedList
+      if (settingsSub?.kind === 'savedWeek') {
+        const saved = savedWeeks?.find(s => s.id === settingsSub.id)
+        if (!saved) return savedWeeksError || savedWeeks ? savedList : <Spinner msg='Loading that saved week…'/>
+        const useWeeks = [0, 1, 2].map(offset => {
+          const w = weekBounds(prefs.weekStartsOn, addWeeks(new Date(), offset))
+          return { offset, label: ['This week', 'Next week', 'The week after'][offset], range: w.range, mealCount: offset === weekOffset ? visibleMealCount : (weekMealCounts[w.weekOf] ?? 0) }
+        })
+        return <SavedWeekEditor key={saved.id} saved={saved} all={savedWeeks} days={week.days} sectionIds={sectionIds} recipes={recipes} defPort={defPort} current={thisWeek} weekOptions={useWeeks} autoFocusName={!!settingsSub.fresh}
+          onSave={editSavedWeek} onUse={fillFromSavedWeek} onDuplicate={duplicateSavedWeek} onReplaceWithCurrent={replaceSavedWithCurrent} onDelete={removeSavedWeek}/>
+      }
+      return <SettingsScreen defPort={defPort} setDefPort={setDefPort} prefs={prefs} setPrefs={setPrefs} goalProfile={goalProfile} goalTargets={goalTargets} setGoalProfile={setGoalProfile} freezerItems={freezerItems} weekLabel={week.label} savedWeekCount={savedWeeks?.length ?? null} session={session} isOwner={!!aiConfig?.isOwner} onOpen={openSettingsSub} onExportRecipes={exportRecipes} onResetWeek={resetWeekPlan} onRecipeRestored={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))}/>
     }
     if (screen === 'freezerManage')   return <FreezerScreen key={freezerShare?.receivedAt ?? 'freezer'} initialShare={freezerShare} items={freezerItems} onReplace={async names=>setFreezerItems(await replaceFreezerItems(names))} onAddOne={async name=>{const item=await addFreezerItem(name);setFreezerItems(items=>{const i=items.findIndex(x=>x.id===item.id);return i>=0?items.map(x=>x.id===item.id?item:x):[...items,item].sort((a,b)=>a.name.localeCompare(b.name))})}} onToggleStock={async(id,inStock)=>{setFreezerItems(items=>items.map(x=>x.id===id?{...x,in_stock:inStock}:x));await updateFreezerStock(id,inStock)}} onDelete={async id=>{setFreezerItems(items=>items.filter(x=>x.id!==id));await removeFreezerItem(id)}}/>
     if (screen === 'nutrition')       return <>{!isThisWeek&&<WeekBanner label={week.label}/>}<NutritionScreen profile={nutriProf} setProfile={setNutriProf} nutriData={nutriData} nutriLoading={nutriLoading} nutriError={nutriError} onAnalyse={analyseNutrition} goalProfile={goalProfile} goalTargets={goalTargets} plan={plan} nutritionByRecipe={nutritionByRecipe} days={week.days} sectionIds={sectionIds} toddlerEnabled={!!toddlerDob} otherWeekLabel={isThisWeek?null:week.shortLabel}/></>
@@ -1319,7 +1414,7 @@ export default function App() {
     if (screen === 'toddlerCooking')  return <ToddlerCookingScreen guide={toddlerGuide} loading={toddlerGuideLoading} error={toddlerGuideError} activeBand={toddlerBand} setActiveBand={setToddlerBand} currentBand={toddlerDob?ageBandFromDob(toddlerDob):null} onGenerate={generateToddlerGuide}/>
     if (tab !== 'planner' && weekLoadState) return weekLoadState
     if (tab === 'home')    return <HomeScreen plan={plan} weekLabel={week.label} days={week.days} sectionIds={sectionIds} recipes={recipes} childName={childName} onDayOpen={openDayPlan} onRecipeOpen={openRecipeFromHome} moveMeal={moveMeal} removeMeal={removeMealWithUndo} onRate={onRate} onAte={onAte} onCopy={copyWeekPlan} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))} aiContext={aiContext}/>
-    if (tab === 'planner') return <PlannerScreen plan={plan} week={week} weekOffset={weekOffset} weekStartsOn={prefs.weekStartsOn} plannedWeeks={plannedWeeks} onSelectWeek={setWeekOffset} onSaveWeek={saveCurrentWeek} onFillWeek={fillWeek} onCopyWeek={copyWeek} onClearWeek={clearWeek} notice={plannerNotice} onDismissNotice={()=>setPlannerNotice(null)} loadState={weekLoadState} sectionIds={sectionIds} removeMeal={removeMeal} moveMeal={moveMeal} duplicateMeal={duplicateMeal} updatePortion={updatePortion} onDayOpen={openDayPlan} onRecipeOpen={openRecipeFromHome} nutrition={{scores:nutriData?.adult?.scores,stale:nutriStale,loading:nutriLoading,error:nutriError}} onCalculateNutrition={analyseNutrition} onNutrition={()=>{ setScreen('nutrition'); if(!nutriData) analyseNutrition() }} onShoppingList={generateShoppingList} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe} tryouts={tryouts}/>
+    if (tab === 'planner') return <PlannerScreen plan={plan} week={week} weekOffset={weekOffset} weekStartsOn={prefs.weekStartsOn} plannedWeeks={plannedWeeks} onSelectWeek={setWeekOffset} onSaveWeek={saveCurrentWeek} onFillWeek={fillWeek} onCopyWeek={copyWeek} onClearWeek={clearWeek} onEditSavedWeek={editSavedWeekFromPlanner} fillWith={fillWithSaved} onFillWithHandled={()=>setFillWithSaved(null)} notice={plannerNotice} onDismissNotice={()=>setPlannerNotice(null)} loadState={weekLoadState} sectionIds={sectionIds} removeMeal={removeMeal} moveMeal={moveMeal} duplicateMeal={duplicateMeal} updatePortion={updatePortion} onDayOpen={openDayPlan} onRecipeOpen={openRecipeFromHome} nutrition={{scores:nutriData?.adult?.scores,stale:nutriStale,loading:nutriLoading,error:nutriError}} onCalculateNutrition={analyseNutrition} onNutrition={()=>{ setScreen('nutrition'); if(!nutriData) analyseNutrition() }} onShoppingList={generateShoppingList} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe} tryouts={tryouts}/>
     const weekBanner = !isThisWeek && <WeekBanner label={week.label} onBack={()=>setWeekOffset(0)}/>
     if (tab === 'list')    return <>{weekBanner}<ShoppingListScreen shopping={shopping} weekLabel={week.label} onToggle={onShoppingToggle} loading={shoppingLoading} loadingMsg={shoppingLoadingMsg} error={shoppingError} notice={shoppingNotice} onRegenerate={generateShoppingList} onBuildBasic={buildBasicList} onAddItem={addShoppingItemByHand} onRemoveItem={removeShoppingItemByHand} plannedPortions={plannedPortions()}/></>
     if (tab === 'batch')   return <>{weekBanner}<BatchScreen activeTab={batchTab} setActiveTab={setBatchTab} batchData={batchData} batchLoading={batchLoading} batchError={batchError} onGenerate={generateBatch} onOpenToddlerCooking={toddlerActivitiesOn?()=>openToddlerCooking(false):null} showToddler={toddlerActivitiesOn}/></>
