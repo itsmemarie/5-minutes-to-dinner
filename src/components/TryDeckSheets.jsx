@@ -1,5 +1,5 @@
 import { C, mn, R } from '../lib/theme.js'
-import { deckName } from '../lib/tryDeck.js'
+import { REMOVE_ON_PASS, deckName } from '../lib/tryDeck.js'
 import { Btn } from './ui/index.js'
 import { Sheet } from './ui/Sheet.jsx'
 
@@ -34,7 +34,7 @@ export function YesSheet({ sheet, onDone, onKeepGoing }) {
 // Closing it without choosing changes nothing, and the card stays on top.
 export function RemoveSheet({ recipe, onKeep, onRemove, onClose }) {
   return (
-    <Sheet title="You've passed on this one 4 times" onClose={onClose}>
+    <Sheet title={`You've passed on this one ${REMOVE_ON_PASS} times`} onClose={onClose}>
       <div style={{ ...mn, fontSize:14, color:C.onSurfaceVariant, lineHeight:1.6, marginBottom:18 }}>
         Remove {deckName(recipe)} from your recipes? You can restore it later from Settings.
       </div>

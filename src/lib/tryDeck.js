@@ -2,11 +2,10 @@
 // The deck's rules, kept pure so they can be tested without a database or a
 // screen. A recipe here is the shape supabase.js › fetchRecipes returns, and a
 // pick is a tryout_picks row.
-import { addWeeks, weekBounds } from './dateHelpers.js'
+import { weekBounds } from './dateHelpers.js'
 import { splitRecipeName } from './recipeParsing.js'
 
-export const SNOOZE_WEEKS = 8
-export const REMOVE_ON_PASS = 4        // this pass offers removal instead of a snooze
+export const REMOVE_ON_PASS = 6        // this pass asks whether to remove the recipe
 export const RECENT_DAYS = 30
 export const DECK_MEAL_TYPES = { off:'main', on:'side' }   // the Sides filter
 
@@ -35,7 +34,6 @@ export const picksInWeek = (picks, weekOf) => picks.filter(p => p.week_of === we
 
 // ── Who's in the deck ─────────────────────────────────────────────
 const isDeckType = r => r.mealTypeId === DECK_MEAL_TYPES.off || r.mealTypeId === DECK_MEAL_TYPES.on
-export const isSnoozed = (r, now = new Date()) => !!r.snoozedUntil && new Date(r.snoozedUntil) > now
 const savedTime = r => new Date(r.savedAt ?? r.createdAt ?? 0).getTime()
 
 // A recipe that's been picked never comes back, unless the pick is undone or
@@ -45,9 +43,9 @@ function candidates(recipes, picks) {
   return recipes.filter(r => r.tryOut && isDeckType(r) && !r.archivedAt && r.status !== 'retired' && !picked.has(r.id))
 }
 
-// Everything waiting to be looked at, mains and sides together.
-export const waitingRecipes = (recipes, picks, now = new Date()) =>
-  candidates(recipes, picks).filter(r => !isSnoozed(r, now))
+// Everything waiting to be looked at, mains and sides together. A Not now puts a
+// recipe back in the pile rather than hiding it, so that's every candidate.
+export const waitingRecipes = (recipes, picks) => candidates(recipes, picks)
 
 function matchesFilters(r, { sides, recent }, now) {
   if (r.mealTypeId !== (sides ? DECK_MEAL_TYPES.on : DECK_MEAL_TYPES.off)) return false
@@ -68,27 +66,34 @@ export function orderDeck(recipes, { order = 'newest', seed = 0 } = {}) {
   return [...recipes].sort(order === 'shuffle' ? byShuffle : (a, b) => savedTime(b) - savedTime(a) || byShuffle(a, b))
 }
 
-export function buildDeck(recipes, picks, { order, sides = false, recent = false, seed = 0, now = new Date() } = {}) {
-  const eligible = waitingRecipes(recipes, picks, now).filter(r => matchesFilters(r, { sides, recent }, now))
-  return orderDeck(eligible, { order, seed })
+// `passed` holds the ids passed on while the app has been open, oldest pass
+// first. Those cards go to the bottom of the pile in that order.
+export function toBottom(deck, passed = []) {
+  if (!passed.length) return deck
+  const rank = new Map(passed.map((id, i) => [id, i]))
+  const fresh = deck.filter(r => !rank.has(r.id))
+  const back = deck.filter(r => rank.has(r.id)).sort((a, b) => rank.get(a.id) - rank.get(b.id))
+  return [...fresh, ...back]
 }
+// The pass list after another Not now on `id`: it moves to the very bottom.
+export const passedAgain = (passed, id) => [...passed.filter(x => x !== id), id]
 
-// Snoozed recipes the current filters would otherwise show.
-export const hiddenCount = (recipes, picks, { sides = false, recent = false, now = new Date() } = {}) =>
-  candidates(recipes, picks).filter(r => isSnoozed(r, now) && matchesFilters(r, { sides, recent }, now)).length
+export function buildDeck(recipes, picks, { order, sides = false, recent = false, seed = 0, passed = [], now = new Date() } = {}) {
+  const eligible = waitingRecipes(recipes, picks).filter(r => matchesFilters(r, { sides, recent }, now))
+  return toBottom(orderDeck(eligible, { order, seed }), passed)
+}
 
 // ── Actions ───────────────────────────────────────────────────────
-export const snoozeUntil = (now = new Date()) => addWeeks(now, SNOOZE_WEEKS).toISOString()
-
-// What ✕ does. `ask` means the Remove sheet decides, so nothing is written yet.
-export function passOutcome(recipe, now = new Date()) {
+// What ✕ does: count the pass, and the card goes back in the pile. `ask` means
+// the Remove sheet decides, so nothing is written yet.
+export function passOutcome(recipe) {
   const passes = (recipe.skipCount ?? 0) + 1
   if (passes >= REMOVE_ON_PASS) return { ask:true }
-  return { ask:false, patch:{ skipCount:passes, snoozedUntil:snoozeUntil(now) } }
+  return { ask:false, patch:{ skipCount:passes } }
 }
-export const keepPatch = (now = new Date()) => ({ skipCount:0, snoozedUntil:snoozeUntil(now) })
+export const keepPatch = () => ({ skipCount:0 })
 export const removePatch = (now = new Date()) => ({ archivedAt:now.toISOString() })
-export const undoPatch = recipe => ({ skipCount:recipe.skipCount ?? 0, snoozedUntil:recipe.snoozedUntil ?? null, archivedAt:null })
+export const undoPatch = recipe => ({ skipCount:recipe.skipCount ?? 0, archivedAt:null })
 
 // ── The tray ──────────────────────────────────────────────────────
 // Unscheduled picks from any week, oldest first. A pick stays here until it's
