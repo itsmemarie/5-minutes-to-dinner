@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
-  DECK_MEAL_TYPES, REMOVE_ON_PASS, SCROLL_ZONE, SNOOZE_WEEKS, autoScrollStep, buildDeck, deckCaption, deckName, deckProgressLabel,
-  dropSection, emptyTitle, hiddenCount, keepPatch, londonClock, orderDeck, passOutcome, pickWeek, pickedMealIds, picksInWeek,
-  plannedMealFrom, progressLabel, removePatch, savedLabel, shuffleKey, snoozeUntil, totalMinutes, trayItems, undoPatch,
+  DECK_MEAL_TYPES, REMOVE_ON_PASS, SCROLL_ZONE, autoScrollStep, buildDeck, deckCaption, deckName, deckProgressLabel,
+  dropSection, emptyTitle, keepPatch, londonClock, orderDeck, passOutcome, passedAgain, pickWeek, pickedMealIds, picksInWeek,
+  plannedMealFrom, progressLabel, removePatch, savedLabel, shuffleKey, toBottom, totalMinutes, trayItems, undoPatch,
   waitingLabel, waitingRecipes, yesSheet,
 } from './tryDeck.js'
 
@@ -31,9 +31,8 @@ describe('who is in the deck', () => {
   it('leaves out archived recipes', () => {
     expect(build([recipe('a', { archivedAt: '2026-11-01T00:00:00Z' })])).toEqual([])
   })
-  it('hides a snoozed recipe until its snooze has passed', () => {
-    expect(build([recipe('a', { snoozedUntil: '2026-12-01T00:00:00Z' })])).toEqual([])
-    expect(build([recipe('a', { snoozedUntil: '2026-11-01T00:00:00Z' })])).toEqual(['a'])
+  it('ignores an old snooze, so the recipe is back in the pile', () => {
+    expect(build([recipe('a', { snoozedUntil: '2026-12-01T00:00:00Z' })])).toEqual(['a'])
   })
   it('leaves out anything picked in any week, scheduled or not', () => {
     const picks = [pick('a'), pick('b', { week_of: '2026-10-05' }), pick('c', { week_of: '2026-10-05', planned_meal_id: 'm1' })]
@@ -44,7 +43,7 @@ describe('who is in the deck', () => {
   })
   it('counts mains and sides together as waiting', () => {
     const recipes = [recipe('a'), recipe('b', { mealTypeId: 'side' }), recipe('c', { mealTypeId: 'entree' })]
-    expect(ids(waitingRecipes(recipes, [], NOW))).toEqual(['a', 'b'])
+    expect(ids(waitingRecipes(recipes, []))).toEqual(['a', 'b'])
   })
 })
 
@@ -90,39 +89,56 @@ describe('ordering', () => {
   })
 })
 
-describe('hiddenCount', () => {
-  it('counts snoozed recipes the filters would show', () => {
-    const snoozed = { snoozedUntil: '2026-12-01T00:00:00Z' }
-    const recipes = [recipe('a', snoozed), recipe('b', snoozed), recipe('c', { ...snoozed, mealTypeId: 'side' }), recipe('d')]
-    expect(hiddenCount(recipes, [], { now: NOW })).toBe(2)
-    expect(hiddenCount(recipes, [], { sides: true, now: NOW })).toBe(1)
+describe('the pile', () => {
+  const deck = ['a', 'b', 'c', 'd'].map(id => recipe(id))
+
+  it('sends passed cards to the bottom, oldest pass first', () => {
+    expect(ids(toBottom(deck, ['b', 'a']))).toEqual(['c', 'd', 'b', 'a'])
+  })
+  it('leaves the deck alone when nothing was passed', () => {
+    expect(ids(toBottom(deck, []))).toEqual(['a', 'b', 'c', 'd'])
+  })
+  it('ignores passed ids that are no longer in the deck', () => {
+    expect(ids(toBottom(deck, ['x', 'a']))).toEqual(['b', 'c', 'd', 'a'])
+  })
+  it('moves a card passed again to the very bottom', () => {
+    expect(passedAgain(['a', 'b'], 'a')).toEqual(['b', 'a'])
+    expect(passedAgain([], 'a')).toEqual(['a'])
+  })
+  it('applies to both Newest first and Shuffle', () => {
+    const recipes = Array.from({ length: 10 }, (_, i) => recipe(`r${i}`, { createdAt: `2026-10-${10 + i}T00:00:00Z` }))
+    for (const order of ['newest', 'shuffle']) {
+      const plain = ids(buildDeck(recipes, [], { order, seed: 5, now: NOW }))
+      const out = ids(buildDeck(recipes, [], { order, seed: 5, passed: [plain[0]], now: NOW }))
+      expect(out).toEqual([...plain.slice(1), plain[0]])
+    }
+  })
+  it('brings the only card straight back', () => {
+    expect(ids(buildDeck([recipe('a')], [], { passed: ['a'], now: NOW }))).toEqual(['a'])
   })
 })
 
 describe('not now', () => {
-  it('counts the pass and snoozes for 8 weeks', () => {
-    const out = passOutcome(recipe('a', { skipCount: 2 }), NOW)
-    expect(out.ask).toBe(false)
-    expect(out.patch.skipCount).toBe(3)
-    expect(SNOOZE_WEEKS).toBe(8)
-    expect(new Date(out.patch.snoozedUntil).getTime() - NOW.getTime()).toBe(56 * 24 * 60 * 60 * 1000)
+  it('counts the pass and hides nothing', () => {
+    expect(passOutcome(recipe('a', { skipCount: 2 }))).toEqual({ ask: false, patch: { skipCount: 3 } })
   })
   it('treats a recipe that was never passed as a first pass', () => {
-    expect(passOutcome(recipe('a', { skipCount: undefined }), NOW).patch.skipCount).toBe(1)
+    expect(passOutcome(recipe('a', { skipCount: undefined })).patch.skipCount).toBe(1)
   })
-  it('offers removal on the 4th pass and writes nothing', () => {
-    expect(REMOVE_ON_PASS).toBe(4)
-    expect(passOutcome(recipe('a', { skipCount: 3 }), NOW)).toEqual({ ask: true })
+  it('offers removal on the 6th pass and writes nothing', () => {
+    expect(REMOVE_ON_PASS).toBe(6)
+    expect(passOutcome(recipe('a', { skipCount: 4 })).ask).toBe(false)
+    expect(passOutcome(recipe('a', { skipCount: 5 }))).toEqual({ ask: true })
   })
-  it('keeps a recipe by clearing its passes and snoozing it', () => {
-    expect(keepPatch(NOW)).toEqual({ skipCount: 0, snoozedUntil: snoozeUntil(NOW) })
+  it('keeps a recipe by clearing its passes', () => {
+    expect(keepPatch()).toEqual({ skipCount: 0 })
   })
   it('removes a recipe by archiving it', () => {
     expect(removePatch(NOW)).toEqual({ archivedAt: '2026-11-07T12:00:00.000Z' })
   })
   it('undoes by putting back what was there', () => {
-    expect(undoPatch(recipe('a', { skipCount: 3, snoozedUntil: '2026-01-01T00:00:00Z' }))).toEqual({ skipCount: 3, snoozedUntil: '2026-01-01T00:00:00Z', archivedAt: null })
-    expect(undoPatch(recipe('a'))).toEqual({ skipCount: 0, snoozedUntil: null, archivedAt: null })
+    expect(undoPatch(recipe('a', { skipCount: 3 }))).toEqual({ skipCount: 3, archivedAt: null })
+    expect(undoPatch(recipe('a'))).toEqual({ skipCount: 0, archivedAt: null })
   })
 })
 

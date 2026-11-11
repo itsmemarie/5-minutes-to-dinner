@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
-import { C, ep, mn } from '../lib/theme.js'
+import { C, ep } from '../lib/theme.js'
 import {
-  SNOOZE_WEEKS, buildDeck, deckCaption, emptyTitle, hiddenCount, keepPatch,
-  passOutcome, pickWeek, picksInWeek, removePatch, undoPatch, yesSheet,
+  buildDeck, deckCaption, emptyTitle, keepPatch, passOutcome, passedAgain,
+  pickWeek, picksInWeek, removePatch, undoPatch, yesSheet,
 } from '../lib/tryDeck.js'
 import { Btn, PillBtn } from './ui/index.js'
 import { SwipeDeck, useFlyOut } from './SwipeDeck.jsx'
@@ -12,30 +12,32 @@ import { RemoveSheet, YesSheet } from './TryDeckSheets.jsx'
 const SESSION_SEED = Math.floor(Math.random() * 2 ** 32)
 
 const SAVE_FAILED = "Couldn't save that. Try again."
-const HIDDEN_TOAST = `Hidden for ${SNOOZE_WEEKS} weeks`
 
 // One card at a time from the try-out recipes. A Yes adds a pick for this week
-// and a Not now snoozes the recipe; neither asks for a day, because the planner's
-// tray does that. See tryDeck.js for the rules.
+// and a Not now puts the card back at the bottom of the pile; neither asks for a
+// day, because the planner's tray does that. See tryDeck.js for the rules.
 //
 // `onPick(recipe, weekOf)` resolves to the new pick, `onRemovePick(pick)` undoes
-// one, and `onDeckState(recipe, patch)` saves skips, snoozes and archiving. All
-// three reject on failure, and the card then stays where it was.
-export function TryDeckScreen({ recipes, picks, weekStartsOn, target, showToddler, onPick, onRemovePick, onDeckState, onNeedStill, onDone, showToast, recipeProps }) {
+// one, and `onDeckState(recipe, patch)` saves passes and archiving. All three
+// reject on failure, and the card then stays where it was. `passed` is the pile
+// order (see tryDeck.toBottom), held by App so it lasts while the app is open.
+export function TryDeckScreen({ recipes, picks, passed, onPassed, weekStartsOn, target, showToddler, onPick, onRemovePick, onDeckState, onNeedStill, onDone, showToast, recipeProps }) {
   const [order, setOrder] = useState('newest')
   const [recent, setRecent] = useState(false)
   const [sides, setSides] = useState(false)
   const { fly, busy, setBusy, flyThen } = useFlyOut(() => showToast(SAVE_FAILED))
   const [sheet, setSheet] = useState(null)       // { kind:'yes', sheet } | { kind:'remove', recipe }
-  const [undo, setUndo] = useState(null)         // { pick?, before? }
+  const [undo, setUndo] = useState(null)         // { pick?, before?, passed? }
 
   const filters = { sides, recent }
-  const deck = useMemo(() => buildDeck(recipes, picks, { order, sides, recent, seed:SESSION_SEED }), [recipes, picks, order, sides, recent])
+  const deck = useMemo(() => buildDeck(recipes, picks, { order, sides, recent, passed, seed:SESSION_SEED }), [recipes, picks, order, sides, recent, passed])
 
-  const saveAndToast = async (recipe, patch, message) => {
+  // Saves the recipe, then (for a pass or a Keep) sends it to the bottom.
+  const save = async (recipe, patch, { toBottom = false, message = null } = {}) => {
     await onDeckState(recipe, patch)
-    setUndo({ before:recipe })
-    showToast(message)
+    setUndo({ before:recipe, passed })
+    if (toBottom) onPassed(passedAgain(passed, recipe.id))
+    if (message) showToast(message)
   }
 
   const act = (dir, recipe) => {
@@ -44,7 +46,7 @@ export function TryDeckScreen({ recipes, picks, weekStartsOn, target, showToddle
     if (dir === 'left') {
       const outcome = passOutcome(recipe)
       if (outcome.ask) setSheet({ kind:'remove', recipe })
-      else flyThen(recipe, 'left', () => saveAndToast(recipe, outcome.patch, HIDDEN_TOAST))
+      else flyThen(recipe, 'left', () => save(recipe, outcome.patch, { toBottom:true }))
       return
     }
     flyThen(recipe, 'right', async () => {
@@ -57,11 +59,11 @@ export function TryDeckScreen({ recipes, picks, weekStartsOn, target, showToddle
 
   const keep = recipe => {
     setSheet(null)
-    flyThen(recipe, 'left', () => saveAndToast(recipe, keepPatch(), `Kept · hidden for ${SNOOZE_WEEKS} weeks`))
+    flyThen(recipe, 'left', () => save(recipe, keepPatch(), { toBottom:true, message:'Kept' }))
   }
   const remove = recipe => {
     setSheet(null)
-    flyThen(recipe, 'left', () => saveAndToast(recipe, removePatch(), 'Removed from your recipes'))
+    flyThen(recipe, 'left', () => save(recipe, removePatch(), { message:'Removed from your recipes' }))
   }
 
   const runUndo = async () => {
@@ -70,6 +72,7 @@ export function TryDeckScreen({ recipes, picks, weekStartsOn, target, showToddle
     try {
       if (undo.pick) await onRemovePick(undo.pick)
       if (undo.before) await onDeckState(undo.before, undoPatch(undo.before))
+      if (undo.passed) onPassed(undo.passed)
       setUndo(null)
       showToast('Undone')
     } catch (e) {
@@ -94,8 +97,7 @@ export function TryDeckScreen({ recipes, picks, weekStartsOn, target, showToddle
         empty={(
           <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', textAlign:'center', padding:'32px 28px' }}>
             <img src='/dino-logo.png' alt='' style={{ width:88, height:88, objectFit:'contain', marginBottom:14 }}/>
-            <div style={{ ...ep, fontSize:21, color:C.onSurface, marginBottom:6 }}>{emptyTitle(filters)}</div>
-            <div style={{ ...mn, fontSize:14, color:C.onSurfaceVariant, marginBottom:20 }}>{hiddenCount(recipes, picks, filters)} hidden for later.</div>
+            <div style={{ ...ep, fontSize:21, color:C.onSurface, marginBottom:20 }}>{emptyTitle(filters)}</div>
             <div style={{ display:'flex', gap:10, flexWrap:'wrap', justifyContent:'center' }}>
               <Btn label='Undo last' secondary strong small disabled={!undo} onClick={runUndo}/>
               <Btn label='Back to planner' small onClick={onDone}/>
