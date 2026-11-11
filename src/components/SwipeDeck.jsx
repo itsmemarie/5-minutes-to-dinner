@@ -52,7 +52,7 @@ function RecipePreview({ recipe, addLabel, onBack, onNotNow, onAdd, ...recipePro
       <div style={{ flex:1, overflowY:'auto', WebkitOverflowScrolling:'touch' }}>
         <RecipeScreen key={recipe.id} recipeId={recipe.id} portion={portion} onPortionChange={setPortion} toddlerDob={null}
           showToddlerVariations={recipeProps.showToddlerVariations} goalProfile={recipeProps.goalProfile} goalTargets={recipeProps.goalTargets}
-          nutritionByRecipe={recipeProps.nutritionByRecipe} sectionIds={recipeProps.sectionIds} onPhotoChange={recipeProps.onPhotoChange} onLinkChange={recipeProps.onLinkChange}/>
+          nutritionByRecipe={recipeProps.nutritionByRecipe} sectionIds={recipeProps.sectionIds} onPhotoChange={recipeProps.onPhotoChange} onLinkChange={recipeProps.onLinkChange} rating={recipeProps.ratingFor?.(recipe.id)}/>
       </div>
       <div style={{ display:'flex', gap:10, padding:'12px 20px calc(12px + env(safe-area-inset-bottom))', flexShrink:0, background:C.white, borderTop:`1px solid ${C.outlineVariant}40` }}>
         <Btn label='Not now' secondary strong onClick={onNotNow}/>

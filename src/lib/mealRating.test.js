@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { activePatch, canRate, mealDate, nextAte, ratingOutcome, reviewPatch, rotationOf } from './mealRating.js'
+import { activePatch, canRate, mealDate, mealHasCome, nextAte, ownRatingFields, ratingOutcome, recipeVerdict, reviewPatch, rotationOf, withOwnRow } from './mealRating.js'
 import { weekBounds } from './dateHelpers.js'
 import { waitingRecipes } from './tryDeck.js'
 
@@ -71,4 +71,52 @@ it('nextAte clears the selected option', () => {
   expect(nextAte('all', 'all')).toBeNull()
   expect(nextAte('all', 'some')).toBe('some')
   expect(nextAte(null, 'none')).toBe('none')
+})
+
+describe('mealHasCome', () => {
+  const week = weekBounds('monday', new Date(2026, 10, 4))   // Mon 2 Nov to Sun 8 Nov
+  it('is true up to and including today', () => {
+    expect(mealHasCome(week, 'monday', new Date(2026, 10, 4))).toBe(true)
+    expect(mealHasCome(week, 'wednesday', new Date(2026, 10, 4))).toBe(true)
+  })
+  it('is false for a day still to come', () => expect(mealHasCome(week, 'thursday', new Date(2026, 10, 4))).toBe(false))
+  it('is true for every day of a past week', () => expect(mealHasCome(week, 'sunday', new Date(2026, 10, 20))).toBe(true))
+})
+
+describe('recipeVerdict', () => {
+  const meal = (id, ratedAt, fields) => ({ id, plannedMealId: `pm-${id}`, ratedAt, rating: null, ate: null, comment: null, ...fields })
+  const own = (ratedAt, fields) => ({ id: 'own', plannedMealId: null, ratedAt, rating: null, ate: null, comment: null, ...fields })
+
+  it('is empty with no ratings', () => expect(recipeVerdict([])).toEqual({ rating: null, comment: null, ate: null, own: null }))
+  it('takes the newest rating, with its comment', () => {
+    const v = recipeVerdict([meal(1, '2026-11-02T18:00:00Z', { rating: 'bad', comment: 'Dry' }), meal(2, '2026-11-05T18:00:00Z', { rating: 'loved', comment: 'Better' })])
+    expect(v).toMatchObject({ rating: 'loved', comment: 'Better' })
+  })
+  it('takes the child answer from the newest meal that has one', () => {
+    const v = recipeVerdict([meal(1, '2026-11-02T18:00:00Z', { rating: 'okay', ate: 'some' }), meal(2, '2026-11-05T18:00:00Z', { rating: 'loved' })])
+    expect(v).toMatchObject({ rating: 'loved', ate: 'some' })
+  })
+  it('lets a newer own row clear an answer', () => {
+    const v = recipeVerdict([meal(1, '2026-11-02T18:00:00Z', { rating: 'okay', ate: 'some' }), own('2026-11-06T09:00:00Z', { rating: 'okay', ate: null })])
+    expect(v.ate).toBe(null)
+    expect(v.own.id).toBe('own')
+  })
+  it('lets a newer meal rating win over the own row', () => {
+    const v = recipeVerdict([own('2026-11-02T09:00:00Z', { rating: 'okay' }), meal(1, '2026-11-05T18:00:00Z', { rating: 'loved' })])
+    expect(v.rating).toBe('loved')
+  })
+  it('compares times, not their spelling', () => {
+    const v = recipeVerdict([meal(1, '2026-11-05T18:00:00.123456+00:00', { rating: 'loved' }), own('2026-11-05T17:00:00.000Z', { rating: 'bad' })])
+    expect(v.rating).toBe('loved')
+  })
+})
+
+describe('ownRatingFields and withOwnRow', () => {
+  it('keeps what was shown and changes one thing', () => {
+    expect(ownRatingFields({ rating: 'loved', ate: 'some', comment: 'Nice' }, { ate: 'all' })).toEqual({ rating: 'loved', ate: 'all', comment: 'Nice' })
+  })
+  it('puts the own row in once', () => {
+    const rows = [{ id: 1, plannedMealId: 'a' }, { id: 'own', plannedMealId: null, rating: 'bad' }]
+    expect(withOwnRow(rows, { id: 'own', plannedMealId: null, rating: 'okay' })).toEqual([{ id: 1, plannedMealId: 'a' }, { id: 'own', plannedMealId: null, rating: 'okay' }])
+  })
 })

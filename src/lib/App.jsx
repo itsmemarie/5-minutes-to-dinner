@@ -10,7 +10,7 @@ import {
   fetchUserProfile, saveUserProfile, fetchAllRecipeNutrition, saveRecipeView, fetchRecipesForExport,
   getSession, onAuthChange, addShoppingItem, removeShoppingItem, fetchRecipeIngredients,
   fetchTryoutPicks, addTryoutPick, removeTryoutPick, linkPickToMeal, saveRecipeDeckState, refreshReelThumbnail,
-  upsertMealRating, setMealAte, setMealComment, insertMealRatings, saveRecipeRotation, removePlannedMealOnExit,
+  upsertMealRating, setMealAte, setMealComment, insertMealRatings, saveRecipeRotation, saveRecipeTryOut, removePlannedMealOnExit,
 } from './supabase.js'
 import { callEdgeFn, fetchAiConfig, onAiLimit } from './ai.js'
 import { computeTargets } from './goalMaths.js'
@@ -22,7 +22,7 @@ import { buildBasicShoppingList, guessAisle } from './basicShoppingList.js'
 import { snapshotWeek, weekMealRows, buildFill, fillNotice, savedRecipeIds } from './savedWeeks.js'
 import { deckProgressLabel, dropSection, pickWeek, pickedMealIds, picksInWeek, plannedMealFrom, progressLabel, trayItems, waitingRecipes } from './tryDeck.js'
 import { reelPlatform } from './reels.js'
-import { activePatch, mealDate, nextAte, ratingOutcome, retiredPatch, reviewPatch, rotationOf } from './mealRating.js'
+import { activePatch, mealDate, mealHasCome, nextAte, ratingOutcome, retiredPatch, reviewPatch, rotationOf } from './mealRating.js'
 import { consumePwaShare } from './share/pwaShareInbox.js'
 import { onIncomingShare, clearIncomingShare } from './share/handleIncomingShare.js'
 import { APP_VERSION_LABEL } from './appVersion.js'
@@ -555,31 +555,71 @@ export default function App() {
     }
   }
 
-  // An Undo puts the recipe back exactly as it was before the rating moved it.
-  const retireWithUndo = (recipe, meal, message) => {
-    const before = rotationOf(recipe)
-    setRecipeRotation(meal.recipeId, retiredPatch)
-    showToast(message, { ms: UNDO_TOAST_MS, action: { label: 'Undo', onClick: () => { showToast(null); setRecipeRotation(meal.recipeId, before) } } })
+  // A rated recipe has been tried, so it leaves the try-outs, and with them the
+  // swipe deck and the picker's "Try something new". Picks already made stay.
+  const setRecipeTryOut = async (recipeId, tryOut) => {
+    const applyToList = value => setRecipes(prev => prev.map(r => r.id === recipeId ? { ...r, tryOut: value } : r))
+    applyToList(tryOut)
+    try {
+      await saveRecipeTryOut(recipeId, tryOut)
+    } catch (e) {
+      console.error('try-out save failed', e)
+      applyToList(!tryOut)
+      showToast("Couldn't update that recipe. Try again.")
+    }
   }
 
-  // The rating is saved whatever happens next. Rules in mealRating.js.
+  // An Undo puts the recipe back exactly as it was before the rating moved it,
+  // try-out included.
+  const retireWithUndo = (recipe, wasTryOut, message) => {
+    const before = rotationOf(recipe)
+    setRecipeRotation(recipe.id, retiredPatch)
+    showToast(message, { ms: UNDO_TOAST_MS, action: { label: 'Undo', onClick: () => {
+      showToast(null)
+      setRecipeRotation(recipe.id, before)
+      if (wasTryOut) setRecipeTryOut(recipe.id, true)
+    } } })
+  }
+
+  // What a rating does to its recipe, wherever it was given. Rules in mealRating.js.
+  // `rated` is { id, recipeId, name, ratingComment } for the review sheet, and
+  // `saveComment` keeps the sheet's comment wherever the rating lives.
+  const applyRating = (rated, rating, date, saveComment) => {
+    const recipe = recipes.find(r => r.id === rated.recipeId)
+    const wasTryOut = !!recipe?.tryOut
+    if (wasTryOut) setRecipeTryOut(recipe.id, false)
+    const tried = wasTryOut ? ' No longer a try-out.' : ''
+    const name = rated.name
+    const openReview = mode => setReview({ meal: rated, mode, saveComment })
+    switch (ratingOutcome(recipe, rating, date)) {
+      case 'backInRotation':
+        setRecipeRotation(recipe.id, activePatch)
+        showToast(`${name} is back in rotation. The fix stays on it as a cooking note.`, { ms: UNDO_TOAST_MS })
+        break
+      case 'retireAfterChance': retireWithUndo(recipe, wasTryOut, `Retired ${name}. It had its one more go.`); break
+      case 'alreadyRetired': showToast(`Rating saved. ${name} is retired; search for it to bring it back.`, { ms: UNDO_TOAST_MS }); break
+      case 'retire': retireWithUndo(recipe, wasTryOut, `Retired ${name}.${tried}`); break
+      case 'reviewOkay': openReview('okay'); break
+      default: showToast(`Saved as Loved.${tried}`, { ms: UNDO_TOAST_MS, action: { label: 'Add notes', onClick: () => { showToast(null); openReview('loved') } } })
+    }
+  }
+
+  // The rating is saved whatever happens next.
   const onRate = (meal, day, rating) => {
     patchMeal(meal.id, { rating })
     upsertMealRating(meal.id, rating).catch(e => console.error('rating save failed', e))
-    const recipe = recipes.find(r => r.id === meal.recipeId)
-    const name = meal.name
-    const rated = { ...meal, rating }
-    switch (ratingOutcome(recipe, rating, mealDate(week, day))) {
-      case 'backInRotation':
-        setRecipeRotation(meal.recipeId, activePatch)
-        showToast(`${name} is back in rotation. The fix stays on it as a cooking note.`, { ms: UNDO_TOAST_MS })
-        break
-      case 'retireAfterChance': retireWithUndo(recipe, meal, `Retired ${name}. It had its one more go.`); break
-      case 'alreadyRetired': showToast(`Rating saved. ${name} is retired; search for it to bring it back.`, { ms: UNDO_TOAST_MS }); break
-      case 'retire': retireWithUndo(recipe, meal, `Retired ${name}.`); break
-      case 'reviewOkay': setReview({ meal: rated, mode: 'okay' }); break
-      default: showToast('Saved as Loved.', { ms: UNDO_TOAST_MS, action: { label: 'Add notes', onClick: () => { showToast(null); setReview({ meal: rated, mode: 'loved' }) } } })
-    }
+    applyRating({ ...meal, rating }, rating, mealDate(week, day), ratingComment => {
+      patchMeal(meal.id, { ratingComment })
+      setMealComment(meal.id, ratingComment).catch(e => console.error('comment save failed', e))
+    })
+  }
+
+  // A rating on the recipe screen with no meal behind it. RecipeScreen has saved it
+  // already; `comment` is the one it had, and it's dated today.
+  const onRateRecipe = (recipeId, rating, { comment, saveComment }) => {
+    const recipe = recipes.find(r => r.id === recipeId)
+    if (!recipe) return
+    applyRating({ id: `recipe-${recipeId}`, recipeId, name: recipe.name, ratingComment: comment }, rating, toISO(new Date()), saveComment)
   }
 
   const onAte = (meal, picked) => {
@@ -589,11 +629,9 @@ export default function App() {
   }
 
   const saveReview = ({ comment, secondChance, fix }) => {
-    const { meal } = review
+    const { meal, saveComment } = review
     setReview(null)
-    const ratingComment = comment || null
-    patchMeal(meal.id, { ratingComment })
-    setMealComment(meal.id, ratingComment).catch(e => console.error('comment save failed', e))
+    saveComment(comment || null)
     const patch = reviewPatch(recipes.find(r => r.id === meal.recipeId), { secondChance, fix }, toISO(new Date()))
     if (patch) setRecipeRotation(meal.recipeId, patch)
     if (secondChance) showToast(`${meal.name} gets one more go.`)
@@ -1235,8 +1273,19 @@ export default function App() {
   // Who Home's child chip asks about: the selected child, while toddler mode is on.
   const childName = prefs.toddlerModeEnabled ? (prefs.children.find(c => c.id === prefs.selectedChildId)?.name?.trim() || null) : null
 
+  // The recipe screen's rating chips (see RecipeScreen). Opened from a meal whose day
+  // has come, in any week, they rate that meal as Home does; otherwise the recipe.
+  const ratingFor = recipeId => ({
+    childName,
+    onRecipeRate: (rating, ctx) => onRateRecipe(recipeId, rating, ctx),
+    onFailed: () => showToast("Couldn't save that rating. Try again."),
+  })
+  const detailMeal = screen === 'recipe' ? findPlannedMeal(recipeDetailMealId) : null
+  const detailRating = detailMeal && detailMeal.meal.recipeId === selRecipeId && mealHasCome(week, detailMeal.day)
+    ? { ...ratingFor(selRecipeId), meal: detailMeal.meal, onMealRate: r => onRate(detailMeal.meal, detailMeal.day, r), onMealAte: a => onAte(detailMeal.meal, a) }
+    : ratingFor(selRecipeId)
   // What the swipe decks pass to the recipe they open over the cards.
-  const deckRecipeProps = { defPort, showToddlerVariations:toddlerVariationsOn, goalProfile, goalTargets, nutritionByRecipe, sectionIds, onPhotoChange:(id,img)=>setRecipes(prev=>prev.map(r=>r.id===id?{...r,...img}:r)), onLinkChange:reelLinkChanged }
+  const deckRecipeProps = { defPort, showToddlerVariations:toddlerVariationsOn, goalProfile, goalTargets, nutritionByRecipe, sectionIds, onPhotoChange:(id,img)=>setRecipes(prev=>prev.map(r=>r.id===id?{...r,...img}:r)), onLinkChange:reelLinkChanged, ratingFor }
 
   const renderScreen = () => {
     if (loading) return <Spinner msg={loadMsg}/>
@@ -1265,7 +1314,7 @@ export default function App() {
     if (screen === 'nutrition')       return <>{!isThisWeek&&<WeekBanner label={week.label}/>}<NutritionScreen profile={nutriProf} setProfile={setNutriProf} nutriData={nutriData} nutriLoading={nutriLoading} nutriError={nutriError} onAnalyse={analyseNutrition} goalProfile={goalProfile} goalTargets={goalTargets} plan={plan} nutritionByRecipe={nutritionByRecipe} days={week.days} sectionIds={sectionIds} toddlerEnabled={!!toddlerDob} otherWeekLabel={isThisWeek?null:week.shortLabel}/></>
     if (screen === 'dailyPlan')       return <DailyPlanScreen day={selDay} dateLabel={isThisWeek?null:dayDateLabel(week,selDay)} plan={plan} recipes={recipes} updatePortion={updatePortion} removeMeal={removeMeal} onAddToSection={openAddSec} onRecipeOpen={openRecipeFromDailyPlan} onSave={()=>setScreen(null)} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe} sectionIds={sectionIds}/>
     if (screen === 'recipeSelection') return <RecipeSelectionScreen day={selDay} section={selSec} plan={plan} recipes={recipes} freezerItems={freezerItems} onAdd={addMeals} onAddFreezer={addFreezerMeals} onManageFreezer={openFreezerManage} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))} onPreview={openRecipeFromSelection} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe} recipeView={recipeView} setRecipeView={setRecipeView} search={recipeSearch} setSearch={setRecipeSearch} chip={recipeChip} setChip={setRecipeChip} selected={selectedRecipes} setSelected={setSelectedRecipes} days={week.days} sectionIds={sectionIds} aiContext={aiContext} showToast={showToast} showToddler={prefs.toddlerModeEnabled} deckRecipeProps={deckRecipeProps}/>
-    if (screen === 'recipe')          return <RecipeScreen recipeId={selRecipeId} rotation={recipes.find(r=>r.id===selRecipeId)} onBringBack={()=>bringBack(selRecipeId)} portion={recipeDetailPortion} onPortionChange={changeRecipeDetailPortion} onAddMeal={()=>addMeals([selRecipeId])} toddlerDob={toddlerActivitiesOn?toddlerDob:null} showToddlerVariations={toddlerVariationsOn} onOpenToddlerCooking={()=>openToddlerCooking(true)} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe} day={selDay} plan={plan} sectionIds={sectionIds} onPhotoChange={(id,img)=>setRecipes(prev=>prev.map(r=>r.id===id?{...r,...img}:r))} onLinkChange={reelLinkChanged}/>
+    if (screen === 'recipe')          return <RecipeScreen recipeId={selRecipeId} rotation={recipes.find(r=>r.id===selRecipeId)} onBringBack={()=>bringBack(selRecipeId)} portion={recipeDetailPortion} onPortionChange={changeRecipeDetailPortion} onAddMeal={()=>addMeals([selRecipeId])} toddlerDob={toddlerActivitiesOn?toddlerDob:null} showToddlerVariations={toddlerVariationsOn} onOpenToddlerCooking={()=>openToddlerCooking(true)} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe} day={selDay} plan={plan} sectionIds={sectionIds} onPhotoChange={(id,img)=>setRecipes(prev=>prev.map(r=>r.id===id?{...r,...img}:r))} onLinkChange={reelLinkChanged} rating={detailRating}/>
     if (screen === 'tryDeck')         return <TryDeckScreen recipes={recipes} picks={tryoutPicks} weekStartsOn={prefs.weekStartsOn} target={prefs.tryoutWeeklyTarget} showToddler={prefs.toddlerModeEnabled} onPick={pickRecipe} onRemovePick={removePick} onDeckState={saveDeckState} onNeedStill={fetchReelStill} onDone={closeDeck} showToast={showToast} recipeProps={deckRecipeProps}/>
     if (screen === 'toddlerCooking')  return <ToddlerCookingScreen guide={toddlerGuide} loading={toddlerGuideLoading} error={toddlerGuideError} activeBand={toddlerBand} setActiveBand={setToddlerBand} currentBand={toddlerDob?ageBandFromDob(toddlerDob):null} onGenerate={generateToddlerGuide}/>
     if (tab !== 'planner' && weekLoadState) return weekLoadState
