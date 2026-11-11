@@ -225,6 +225,39 @@ export const upsertMealRating = (plannedMealId, rating) => saveMealRatingFields(
 export const setMealAte = (plannedMealId, ate) => saveMealRatingFields(plannedMealId, { ate })
 export const setMealComment = (plannedMealId, comment) => saveMealRatingFields(plannedMealId, { comment })
 
+// Every rating of one recipe, from any meal plus its own (see mealRating.js › recipeVerdict).
+const toRatingRow = r => ({ id: r.id, plannedMealId: r.planned_meal_id, rating: r.rating, ate: r.ate, comment: r.comment, ratedAt: r.rated_at })
+export async function fetchRecipeRatings(recipeId) {
+  const { data, error } = await supabase
+    .from('meal_ratings')
+    .select('id, planned_meal_id, rating, ate, comment, rated_at')
+    .eq('recipe_id', recipeId)
+  if (error) throw error
+  return data.map(toRatingRow)
+}
+
+// The recipe's own rating, rated from the recipe screen with no meal behind it.
+// `id` is its row once it has one. There's one per recipe, so writes for a recipe
+// must not overlap (useRecipeRating queues them).
+export async function saveOwnRecipeRating(id, recipeId, { rating, ate, comment }) {
+  const fields = { rating, ate, comment, rated_at: new Date().toISOString() }
+  const query = id
+    ? supabase.from('meal_ratings').update(fields).eq('id', id)
+    : supabase.from('meal_ratings').insert({ recipe_id: recipeId, ...fields })
+  const { data, error } = await query.select('id, planned_meal_id, rating, ate, comment, rated_at').single()
+  if (error) throw error
+  return toRatingRow(data)
+}
+
+// A rated recipe isn't a try-out any more.
+export async function saveRecipeTryOut(id, tryOut) {
+  const { error } = await supabase
+    .from('recipes')
+    .update({ try_out: tryOut, updated_at: new Date().toISOString() })
+    .eq('id', id)
+  if (error) throw error
+}
+
 // Undo of a cleared week: the meals are new rows, so their ratings go back in too.
 export async function insertMealRatings(rows) {
   if (!rows.length) return

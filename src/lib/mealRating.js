@@ -49,3 +49,34 @@ export function reviewPatch(recipe, { secondChance, fix }, today) {
 
 // Picking the option that's already selected clears the child's answer.
 export const nextAte = (current, picked) => (current === picked ? null : picked)
+
+// A planned meal opened as a recipe can be rated once its day has come, in any week.
+export const mealHasCome = (week, day, today = new Date()) => mealDate(week, day) <= toISO(today)
+
+// ─── A recipe's own rating ────────────────────────────────────────
+// The recipe screen shows what you last thought of a recipe, wherever you said it.
+// `rows` are its meal_ratings, as supabase.js › fetchRecipeRatings returns them:
+// { id, plannedMealId, rating, ate, comment, ratedAt }. The one row with no planned
+// meal is the recipe's own, written from the recipe screen. It always holds the
+// whole picture as it was shown, so when it's the newest row it wins outright,
+// and a cleared answer stays cleared.
+const time = r => Date.parse(r.ratedAt ?? '') || 0
+export function recipeVerdict(rows = []) {
+  const newest = [...rows].sort((a, b) => time(b) - time(a))
+  const counts = field => r => r[field] != null || !r.plannedMealId
+  const rated = newest.find(counts('rating'))
+  return {
+    rating: rated?.rating ?? null,
+    comment: rated?.comment ?? null,
+    ate: newest.find(counts('ate'))?.ate ?? null,
+    own: rows.find(r => !r.plannedMealId) ?? null,
+  }
+}
+
+// What the recipe's own row becomes after a change, keeping everything else shown.
+export const ownRatingFields = (verdict, change) => ({
+  rating: verdict.rating, ate: verdict.ate, comment: verdict.comment, ...change,
+})
+
+// `rows` with the recipe's own row put in, or replaced.
+export const withOwnRow = (rows, row) => [...rows.filter(r => r.plannedMealId), row]

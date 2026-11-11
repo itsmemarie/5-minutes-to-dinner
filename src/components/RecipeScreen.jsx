@@ -7,6 +7,9 @@ import { isFullFrame } from '../lib/imageMath.js'
 import { RecipePhotoStrip } from './recipe/RecipePhotoStrip.jsx'
 import { RecipeSourceLink } from './recipe/RecipeSourceLink.jsx'
 import { RotationNote } from './recipe/RotationNote.jsx'
+import { RatingChips } from './home/RatingChips.jsx'
+import { nextAte } from '../lib/mealRating.js'
+import { useRecipeRating } from '../lib/useRecipeRating.js'
 import { AI_PHOTO, AiPhotoSheet } from './recipe/PhotoSheets.jsx'
 import { callEdgeFn, fetchLinkPhoto } from '../lib/ai.js'
 import { C, ep, mn, CARD, R } from '../lib/theme.js'
@@ -17,10 +20,20 @@ import { collectQuantities } from '../lib/quantityScaling.js'
 import { Spinner, Btn, Icon, NeedMoreIdeasBtn, Stepper, ScaledText } from './ui/index.js'
 import { dayNutritionTotals, rowFigure } from '../lib/goalMaths.js'
 
+const RATING_WORDS = { loved:'Loved', okay:'Okay', bad:'Bad' }
+
 // toddlerDob is null when toddler activities are off in Settings; that hides the
 // activities card and the ideas button. showToddlerVariations gates the recipe's
 // own toddler variation notes separately.
-export function RecipeScreen({ recipeId, rotation, onBringBack, portion, onPortionChange, onAddMeal, toddlerDob, showToddlerVariations = true, onOpenToddlerCooking, goalProfile, goalTargets, nutritionByRecipe={}, day, plan, sectionIds = ALL_SECTION_IDS, onPhotoChange, onLinkChange }) {
+//
+// `rating` shows the rating and child chips under the title; leave it out to hide
+// them. It is { childName, meal, onMealRate, onMealAte, onRecipeRate, onFailed }.
+// With a `meal` (a planned meal whose day has come) the chips are that meal's, as on
+// Home. Without one they show what you last thought of the recipe and save to the
+// recipe itself. Either way the rating's consequences (retiring, second chances,
+// leaving the try-outs) are App's, through onMealRate or onRecipeRate.
+export function RecipeScreen({ recipeId, rotation, onBringBack, portion, onPortionChange, onAddMeal, toddlerDob, showToddlerVariations = true, onOpenToddlerCooking, goalProfile, goalTargets, nutritionByRecipe={}, day, plan, sectionIds = ALL_SECTION_IDS, onPhotoChange, onLinkChange, rating }) {
+  const own = useRecipeRating(recipeId)
   const goalMode = !!goalProfile?.goalModeEnabled && !!goalTargets
   const recipeNutrition = nutritionByRecipe[recipeId]
   const [showGoalSheet, setShowGoalSheet] = useState(false)
@@ -158,6 +171,23 @@ export function RecipeScreen({ recipeId, rotation, onBringBack, portion, onPorti
   // times, oven temps and Thermomix speeds being rescaled as if they were food.
   const knownQtys = collectQuantities(data.ingredients)
   const prose = text => <ScaledText text={text} scale={scale} knownQtys={knownQtys}/>
+  const meal = rating?.meal
+  const shown = meal ? { rating:meal.rating, ate:meal.ate } : own.verdict
+  const rateRecipe = picked => {
+    const { comment } = own.verdict
+    own.save({ rating:picked }).catch(() => rating.onFailed?.())
+    rating.onRecipeRate(picked, { comment, saveComment:c => own.save({ comment:c }).catch(() => rating.onFailed?.()) })
+  }
+  const ateRecipe = picked => own.save({ ate:nextAte(own.verdict.ate, picked) }).catch(() => rating.onFailed?.())
+  // A meal not rated yet still says how the recipe went before.
+  const lastTime = meal && !meal.rating && own.verdict?.rating
+  const chips = rating && shown && (
+    <div style={{ display:'flex', alignItems:'center', flexWrap:'wrap', columnGap:8, marginTop:8 }}>
+      <RatingChips name={data.name} rating={shown.rating} ate={shown.ate} childName={rating.childName}
+        onRate={meal ? rating.onMealRate : rateRecipe} onAte={meal ? rating.onMealAte : ateRecipe}/>
+      {lastTime && <span style={{ ...mn, fontSize:11, color:C.onSurfaceVariant }}>Last time: {RATING_WORDS[lastTime]}</span>}
+    </div>
+  )
   const scaleBadge = <span style={{...mn,fontSize:11,fontWeight:700,background:C.primaryFixed,color:C.primary,padding:'3px 10px',borderRadius:R.pill}}>Scaled for {scaledFor} portions</span>
 
   return (
@@ -181,6 +211,7 @@ export function RecipeScreen({ recipeId, rotation, onBringBack, portion, onPorti
       <div style={{marginBottom:20}}>
         <div style={{...ep,fontSize:24,color:C.onSurface,lineHeight:1.2}}>{data.name}</div>
         <RecipeSourceLink key={recipeId} url={data.source_url} onSave={handleSourceLinkSave}/>
+        {chips}
       </div>
 
       {/* Prep / Cook */}

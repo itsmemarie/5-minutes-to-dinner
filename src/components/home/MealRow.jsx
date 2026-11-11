@@ -3,28 +3,7 @@ import { DAY_LBL, formatAdvance } from '../../lib/dateHelpers.js'
 import { sectionShort } from '../../lib/mealSections.js'
 import { RETIRED, SECOND_CHANCE } from '../../lib/mealRating.js'
 import { Icon } from '../ui/index.js'
-import { ChipMenu } from './ChipMenu.jsx'
-
-const UNSET = { background:C.white, color:C.onSurfaceVariant, borderColor:C.outlineVariant }
-const WARM = { background:C.secondaryContainer, color:C.onSecondaryContainerStrong, borderColor:C.accent2_300 }
-const filled = background => ({ background, color:C.onPrimary, borderColor:background })
-
-const RATING_LOOKS = {
-  loved: { ...filled(C.primary), icon:'heart', label:'Loved' },
-  okay:  { ...WARM, icon:'meh', label:'Okay' },
-  bad:   { ...filled(C.errorInk), icon:'thumbsDown', label:'Bad' },
-}
-const RATING_ITEMS = [
-  { value:'loved', label:'Loved', icon:'heart', iconColor:C.primary },
-  { value:'okay',  label:'Okay',  icon:'meh', iconColor:C.onSecondaryContainerStrong },
-  { value:'bad',   label:'Bad',   icon:'thumbsDown', iconColor:C.errorInk, labelColor:C.errorInk },
-]
-const ATE_LOOKS = {
-  all:  { background:C.primaryFixed, color:C.primary, borderColor:C.primary },
-  some: WARM,
-  none: filled(C.onSurfaceVariant),
-}
-const ATE_ITEMS = [{ value:'all', label:'All of it' }, { value:'some', label:'Some' }, { value:'none', label:'None' }]
+import { RatingChips } from './RatingChips.jsx'
 
 const STATUS_TAGS = {
   [SECOND_CHANCE]: { label:'Second chance', color:C.onSecondaryContainerStrong },
@@ -61,12 +40,7 @@ export function MealRow({ meal, day, status, rateable, childName, divider, held,
           {tag && <span style={{ ...mn, fontSize:10, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.04em', color:tag.color }}>{tag.label}</span>}
         </div>
         {rateable && (
-          <div data-no-drag onClick={stop} style={{ display:'flex', flexWrap:'wrap', columnGap:6, marginTop:1, marginBottom:-5 }}>
-            <ChipMenu label={`How was ${meal.name}?`} look={RATING_LOOKS[meal.rating] ?? { ...UNSET, label:'How was it?' }} items={RATING_ITEMS} value={meal.rating} onPick={onRate}/>
-            {childName && (
-              <ChipMenu label={`Did ${childName} eat ${meal.name}?`} look={meal.ate ? { ...ATE_LOOKS[meal.ate], label:`${childName} ate ${meal.ate}` } : { ...UNSET, label:`Did ${childName} eat it?` }} items={ATE_ITEMS} value={meal.ate} onPick={onAte}/>
-            )}
-          </div>
+          <RatingChips name={meal.name} rating={meal.rating} ate={meal.ate} childName={childName} onRate={onRate} onAte={onAte} style={{ marginTop:1, marginBottom:-5 }}/>
         )}
       </div>
       <button data-no-drag type='button' aria-label={`Remove ${meal.name} from ${DAY_LBL[day]}`} onClick={e => { stop(e); onRemove() }}
