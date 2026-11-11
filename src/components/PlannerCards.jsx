@@ -18,12 +18,12 @@ function CardButton({ children, disabled, ariaLabel, onClick }) {
 }
 
 // The week's AI scores, worked out on the spot, under the stepper. `nutrition` is
-// { scores, stale, loading, error }: `scores` are the adult scores out of 100, and
-// `stale` means the meals have changed since. The full picture stays on the
+// { scores, loading, error }: `scores` are the adult scores out of 100, left out
+// once the meals have changed since they were worked out. The full picture stays on the
 // Nutrition insights screen, which `onOpen` opens: from the scores once there are
 // some, and from the heading in goal mode, whose figures need no calculating.
 export function NutritionCard({ title, basis, nutrition, goalMode, onCalculate, onOpen }) {
-  const { scores, stale, loading, error } = nutrition
+  const { scores, loading, error } = nutrition
   const heading = (
     <>
       <span style={{ width:36, height:36, flexShrink:0, borderRadius:12, background:C.peachIcon, display:'flex', alignItems:'center', justifyContent:'center' }}><Icon name='barChart3' size={18} color={C.onSecondaryContainerStrong}/></span>
@@ -44,7 +44,6 @@ export function NutritionCard({ title, basis, nutrition, goalMode, onCalculate, 
         {loading
           ? <CardButton disabled ariaLabel='Calculating'><span style={{ width:16, height:16, boxSizing:'border-box', border:'2px solid rgba(255,255,255,0.35)', borderTopColor:C.white, borderRadius:'50%', animation:'sp 0.9s linear infinite' }}/></CardButton>
           : !scores ? <CardButton onClick={onCalculate}>Calculate</CardButton>
-          : stale ? <CardButton onClick={onCalculate}>Recalculate</CardButton>
           : <CardButton onClick={onOpen}>Details</CardButton>}
       </div>
       <Tiles {...(scores ? { onClick:onOpen, 'aria-label':'See the full nutrition insights' } : null)}

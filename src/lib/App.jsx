@@ -203,7 +203,7 @@ export default function App() {
   const isThisWeek = weekOffset === 0
   const isPastWeek = weekOffset < 0
   const sectionIds = useMemo(() => enabledSectionIds(prefs.mealSections), [prefs.mealSections])
-  const nutriData  = nutriByWeek[week.weekOf] ?? null
+  const savedNutri = nutriByWeek[week.weekOf] ?? null
   const nutriLoading = nutriLoadingWeek === week.weekOf
   const nutriError = nutriFailure?.weekOf === week.weekOf ? nutriFailure.message : null
   const batchData  = batchByWeek[week.weekOf] ?? null
@@ -1269,7 +1269,10 @@ export default function App() {
   const visibleMealCount = week.days.flatMap(day => dayMeals(plan[day], sectionIds)).length
   const plannedWeeks = new Set(Object.keys(weekMealCounts).filter(w => weekMealCounts[w] > 0))
   if (!weekLoadState) plannedWeeks[visibleMealCount > 0 ? 'add' : 'delete'](week.weekOf)
-  const nutriStale = !!nutriData && !weekLoadState && nutriData.signature !== JSON.stringify(plannedMealsPayload())
+  // An analysis only counts while the week's meals are the ones it looked at. Once
+  // they change it is dropped, so the planner offers a fresh Calculate rather than
+  // old scores beside a Recalculate button that was easy to miss.
+  const nutriData = savedNutri && (weekLoadState || savedNutri.signature === JSON.stringify(plannedMealsPayload())) ? savedNutri : null
   // Who Home's child chip asks about: the selected child, while toddler mode is on.
   const childName = prefs.toddlerModeEnabled ? (prefs.children.find(c => c.id === prefs.selectedChildId)?.name?.trim() || null) : null
 
@@ -1319,7 +1322,7 @@ export default function App() {
     if (screen === 'toddlerCooking')  return <ToddlerCookingScreen guide={toddlerGuide} loading={toddlerGuideLoading} error={toddlerGuideError} activeBand={toddlerBand} setActiveBand={setToddlerBand} currentBand={toddlerDob?ageBandFromDob(toddlerDob):null} onGenerate={generateToddlerGuide}/>
     if (tab !== 'planner' && weekLoadState) return weekLoadState
     if (tab === 'home')    return <HomeScreen plan={plan} weekLabel={week.label} days={week.days} sectionIds={sectionIds} recipes={recipes} childName={childName} onDayOpen={openDayPlan} onRecipeOpen={openRecipeFromHome} moveMeal={moveMeal} removeMeal={removeMealWithUndo} onRate={onRate} onAte={onAte} onCopy={copyWeekPlan} onRecipeCreated={r=>setRecipes(prev=>[...prev,r].sort((a,b)=>a.name.localeCompare(b.name)))} aiContext={aiContext}/>
-    if (tab === 'planner') return <PlannerScreen plan={plan} week={week} weekOffset={weekOffset} weekStartsOn={prefs.weekStartsOn} plannedWeeks={plannedWeeks} onSelectWeek={setWeekOffset} onSaveWeek={saveCurrentWeek} onFillWeek={fillWeek} onCopyWeek={copyWeek} onClearWeek={clearWeek} notice={plannerNotice} onDismissNotice={()=>setPlannerNotice(null)} loadState={weekLoadState} sectionIds={sectionIds} removeMeal={removeMeal} moveMeal={moveMeal} duplicateMeal={duplicateMeal} updatePortion={updatePortion} onDayOpen={openDayPlan} onRecipeOpen={openRecipeFromHome} nutrition={{scores:nutriData?.adult?.scores,stale:nutriStale,loading:nutriLoading,error:nutriError}} onCalculateNutrition={analyseNutrition} onNutrition={()=>{ setScreen('nutrition'); if(!nutriData) analyseNutrition() }} onShoppingList={generateShoppingList} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe} tryouts={tryouts}/>
+    if (tab === 'planner') return <PlannerScreen plan={plan} week={week} weekOffset={weekOffset} weekStartsOn={prefs.weekStartsOn} plannedWeeks={plannedWeeks} onSelectWeek={setWeekOffset} onSaveWeek={saveCurrentWeek} onFillWeek={fillWeek} onCopyWeek={copyWeek} onClearWeek={clearWeek} notice={plannerNotice} onDismissNotice={()=>setPlannerNotice(null)} loadState={weekLoadState} sectionIds={sectionIds} removeMeal={removeMeal} moveMeal={moveMeal} duplicateMeal={duplicateMeal} updatePortion={updatePortion} onDayOpen={openDayPlan} onRecipeOpen={openRecipeFromHome} nutrition={{scores:nutriData?.adult?.scores,loading:nutriLoading,error:nutriError}} onCalculateNutrition={analyseNutrition} onNutrition={()=>{ setScreen('nutrition'); if(!nutriData) analyseNutrition() }} onShoppingList={generateShoppingList} goalProfile={goalProfile} goalTargets={goalTargets} nutritionByRecipe={nutritionByRecipe} tryouts={tryouts}/>
     const weekBanner = !isThisWeek && <WeekBanner label={week.label} onBack={()=>setWeekOffset(0)}/>
     if (tab === 'list')    return <>{weekBanner}<ShoppingListScreen shopping={shopping} weekLabel={week.label} onToggle={onShoppingToggle} loading={shoppingLoading} loadingMsg={shoppingLoadingMsg} error={shoppingError} notice={shoppingNotice} onRegenerate={generateShoppingList} onBuildBasic={buildBasicList} onAddItem={addShoppingItemByHand} onRemoveItem={removeShoppingItemByHand} plannedPortions={plannedPortions()}/></>
     if (tab === 'batch')   return <>{weekBanner}<BatchScreen activeTab={batchTab} setActiveTab={setBatchTab} batchData={batchData} batchLoading={batchLoading} batchError={batchError} onGenerate={generateBatch} onOpenToddlerCooking={toddlerActivitiesOn?()=>openToddlerCooking(false):null} showToddler={toddlerActivitiesOn}/></>
